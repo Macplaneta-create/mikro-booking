@@ -1,0 +1,16 @@
+/* Basic Widget Styles */
+.mb-widget-container {
+    padding: 20px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    max-width: 800px;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.mb-loading {
+    text-align: center;
+    color: #6b7280;
+    padding: 40px;
+}

@@ -1,0 +1,29 @@
+# Dependencies
+/vendor/
+/admin/node_modules/
+/admin/dist/
+
+# Build artifacts
+/assets/admin/*
+!/assets/admin/.gitkeep
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# WordPress
+wp-config.php
