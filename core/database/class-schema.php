@@ -100,13 +100,11 @@ class Schema {
      */
     public static function reservations_table(): string {
         $table = self::get_table_name('reservations');
-        $beds_table = self::get_table_name('beds');
         $guests_table = self::get_table_name('guests');
         $charset = self::get_charset_collate();
         
         return "CREATE TABLE {$table} (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            bed_id BIGINT UNSIGNED NOT NULL,
             guest_id BIGINT UNSIGNED NOT NULL,
             check_in DATE NOT NULL,
             check_out DATE NOT NULL,
@@ -118,11 +116,10 @@ class Schema {
             created_by BIGINT UNSIGNED,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (bed_id) REFERENCES {$beds_table}(id) ON DELETE RESTRICT,
             FOREIGN KEY (guest_id) REFERENCES {$guests_table}(id) ON DELETE RESTRICT,
             INDEX idx_dates (check_in, check_out),
             INDEX idx_status (status),
-            INDEX idx_bed_dates (bed_id, check_in, check_out)
+            INDEX idx_guest (guest_id)
         ) {$charset};";
     }
     
@@ -214,6 +211,29 @@ class Schema {
             feedback TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_created_at (created_at)
+        ) {$charset};";
+    }
+
+    /**
+     * Pricing table schema
+     */
+    public static function pricing_table(): string {
+        $table = self::get_table_name('pricing');
+        $rooms_table = self::get_table_name('rooms');
+        $charset = self::get_charset_collate();
+        
+        return "CREATE TABLE {$table} (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            room_id BIGINT UNSIGNED NOT NULL,
+            start_date DATE NOT NULL,
+            end_date DATE NOT NULL,
+            base_price DECIMAL(10,2) NOT NULL,
+            weekend_price DECIMAL(10,2) NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (room_id) REFERENCES {$rooms_table}(id) ON DELETE CASCADE,
+            INDEX idx_room (room_id),
+            INDEX idx_dates (start_date, end_date)
         ) {$charset};";
     }
 }

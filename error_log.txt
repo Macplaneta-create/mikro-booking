@@ -1,0 +1,3 @@
+[2026-02-08 16:23:36] Create room initiated. Data: {"name":"03","room_type":"dorm","floor":1}
+[2026-02-08 16:23:36] Normalized room type: dormitory
+[2026-02-08 16:23:36] Room inserted successfully. ID: 4

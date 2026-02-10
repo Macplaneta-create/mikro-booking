@@ -83,6 +83,15 @@ class Admin {
             'mikroplaneta-booking-settings',
             [$this, 'render_admin_page']
         );
+        
+        add_submenu_page(
+            'mikroplaneta-booking',
+            __('Database Migrations', 'mikroplaneta-booking'),
+            __('Migrations', 'mikroplaneta-booking'),
+            'manage_options',
+            'mikroplaneta-booking-migrations',
+            [$this, 'render_migrations_page']
+        );
     }
     
     /**
@@ -158,6 +167,13 @@ class Admin {
             </div>
         </div>
         <?php
+    }
+    
+    /**
+     * Render migrations page
+     */
+    public function render_migrations_page(): void {
+        require_once MIKROPLANETA_BOOKING_PLUGIN_DIR . 'admin/pages/migrations.php';
     }
     
     /**

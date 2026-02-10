@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, BedDouble, Loader2, ChevronDown, ChevronRight as ChevronRightIcon, Home, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BedDouble, Loader2, ChevronDown, ChevronRight as ChevronRightIcon, Home, Check, X } from 'lucide-react';
 import { format, addDays, startOfWeek, addWeeks, subWeeks, isSameDay, parseISO, differenceInDays, isAfter, isBefore } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { RoomsAPI, ReservationsAPI, Room, Reservation } from '../services/api';
@@ -14,14 +14,72 @@ const CalendarView: React.FC = () => {
 
     // Selection state
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalData, setModalData] = useState<{ bedId?: number, roomId?: number, checkIn?: string, checkOut?: string }>({});
+    const [modalData, setModalData] = useState<{ bedId?: number, bedIds?: number[], roomId?: number, checkIn?: string, checkOut?: string }>({});
 
-    const [isSelecting, setIsSelecting] = useState(false);
-    const [selection, setSelection] = useState<{ bedId: number, roomId: number, start: Date, end: Date } | null>(null);
+    const [selection, setSelection] = useState<{ bedId: number, roomId: number, start: Date | null, end: Date | null } | null>(null);
+    const [selectedBeds, setSelectedBeds] = useState<Set<number>>(new Set());
+
+    // Reservation details modal
+    const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
     const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
     const days = Array.from({ length: 14 }).map((_, i) => addDays(startDate, i));
     const endDate = days[days.length - 1];
+
+    const getVisibleStats = () => {
+        const visibleBookings = bookings.filter((booking) => {
+            if (booking.status === 'cancelled') return false;
+            const checkIn = parseISO(booking.check_in);
+            const checkOut = parseISO(booking.check_out);
+            return checkOut > startDate && checkIn <= endDate;
+        });
+
+        const reservationIds = new Set<number>();
+        const bedIds = new Set<number>();
+
+        visibleBookings.forEach((booking) => {
+            if (booking.id) reservationIds.add(booking.id);
+            if (booking.bed_id) bedIds.add(booking.bed_id);
+        });
+
+        return {
+            reservations: reservationIds.size,
+            beds: bedIds.size
+        };
+    };
+
+    const getVisibleStatusLegend = () => {
+        const visibleBookings = bookings.filter((booking) => {
+            if (booking.status === 'cancelled') return false;
+            const checkIn = parseISO(booking.check_in);
+            const checkOut = parseISO(booking.check_out);
+            return checkOut > startDate && checkIn <= endDate;
+        });
+
+        const statusCounts = {
+            confirmed: 0,
+            pending: 0,
+            checked_in: 0,
+            checked_out: 0,
+            cancelled: 0
+        };
+
+        visibleBookings.forEach((booking) => {
+            if (booking.status && booking.status in statusCounts) {
+                statusCounts[booking.status as keyof typeof statusCounts]++;
+            }
+        });
+
+        return Object.entries(statusCounts)
+            .filter(([_, count]) => count > 0)
+            .map(([status, count]) => ({
+                status,
+                count,
+                color: getStatusColor(status),
+                label: getStatusLabel(status)
+            }));
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -69,39 +127,84 @@ const CalendarView: React.FC = () => {
         }));
     };
 
-    // --- SELECTION LOGIC ---
-    const onMouseDown = (bedId: number, roomId: number, date: Date) => {
-        const isOccupied = bookings.some(b => b.bed_id === bedId && isSameDay(parseISO(b.check_in), date));
+    // --- MULTI-BED SELECTION LOGIC ---
+    const handleCellClick = (bedId: number, roomId: number, date: Date, event: React.MouseEvent) => {
+        const isOccupied = bookings.some(b => b.bed_id === bedId &&
+            (isSameDay(parseISO(b.check_in), date) || (isAfter(date, parseISO(b.check_in)) && isBefore(date, parseISO(b.check_out))))
+        );
         if (isOccupied) return;
 
-        setIsSelecting(true);
-        setSelection({ bedId, roomId, start: date, end: date });
+        // Ctrl+Click for multi-bed selection
+        if (event.ctrlKey || event.metaKey) {
+            if (!selection || !selection.start || !selection.end) {
+                // Need to have a date range first
+                return;
+            }
+
+            // Toggle bed in selection
+            const newSelectedBeds = new Set(selectedBeds);
+            if (newSelectedBeds.has(bedId)) {
+                newSelectedBeds.delete(bedId);
+            } else {
+                // Verify this bed is available for the selected date range
+                const isAvailable = !bookings.some(b =>
+                    b.bed_id === bedId &&
+                    b.status !== 'cancelled' &&
+                    (
+                        (parseISO(b.check_in) < selection.end! && parseISO(b.check_out) > selection.start!) ||
+                        isSameDay(parseISO(b.check_in), selection.start!) ||
+                        isSameDay(parseISO(b.check_out), selection.end!)
+                    )
+                );
+
+                if (isAvailable) {
+                    newSelectedBeds.add(bedId);
+                } else {
+                    alert(`Łóżko #${bedId} nie jest dostępne w wybranym terminie`);
+                    return;
+                }
+            }
+            setSelectedBeds(newSelectedBeds);
+            return;
+        }
+
+        // Normal single-bed date selection
+        if (!selection || selection.bedId !== bedId) {
+            // Start new selection - clear multi-bed selection
+            setSelectedBeds(new Set());
+            setSelection({ bedId, roomId, start: date, end: null });
+        } else if (selection.start && !selection.end) {
+            // Set end date
+            if (isSameDay(date, selection.start)) {
+                setSelection(null); // Deselect if clicked same day
+                setSelectedBeds(new Set());
+            } else if (isBefore(date, selection.start)) {
+                // If clicked earlier date, make it the new start
+                setSelection({ ...selection, start: date, end: null });
+            } else {
+                // Valid range selected - automatically add this bed to selection
+                setSelection({ ...selection, end: date });
+                setSelectedBeds(new Set([bedId]));
+            }
+        } else {
+            // Already have range, click again allows resetting or changing
+            setSelectedBeds(new Set());
+            setSelection({ bedId, roomId, start: date, end: null });
+        }
     };
 
-    const onMouseEnter = (bedId: number, date: Date) => {
-        if (!isSelecting || !selection) return;
-        if (selection.bedId !== bedId) return;
+    const handleConfirmSelection = () => {
+        if (!selection || !selection.start || !selection.end) return;
 
-        setSelection(prev => prev ? ({ ...prev, end: date }) : null);
-    };
-
-    const onMouseUp = () => {
-        if (!isSelecting || !selection) return;
-
-        const { bedId, roomId, start, end } = selection;
-        const d1 = isBefore(start, end) ? start : end;
-        const d2 = isAfter(start, end) ? start : end;
-
-        const finalEnd = addDays(d2, 1);
+        const bedIds = Array.from(selectedBeds);
 
         setModalData({
-            bedId,
-            roomId,
-            checkIn: format(d1, 'yyyy-MM-dd'),
-            checkOut: format(finalEnd, 'yyyy-MM-dd')
+            bedId: selection.bedId,
+            bedIds: bedIds.length > 0 ? bedIds : undefined,
+            roomId: selection.roomId,
+            checkIn: format(selection.start, 'yyyy-MM-dd'),
+            checkOut: format(selection.end, 'yyyy-MM-dd')
         });
-
-        setIsSelecting(false);
         setIsModalOpen(true);
     };
 
@@ -111,17 +214,8 @@ const CalendarView: React.FC = () => {
         setModalData({});
     };
 
-    useEffect(() => {
-        const handleGlobalMouseUp = () => {
-            if (isSelecting) {
-                setIsSelecting(false);
-            }
-        };
-        window.addEventListener('mouseup', handleGlobalMouseUp);
-        return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-    }, [isSelecting]);
 
-    const getBookingStyle = (booking: { check_in: string, check_out: string, status?: string }) => {
+    const getBookingStyle = (booking: Reservation) => {
         const checkIn = parseISO(booking.check_in);
         const checkOut = parseISO(booking.check_out);
 
@@ -135,18 +229,123 @@ const CalendarView: React.FC = () => {
 
         if (checkOut <= startDate || checkIn > endDate) return { display: 'none' };
 
-        let bgColor = 'bg-blue-500';
-        if (booking.status === 'confirmed') bgColor = 'bg-blue-600';
-        if (booking.status === 'checked_in') bgColor = 'bg-emerald-600';
-        if (booking.status === 'cancelled') bgColor = 'bg-red-400 opacity-50';
-        if (booking.status === 'checked_out') bgColor = 'bg-gray-500';
-        if (booking.status === 'selecting') bgColor = 'bg-brand-500 ring-2 ring-brand-700 shadow-lg';
+        const statusClass = booking.status === 'cancelled'
+            ? 'opacity-40'
+            : booking.status === 'checked_out'
+                ? 'opacity-70'
+                : booking.status === 'checked_in'
+                    ? 'ring-2 ring-emerald-700'
+                    : booking.status === 'pending'
+                        ? 'animate-pulse'
+                        : booking.status === 'selecting'
+                            ? 'ring-2 ring-brand-700 shadow-lg'
+                            : 'ring-1 ring-white/40';
+
+        const colorClass = getStatusColor(booking.status);
 
         return {
             left: `${left}%`,
             width: `${width}%`,
-            className: `absolute top-1 bottom-1 rounded-md px-2 flex items-center text-[10px] text-white shadow-sm cursor-pointer hover:brightness-110 transition z-10 overflow-hidden ${bgColor}`
+            className: `absolute top-1 bottom-1 rounded-md px-2 flex items-center text-[10px] text-white shadow-sm cursor-pointer hover:brightness-110 transition z-10 overflow-hidden ${colorClass} ${statusClass}`
         };
+    };
+
+    const statusColors = {
+        confirmed: 'bg-green-500',
+        pending: 'bg-amber-500',
+        checked_in: 'bg-emerald-600',
+        checked_out: 'bg-gray-500',
+        cancelled: 'bg-gray-400'
+    };
+
+    const statusLabels = {
+        confirmed: 'Potwierdzona',
+        pending: 'Oczekująca',
+        checked_in: 'Zalogowana',
+        checked_out: 'Wylogowana',
+        cancelled: 'Anulowana'
+    };
+
+    const getStatusColor = (status: string | undefined): string => {
+        if (!status || !statusColors[status as keyof typeof statusColors]) {
+            return 'bg-blue-500';
+        }
+        return statusColors[status as keyof typeof statusColors];
+    };
+
+    const getStatusLabel = (status: string): string => {
+        if (!statusLabels[status as keyof typeof statusLabels]) {
+            return status;
+        }
+        return statusLabels[status as keyof typeof statusLabels];
+    };
+
+    const getRoomBookingStyle = (check_in: string, check_out: string) => {
+        const checkIn = parseISO(check_in);
+        const checkOut = parseISO(check_out);
+
+        const effectiveStart = checkIn < startDate ? startDate : checkIn;
+        const diffStart = differenceInDays(effectiveStart, startDate);
+        const visibleDuration = differenceInDays(checkOut, effectiveStart);
+
+        const dayWidth = 100 / 14;
+        const left = diffStart * dayWidth;
+        const width = Math.max(0.5, Math.min(visibleDuration, 14 - diffStart)) * dayWidth;
+
+        if (checkOut <= startDate || checkIn > endDate) return { display: 'none' } as const;
+
+        return {
+            left: `${left}%`,
+            width: `${width}%`
+        };
+    };
+
+    const getRoomReservations = (room: Room): Reservation[] => {
+        const bedIds = new Set((room.beds || []).map(b => b.id).filter(Boolean) as number[]);
+        const unique = new Map<number, Reservation>();
+
+        bookings.forEach((booking) => {
+            if (!bedIds.has(booking.bed_id) || booking.status === 'cancelled') {
+                return;
+            }
+
+            if (booking.id && !unique.has(booking.id)) {
+                unique.set(booking.id, booking);
+            }
+        });
+
+        return Array.from(unique.values());
+    };
+
+    const buildRoomLanes = (reservations: Reservation[]) => {
+        const sorted = [...reservations].sort((a, b) =>
+            parseISO(a.check_in).getTime() - parseISO(b.check_in).getTime()
+        );
+
+        const lanes: { end: Date; items: Reservation[] }[] = [];
+
+        sorted.forEach((reservation) => {
+            const start = parseISO(reservation.check_in);
+            const end = parseISO(reservation.check_out);
+
+            let placed = false;
+            for (const lane of lanes) {
+                if (end <= lane.end || start >= lane.end) {
+                    if (start >= lane.end) {
+                        lane.items.push(reservation);
+                        lane.end = end;
+                        placed = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!placed) {
+                lanes.push({ end, items: [reservation] });
+            }
+        });
+
+        return lanes;
     };
 
     if (loading && rooms.length === 0) {
@@ -168,8 +367,25 @@ const CalendarView: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex gap-4 text-xs text-brand-600 font-medium bg-brand-50 px-3 py-1.5 rounded-full border border-brand-100">
-                    <span className="flex items-center gap-2">✨ Przeciągnij zakres dat, aby szybko zarezerwować</span>
+                <div className="flex flex-col gap-2">
+                    <div className="flex gap-3 text-xs text-brand-700 font-medium bg-brand-50 px-3 py-1.5 rounded-full border border-brand-100">
+                        <span className="flex items-center gap-2">✨ Kliknij datę przyjazdu i wyjazdu | Ctrl+klik aby dodać więcej łóżek (rezerwacja grupowa)</span>
+                        <span className="text-brand-300">•</span>
+                        <span>
+                            {`Rezerwacje: ${getVisibleStats().reservations} • Zajęte łóżka: ${getVisibleStats().beds}`}
+                        </span>
+                    </div>
+                    {getVisibleStatusLegend().length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-600">
+                            <span className="font-bold text-gray-500 uppercase tracking-wide">Status rezerwacji:</span>
+                            {getVisibleStatusLegend().map((statusItem) => (
+                                <span key={statusItem.status} className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 rounded-full px-2 py-0.5">
+                                    <span className={`w-2.5 h-2.5 rounded-full ${statusItem.color}`} />
+                                    <span className="truncate">{statusItem.label} ({statusItem.count})</span>
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex gap-2">
@@ -202,10 +418,15 @@ const CalendarView: React.FC = () => {
                         const isExpanded = !!expandedRooms[room.id!];
                         const bedCount = room.beds?.length || 0;
 
+                        const roomReservations = getRoomReservations(room);
+                        const roomLanes = buildRoomLanes(roomReservations);
+                        const maxLanes = 3;
+                        const hiddenLanes = Math.max(0, roomLanes.length - maxLanes);
+
                         return (
                             <React.Fragment key={room.id}>
                                 <div
-                                    className="flex bg-gray-50/50 border-b border-gray-200 sticky left-0 group cursor-pointer hover:bg-gray-100/80 transition-colors h-10"
+                                    className="flex bg-gray-50/50 border-b border-gray-200 sticky left-0 group cursor-pointer hover:bg-gray-100/80 transition-colors h-12"
                                     onClick={() => toggleRoom(room.id!)}
                                 >
                                     <div className="w-48 p-2 border-r border-gray-200 sticky left-0 bg-gray-50 z-10 flex items-center gap-2 pl-3">
@@ -215,15 +436,37 @@ const CalendarView: React.FC = () => {
                                         <Home size={14} className="text-brand-600" />
                                         <div className="flex flex-col">
                                             <span className="font-bold text-gray-900 text-[11px] truncate leading-tight uppercase tracking-wider">{room.name}</span>
-                                            <span className="text-[9px] text-gray-500">{bedCount} {bedCount === 1 ? 'miejsce' : 'miejsca'}</span>
+                                            <span className="text-[9px] text-gray-500">
+                                                {bedCount} {bedCount === 1 ? 'miejsce' : 'miejsca'}
+                                                {!isExpanded && hiddenLanes > 0 ? ` • +${hiddenLanes} grup` : ''}
+                                            </span>
                                         </div>
                                     </div>
-                                    <div className="flex-1" />
+                                    <div className="flex-1 relative">
+                                        {!isExpanded && roomLanes.slice(0, maxLanes).map((lane, laneIndex) => (
+                                            lane.items.map((reservation) => {
+                                                const style = getRoomBookingStyle(reservation.check_in, reservation.check_out);
+                                                if ('display' in style && style.display === 'none') return null;
+
+                                                const colorClass = getStatusColor(reservation.status);
+                                                const top = 6 + laneIndex * 10;
+
+                                                return (
+                                                    <div
+                                                        key={`room-${room.id}-res-${reservation.id}-lane-${laneIndex}`}
+                                                        className={`absolute ${colorClass} h-2 rounded-full shadow-sm`}
+                                                        style={{ left: style.left, width: style.width, top }}
+                                                        title={`Rezerwacja #${reservation.id} | ${reservation.first_name} ${reservation.last_name} | Status: ${getStatusLabel(reservation.status || 'pending')}`}
+                                                    />
+                                                );
+                                            })
+                                        ))}
+                                    </div>
                                 </div>
 
                                 {isExpanded && room.beds?.map(bed => (
                                     <div key={bed.id} className="flex border-b border-gray-100 h-14 relative hover:bg-gray-50/30 transition-colors group/row">
-                                        <div className="w-48 px-4 border-r border-gray-200 sticky left-0 bg-white z-10 flex items-center gap-3 text-sm text-gray-600 pl-8 border-l-4 border-l-brand-100/50">
+                                        <div className={`w-48 px-4 border-r border-gray-200 sticky left-0 z-10 flex items-center gap-3 text-sm text-gray-600 pl-8 ${selectedBeds.has(bed.id!) ? 'bg-brand-50 border-l-4 border-l-brand-500' : 'bg-white border-l-4 border-l-brand-100/50'}`}>
                                             <div className="w-5 h-5 bg-gray-50 border border-gray-100 rounded text-[9px] flex items-center justify-center font-bold text-gray-500 group-hover/row:bg-brand-50 group-hover/row:text-brand-600 transition-colors">
                                                 {bed.bed_number}
                                             </div>
@@ -237,31 +480,73 @@ const CalendarView: React.FC = () => {
                                             {days.map(day => (
                                                 <div
                                                     key={day.toString()}
-                                                    onMouseDown={() => onMouseDown(bed.id!, room.id!, day)}
-                                                    onMouseEnter={() => onMouseEnter(bed.id!, day)}
-                                                    onMouseUp={onMouseUp}
-                                                    className={`flex-1 min-w-[80px] border-r border-gray-50 cursor-pointer ${isSameDay(day, new Date()) ? 'bg-brand-50/10' : ''}`}
+                                                    onClick={(e) => handleCellClick(bed.id!, room.id!, day, e)}
+                                                    className={`flex-1 min-w-[80px] border-r border-gray-50 cursor-pointer hover:bg-brand-50/20 transition-colors ${isSameDay(day, new Date()) ? 'bg-brand-50/10' : ''}`}
                                                 />
                                             ))}
 
-                                            {/* SELECTION PREVIEW - No more spinner, just a checkmark */}
-                                            {selection && selection.bedId === bed.id && (
-                                                <div
-                                                    className={getBookingStyle({
-                                                        check_in: format(isBefore(selection.start, selection.end) ? selection.start : selection.end, 'yyyy-MM-dd'),
-                                                        check_out: format(addDays(isAfter(selection.start, selection.end) ? selection.start : selection.end, 1), 'yyyy-MM-dd'),
-                                                        status: 'selecting'
-                                                    }).className}
-                                                    style={getBookingStyle({
-                                                        check_in: format(isBefore(selection.start, selection.end) ? selection.start : selection.end, 'yyyy-MM-dd'),
-                                                        check_out: format(addDays(isAfter(selection.start, selection.end) ? selection.start : selection.end, 1), 'yyyy-MM-dd'),
-                                                    })}
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <Check size={12} className="text-white" />
-                                                        <span className="font-bold">Wybrano</span>
+                                            {/* SELECTION PREVIEW - Updated for Multi-Bed */}
+                                            {selection && (selection.bedId === bed.id || selectedBeds.has(bed.id!)) && selection.start && (
+                                                <>
+                                                    {/* Start Day Indicator */}
+                                                    <div
+                                                        className="absolute top-1 bottom-1 bg-emerald-600 rounded-l-md z-20 flex items-center justify-center text-[10px] text-white font-bold animate-in fade-in"
+                                                        style={{
+                                                            left: `${(differenceInDays(selection.start, startDate)) * (100 / 14)}%`,
+                                                            width: `${100 / 14}%`
+                                                        }}
+                                                    >
+                                                        PRZYJAZD
                                                     </div>
-                                                </div>
+
+                                                    {selection.end && (
+                                                        <>
+                                                            {/* Range Highlight */}
+                                                            {days.map(day => {
+                                                                if (isAfter(day, selection.start!) && isBefore(day, selection.end!)) {
+                                                                    return (
+                                                                        <div
+                                                                            key={`range-${day.toString()}`}
+                                                                            className="absolute top-1.5 bottom-1.5 bg-brand-200/60 z-10"
+                                                                            style={{
+                                                                                left: `${(differenceInDays(day, startDate)) * (100 / 14)}%`,
+                                                                                width: `${100 / 14}%`
+                                                                            }}
+                                                                        />
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            })}
+
+                                                            {/* End Day Indicator */}
+                                                            <div
+                                                                className="absolute top-1 bottom-1 bg-amber-600 rounded-r-md z-20 flex items-center justify-center text-[10px] text-white font-bold animate-in fade-in pointer-events-none"
+                                                                style={{
+                                                                    left: `${(differenceInDays(selection.end, startDate)) * (100 / 14)}%`,
+                                                                    width: `${100 / 14}%`
+                                                                }}
+                                                            >
+                                                                WYJAZD
+                                                            </div>
+
+                                                            {/* CTA Button - Only on the primary selected bed or last selected to avoid clutter */}
+                                                            {selection.bedId === bed.id && (
+                                                                <div
+                                                                    className="absolute -bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-2"
+                                                                    style={{ left: `${(differenceInDays(selection.start, startDate) + differenceInDays(selection.end, selection.start) / 2 + 0.5) * (100 / 14)}%` }}
+                                                                >
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleConfirmSelection(); }}
+                                                                        className="bg-brand-600 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl flex items-center gap-1.5 hover:bg-brand-700 hover:scale-105 transition-all whitespace-nowrap ring-2 ring-white"
+                                                                    >
+                                                                        <Check size={16} />
+                                                                        ZAREZERWUJ {selectedBeds.size > 1 ? `(${selectedBeds.size} ŁÓŻKA)` : ''}
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </>
                                             )}
 
                                             {bookings
@@ -278,7 +563,8 @@ const CalendarView: React.FC = () => {
                                                             title={`${booking.first_name} ${booking.last_name} | Rezerwacja #${booking.id}`}
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                alert(`Rezerwacja #${booking.id}: ${booking.first_name} ${booking.last_name}`);
+                                                                setSelectedReservation(booking);
+                                                                setIsDetailsModalOpen(true);
                                                             }}
                                                         >
                                                             <span className="truncate flex-1 font-bold">
@@ -312,6 +598,110 @@ const CalendarView: React.FC = () => {
                 initialData={modalData}
                 rooms={rooms}
             />
+
+            {/* Reservation Details Modal */}
+            {isDetailsModalOpen && selectedReservation && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50/50">
+                            <h3 className="text-xl font-bold text-gray-900">Rezerwacja #{selectedReservation.id}</h3>
+                            <button onClick={() => setIsDetailsModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-xl transition-all shadow-sm">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase font-bold mb-1">Gość</p>
+                                <p className="text-lg font-bold text-gray-900">{selectedReservation.first_name} {selectedReservation.last_name}</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Przyjazd</p>
+                                    <p className="font-medium">{format(parseISO(selectedReservation.check_in), 'd MMM yyyy', { locale: pl })}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Wyjazd</p>
+                                    <p className="font-medium">{format(parseISO(selectedReservation.check_out), 'd MMM yyyy', { locale: pl })}</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Dorośli</p>
+                                    <p className="font-medium">{selectedReservation.adults || 1}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Dzieci</p>
+                                    <p className="font-medium">{selectedReservation.children || 0}</p>
+                                </div>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase font-bold mb-1">Status</p>
+                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
+                                    selectedReservation.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                                    selectedReservation.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                                    selectedReservation.status === 'checked_in' ? 'bg-emerald-100 text-emerald-700' :
+                                    selectedReservation.status === 'checked_out' ? 'bg-gray-100 text-gray-700' :
+                                    'bg-gray-100 text-gray-700'
+                                }`}>
+                                    {selectedReservation.status === 'confirmed' ? 'Potwierdzona' :
+                                    selectedReservation.status === 'pending' ? 'Oczekująca' :
+                                    selectedReservation.status === 'checked_in' ? 'Zalogowana' :
+                                    selectedReservation.status === 'checked_out' ? 'Wylogowana' :
+                                    'Anulowana'}
+                                </span>
+                            </div>
+                            {selectedReservation.notes && (
+                                <div>
+                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Notatki</p>
+                                    <p className="text-sm text-gray-700">{selectedReservation.notes}</p>
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-6 border-t border-gray-100 flex gap-3">
+                            {selectedReservation.status === 'pending' && (
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await ReservationsAPI.confirm(selectedReservation.id!);
+                                            setIsDetailsModalOpen(false);
+                                            fetchData();
+                                        } catch (error) {
+                                            alert('Błąd podczas potwierdzania rezerwacji');
+                                            console.error(error);
+                                        }
+                                    }}
+                                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-all text-sm flex items-center justify-center gap-2"
+                                >
+                                    <Check size={16} />
+                                    Potwierdź
+                                </button>
+                            )}
+                            <button
+                                onClick={async () => {
+                                    if (confirm('Czy na pewno chcesz anulować tę rezerwację?')) {
+                                        try {
+                                            await ReservationsAPI.cancel(selectedReservation.id!, 'Anulowano przez użytkownika');
+                                            setIsDetailsModalOpen(false);
+                                            fetchData();
+                                        } catch (error) {
+                                            alert('Błąd podczas anulowania rezerwacji');
+                                        }
+                                    }
+                                }}
+                                className="flex-1 px-4 py-3 border border-red-200 rounded-xl font-bold text-red-600 hover:bg-red-50 transition-all text-sm"
+                            >
+                                Anuluj Rezerwację
+                            </button>
+                            <button
+                                onClick={() => setIsDetailsModalOpen(false)}
+                                className="flex-1 px-4 py-3 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all text-sm"
+                            >
+                                Zamknij
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

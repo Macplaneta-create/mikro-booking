@@ -40,7 +40,6 @@ class AvailabilityController extends RestController {
             [
                 'methods' => 'GET',
                 'callback' => [$this, 'get_available_beds'],
-                'permission_callback' => '__return_true', // Public endpoint usually? Or protected? Let's protect for now.
                 'permission_callback' => [$this, 'check_permission'],
                 'args' => [
                     'check_in' => ['required' => true, 'type' => 'string', 'format' => 'date'],

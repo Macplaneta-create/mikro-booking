@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Save, Loader2, UserPlus, Users, Baby, Calendar as CalendarIcon, MapPin } from 'lucide-react';
-import { GuestsAPI, ReservationsAPI, Guest, Room } from '../services/api';
+import { AvailabilityAPI, GuestsAPI, ReservationsAPI, Guest, Room } from '../services/api';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -10,6 +10,7 @@ interface ReservationModalProps {
     onSuccess: () => void;
     initialData?: {
         bedId?: number;
+        bedIds?: number[];
         checkIn?: string;
         checkOut?: string;
         roomId?: number;
@@ -32,11 +33,20 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         room_id: 0,
         check_in: format(new Date(), 'yyyy-MM-dd'),
         check_out: format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'),
-        status: 'confirmed',
+        status: 'pending',
         adults: 1,
         children: 0,
         notes: '',
         total_price: 0
+    });
+
+    // Guest Creation State
+    const [isCreatingGuest, setIsCreatingGuest] = useState(false);
+    const [newGuestData, setNewGuestData] = useState({
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: ''
     });
 
     // Update form when initial data changes or modal opens
@@ -48,12 +58,14 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                 room_id: initialData?.roomId || 0,
                 check_in: initialData?.checkIn || format(new Date(), 'yyyy-MM-dd'),
                 check_out: initialData?.checkOut || format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'),
-                adults: 1,
+                adults: initialData?.bedIds?.length || 1,
                 children: 0
             }));
             setStep(1);
             setSelectedGuest(null);
             setSearchQuery('');
+            setIsCreatingGuest(false);
+            setNewGuestData({ first_name: '', last_name: '', email: '', phone: '' });
         }
     }, [isOpen, initialData]);
 
@@ -79,18 +91,84 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedGuest || !formData.bed_id) return;
+        if (!selectedGuest) return;
 
         setLoading(true);
         try {
-            await ReservationsAPI.create({
-                ...formData,
-                guest_id: selectedGuest.id
-            });
+            const totalGuests = Math.max(1, formData.adults + formData.children);
+            let bedIds = initialData?.bedIds && initialData.bedIds.length > 0
+                ? initialData.bedIds
+                : (formData.bed_id ? [formData.bed_id] : []);
+
+            // Auto-assign beds if none were selected
+            if (bedIds.length === 0) {
+                const options = await AvailabilityAPI.groupSearch({
+                    group_size: totalGuests,
+                    check_in: formData.check_in,
+                    check_out: formData.check_out,
+                });
+
+                if (options.length > 0) {
+                    bedIds = options[0].beds
+                        .map(bed => bed.id as number)
+                        .filter((id) => Number.isInteger(id));
+                } else {
+                    const availableBeds = await AvailabilityAPI.findBeds({
+                        check_in: formData.check_in,
+                        check_out: formData.check_out,
+                    });
+
+                    bedIds = availableBeds
+                        .slice(0, totalGuests)
+                        .map(bed => bed.id as number)
+                        .filter((id) => Number.isInteger(id));
+                }
+
+                if (bedIds.length < totalGuests) {
+                    alert('Brak wystarczającej liczby dostępnych łóżek dla wybranej liczby osób.');
+                    return;
+                }
+            }
+
+            const reservationData = {
+                guest_id: selectedGuest.id,
+                bed_ids: bedIds,
+                check_in: formData.check_in,
+                check_out: formData.check_out,
+                status: formData.status,
+                adults: formData.adults,
+                children: formData.children,
+                notes: formData.notes,
+                total_price: formData.total_price
+            };
+
+            await ReservationsAPI.create(reservationData);
             onSuccess();
             onClose();
+        } catch (error: any) {
+            const message = error.response?.data?.message || error.message || "Błąd podczas tworzenia rezerwacji.";
+            alert(`Błąd: ${message}`);
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCreateGuest = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newGuestData.first_name || !newGuestData.last_name || !newGuestData.email) {
+            alert("Imię, nazwisko i email są wymagane.");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const guest = await GuestsAPI.create(newGuestData);
+            setSelectedGuest(guest);
+            setStep(2);
+            setIsCreatingGuest(false);
         } catch (error) {
-            alert("Błąd podczas tworzenia rezerwacji. Sprawdź czy termin nie jest zajęty.");
+            alert("Błąd podczas dodawania gościa. Sprawdź czy podany email jest unikalny.");
             console.error(error);
         } finally {
             setLoading(false);
@@ -101,6 +179,10 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
     const selectedRoom = rooms.find(r => r.id === formData.room_id);
     const selectedBed = selectedRoom?.beds?.find(b => b.id === formData.bed_id);
+    const selectedBedCount = initialData?.bedIds?.length || 1;
+    const isDormitory = selectedRoom?.room_type === 'dormitory';
+    const showBedWarning = isDormitory && (formData.adults + formData.children > selectedBedCount);
+    const isAutoBedSelection = !formData.bed_id && !(initialData?.bedIds && initialData.bedIds.length > 0);
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
@@ -119,17 +201,31 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                 <form onSubmit={handleSubmit}>
                     <div className="p-6">
                         {/* SELECTION SUMMARY - ALWAYS VISIBLE */}
-                        <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-2xl flex flex-wrap gap-y-3 items-center text-sm shadow-sm">
-                            <div className="flex items-center gap-2 text-blue-700 font-bold mr-6">
-                                <CalendarIcon size={16} />
-                                <span>{format(parseISO(formData.check_in), 'd MMMM', { locale: pl })}</span>
-                                <span className="text-blue-300 mx-1">→</span>
-                                <span>{format(parseISO(formData.check_out), 'd MMMM', { locale: pl })}</span>
+                        <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-2xl space-y-2 shadow-sm">
+                            <div className="flex flex-wrap gap-y-3 items-center text-sm">
+                                <div className="flex items-center gap-2 text-blue-700 font-bold mr-6">
+                                    <CalendarIcon size={16} />
+                                    <span>{format(parseISO(formData.check_in), 'd MMMM', { locale: pl })}</span>
+                                    <span className="text-blue-300 mx-1">→</span>
+                                    <span>{format(parseISO(formData.check_out), 'd MMMM', { locale: pl })}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-blue-600 font-medium">
+                                    <MapPin size={16} />
+                                    <span>{selectedRoom?.name}, miejsce {selectedBed?.bed_number}</span>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2 text-blue-600 font-medium">
-                                <MapPin size={16} />
-                                <span>{selectedRoom?.name}, miejsce {selectedBed?.bed_number}</span>
-                            </div>
+                            {initialData?.bedIds && initialData.bedIds.length > 1 && (
+                                <div className="pt-2 border-t border-blue-100">
+                                    <p className="text-xs font-bold text-blue-700 uppercase mb-1">Rezerwacja grupowa</p>
+                                    <p className="text-sm text-blue-600">
+                                        {initialData.bedIds.length} łóżek: {initialData.bedIds.map(id => {
+                                            const bed = rooms.flatMap(r => r.beds || []).find(b => b.id === id);
+                                            const room = rooms.find(r => r.beds?.some(b => b.id === id));
+                                            return `${room?.name} #${bed?.bed_number}`;
+                                        }).join(', ')}
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         {step === 1 ? (
@@ -167,10 +263,63 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                             <div className="opacity-0 group-hover:opacity-100 text-brand-600 font-bold text-xs transition-all">WYBIERZ →</div>
                                         </div>
                                     ))}
-                                    {searchQuery.length > 2 && searchResults.length === 0 && !searching && (
+                                    {searchQuery.length > 2 && searchResults.length === 0 && !searching && !isCreatingGuest && (
                                         <div className="p-8 text-center border-2 border-dashed border-gray-100 rounded-2xl">
                                             <UserPlus size={24} className="mx-auto text-gray-300 mb-2" />
-                                            <p className="text-sm text-gray-500">Nie znaleziono gościa. <br /><span className="text-brand-600 font-bold cursor-pointer">Dodaj nowego →</span></p>
+                                            <p className="text-sm text-gray-500">Nie znaleziono gościa. <br />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsCreatingGuest(true)}
+                                                    className="text-brand-600 font-bold hover:underline"
+                                                >
+                                                    Dodaj nowego →
+                                                </button>
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {isCreatingGuest && (
+                                        <div className="space-y-4 p-4 bg-gray-50 rounded-2xl border border-gray-200 animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <h4 className="font-bold text-gray-900 text-sm">Nowy Gość</h4>
+                                                <button type="button" onClick={() => setIsCreatingGuest(false)} className="text-xs text-gray-500 hover:text-gray-700">Anuluj</button>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <input
+                                                    placeholder="Imię"
+                                                    value={newGuestData.first_name}
+                                                    onChange={e => setNewGuestData({ ...newGuestData, first_name: e.target.value })}
+                                                    className="p-2.5 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                                                />
+                                                <input
+                                                    placeholder="Nazwisko"
+                                                    value={newGuestData.last_name}
+                                                    onChange={e => setNewGuestData({ ...newGuestData, last_name: e.target.value })}
+                                                    className="p-2.5 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                                                />
+                                            </div>
+                                            <input
+                                                type="email"
+                                                placeholder="Email"
+                                                value={newGuestData.email}
+                                                onChange={e => setNewGuestData({ ...newGuestData, email: e.target.value })}
+                                                className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                                            />
+                                            <input
+                                                placeholder="Telefon (opcjonalnie)"
+                                                value={newGuestData.phone}
+                                                onChange={e => setNewGuestData({ ...newGuestData, phone: e.target.value })}
+                                                className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleCreateGuest}
+                                                disabled={loading}
+                                                className="w-full py-2.5 bg-brand-600 text-white rounded-xl font-bold text-sm hover:bg-brand-700 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                {loading ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+                                                Zapisz i kontynuuj
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -258,6 +407,22 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                         </div>
                                     </div>
                                 </div>
+
+                                {isAutoBedSelection && (
+                                    <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
+                                        Nie wybrano łóżek. System przydzieli automatycznie liczbę łóżek równą liczbie osób.
+                                    </div>
+                                )}
+
+                                {showBedWarning && (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-amber-700">
+                                        <Users size={16} className="mt-0.5 shrink-0" />
+                                        <div className="text-xs">
+                                            <p className="font-bold">Uwaga: Więcej osób niż łóżek</p>
+                                            <p>Wybrałeś {selectedBedCount} łóżka dla {formData.adults + formData.children} osób. Dla pokoi wieloosobowych każda osoba powinna mieć osobne łóżko w kalendarzu.</p>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div>
                                     <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Notatki (opcjonalnie)</label>

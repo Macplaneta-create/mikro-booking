@@ -188,6 +188,10 @@ export const GuestsAPI = {
 };
 
 export const AvailabilityAPI = {
+    groupSearch: async (params: { group_size: number, check_in: string, check_out: string }) => {
+        const res = await api.get('/availability/group-search', { params });
+        return res.data.data as { type: string; room_id?: number; beds: Bed[]; score: number }[];
+    },
     getCalendar: async (bedId: number, start: string, end: string) => {
         const res = await api.get(`/availability/calendar/${bedId}`, { params: { start_date: start, end_date: end } });
         return res.data.data;
@@ -199,6 +203,32 @@ export const AvailabilityAPI = {
     findBeds: async (params: { check_in: string, check_out: string, room_id?: number }) => {
         const res = await api.get('/availability/beds', { params });
         return res.data.data as Bed[];
+    }
+};
+
+export const DashboardAPI = {
+    getStats: async () => {
+        const res = await api.get('/dashboard/stats');
+        return res.data.data;
+    }
+};
+
+export const SettingsAPI = {
+    getAll: async () => {
+        const res = await api.get('/settings');
+        return res.data.data as {
+            pending_timeout_hours: number;
+            auto_expire_pending: boolean;
+            require_payment_confirmation: boolean;
+        };
+    },
+    update: async (data: {
+        pending_timeout_hours?: number;
+        auto_expire_pending?: boolean;
+        require_payment_confirmation?: boolean;
+    }) => {
+        const res = await api.post('/settings', data);
+        return res.data.data;
     }
 };
 

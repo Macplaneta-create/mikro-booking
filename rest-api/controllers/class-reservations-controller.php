@@ -48,7 +48,7 @@ class ReservationsController extends RestController {
                 'callback' => [$this, 'get_items'],
                 'permission_callback' => [$this, 'check_permission'],
                 'args' => [
-                    'status' => ['type' => 'string'], // or array
+                    'status' => ['type' => ['string', 'array']],
                     'check_in_from' => ['type' => 'string', 'format' => 'date'],
                     'check_in_to' => ['type' => 'string', 'format' => 'date'],
                     'check_out_from' => ['type' => 'string', 'format' => 'date'],
@@ -66,7 +66,7 @@ class ReservationsController extends RestController {
                 // Validation handled by Service, but basic types here
                 'args' => [
                     'guest_id' => ['required' => true, 'type' => 'integer'],
-                    'bed_id' => ['required' => true, 'type' => 'integer'],
+                    'bed_ids' => ['required' => true, 'type' => 'array', 'items' => ['type' => 'integer']],
                     'check_in' => ['required' => true, 'type' => 'string', 'format' => 'date'],
                     'check_out' => ['required' => true, 'type' => 'string', 'format' => 'date'],
                     'adults' => ['type' => 'integer', 'default' => 1],
@@ -122,7 +122,13 @@ class ReservationsController extends RestController {
         
         $reservations = $this->reservation_repository->all($args);
         
-        $data = array_map(fn($res) => $res->toArray(), $reservations);
+        $data = array_map(function($res) {
+            $arr = $res->toArray();
+            if (isset($res->bed_id)) {
+                $arr['bed_id'] = $res->bed_id;
+            }
+            return $arr;
+        }, $reservations);
         
         return $this->success($data);
     }
@@ -146,9 +152,18 @@ class ReservationsController extends RestController {
      */
     public function create_item($request): WP_REST_Response {
         try {
-            $reservation = $this->reservation_service->createReservation($request->get_params());
+            $params = $request->get_params();
+            $reservation = $this->reservation_service->createReservation($params);
             return $this->success($reservation->toArray(), 201);
         } catch (\Exception $e) {
+            $safe_context = [
+                'error' => $e->getMessage(),
+                'guest_id' => isset($params['guest_id']) ? (int) $params['guest_id'] : null,
+                'check_in' => $params['check_in'] ?? null,
+                'check_out' => $params['check_out'] ?? null,
+                'bed_ids_count' => isset($params['bed_ids']) && is_array($params['bed_ids']) ? count($params['bed_ids']) : null,
+            ];
+            error_log('[MikroBooking] Create Reservation Error: ' . wp_json_encode($safe_context));
             return $this->error($e->getMessage());
         }
     }

@@ -64,24 +64,34 @@ class Plugin {
         require_once $dir . 'core/models/class-bed.php';
         require_once $dir . 'core/models/class-guest.php';
         require_once $dir . 'core/models/class-reservation.php';
+        require_once $dir . 'core/models/class-reservation-bed.php';
+        require_once $dir . 'core/models/class-pricing.php';
         
         // 3. Repositories
         require_once $dir . 'core/repositories/class-room-repository.php';
         require_once $dir . 'core/repositories/class-bed-repository.php';
         require_once $dir . 'core/repositories/class-guest-repository.php';
         require_once $dir . 'core/repositories/class-reservation-repository.php';
+        require_once $dir . 'core/repositories/class-reservation-bed-repository.php';
+        require_once $dir . 'core/repositories/class-pricing-repository.php';
         
         // 4. Services
         require_once $dir . 'core/services/class-availability-service.php';
         require_once $dir . 'core/services/class-notification-service.php';
         require_once $dir . 'core/services/class-reservation-service.php';
         require_once $dir . 'core/services/class-guest-service.php';
+        require_once $dir . 'core/services/class-pricing-service.php';
+        require_once $dir . 'core/services/class-reservation-expiry-service.php';
         
         // 5. REST API Controllers
         require_once $dir . 'rest-api/controllers/class-rooms-controller.php';
         require_once $dir . 'rest-api/controllers/class-reservations-controller.php';
+        require_once $dir . 'rest-api/controllers/class-public-reservations-controller.php';
         require_once $dir . 'rest-api/controllers/class-guests-controller.php';
         require_once $dir . 'rest-api/controllers/class-availability-controller.php';
+        require_once $dir . 'rest-api/controllers/class-pricing-controller.php';
+        require_once $dir . 'rest-api/controllers/class-dashboard-controller.php';
+        require_once $dir . 'rest-api/controllers/class-settings-controller.php';
         
         // 6. Routes
         require_once $dir . 'rest-api/routes.php';
@@ -89,6 +99,12 @@ class Plugin {
         // 7. Admin & Frontend
         require_once $dir . 'core/class-admin.php';
         require_once $dir . 'public/class-frontend.php';
+        require_once $dir . 'core/class-cron-handler.php';
+
+        // 8. Utilities
+        if (file_exists($dir . 'force-update.php')) {
+            require_once $dir . 'force-update.php';
+        }
     }
     
     /**

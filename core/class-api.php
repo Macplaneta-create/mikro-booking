@@ -11,6 +11,11 @@ class Mikroplaneta_Booking_API {
     private $namespace = 'mikroplaneta-booking/v1';
 
     public function register_routes() {
+        // Legacy API disabled by default for security. Opt-in with a filter if needed.
+        if (!apply_filters('mikroplaneta_booking_enable_legacy_api', false)) {
+            return;
+        }
+
         register_rest_route( $this->namespace, '/dashboard/stats', array(
             'methods'  => 'GET',
             'callback' => array( $this, 'get_dashboard_stats' ),
@@ -33,13 +38,13 @@ class Mikroplaneta_Booking_API {
         register_rest_route( $this->namespace, '/bookings/check', array(
             'methods'  => 'POST',
             'callback' => array( $this, 'api_check_availability' ),
-            'permission_callback' => '__return_true',
+            'permission_callback' => array( $this, 'check_permission' ),
         ) );
 
         register_rest_route( $this->namespace, '/bookings', array(
             'methods'  => 'POST',
             'callback' => array( $this, 'api_create_booking' ),
-            'permission_callback' => '__return_true',
+            'permission_callback' => array( $this, 'check_permission' ),
         ) );
     }
 

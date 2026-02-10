@@ -1,0 +1,62 @@
+<?php
+/**
+ * Pricing Model
+ *
+ * @package MikroPlaneta\Booking
+ * @since 1.0.0
+ */
+
+namespace MikroPlaneta\Booking\Core\Models;
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class Pricing {
+    
+    public ?int $id;
+    public int $room_id;
+    public string $start_date;
+    public string $end_date;
+    public float $base_price;
+    public float $weekend_price;
+    public string $created_at;
+    public string $updated_at;
+    
+    /**
+     * Constructor
+     */
+    public function __construct(array $data = []) {
+        $this->id = isset($data['id']) ? (int) $data['id'] : null;
+        $this->room_id = (int) ($data['room_id'] ?? 0);
+        $this->start_date = $data['start_date'] ?? '';
+        $this->end_date = $data['end_date'] ?? '';
+        $this->base_price = (float) ($data['base_price'] ?? 0.0);
+        $this->weekend_price = (float) ($data['weekend_price'] ?? 0.0);
+        $this->created_at = $data['created_at'] ?? '';
+        $this->updated_at = $data['updated_at'] ?? '';
+    }
+    
+    /**
+     * Create from array
+     */
+    public static function fromArray(array $data): self {
+        return new self($data);
+    }
+    
+    /**
+     * Convert to array
+     */
+    public function toArray(): array {
+        return [
+            'id' => $this->id,
+            'room_id' => $this->room_id,
+            'start_date' => $this->start_date,
+            'end_date' => $this->end_date,
+            'base_price' => $this->base_price,
+            'weekend_price' => $this->weekend_price,
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at,
+        ];
+    }
+}

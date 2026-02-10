@@ -15,18 +15,25 @@ use MikroPlaneta\Booking\Core\Repositories\RoomRepository;
 use MikroPlaneta\Booking\Core\Repositories\BedRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationRepository;
 use MikroPlaneta\Booking\Core\Repositories\GuestRepository;
+use MikroPlaneta\Booking\Core\Repositories\PricingRepository;
+use MikroPlaneta\Booking\Core\Repositories\ReservationBedRepository;
 
 // Services
 use MikroPlaneta\Booking\Core\Services\AvailabilityService;
 use MikroPlaneta\Booking\Core\Services\ReservationService;
 use MikroPlaneta\Booking\Core\Services\GuestService;
 use MikroPlaneta\Booking\Core\Services\NotificationService;
+use MikroPlaneta\Booking\Core\Services\PricingService;
 
 // Controllers
 use MikroPlaneta\Booking\RestApi\Controllers\RoomsController;
 use MikroPlaneta\Booking\RestApi\Controllers\ReservationsController;
+use MikroPlaneta\Booking\RestApi\Controllers\PublicReservationsController;
 use MikroPlaneta\Booking\RestApi\Controllers\GuestsController;
 use MikroPlaneta\Booking\RestApi\Controllers\AvailabilityController;
+use MikroPlaneta\Booking\RestApi\Controllers\PricingController;
+use MikroPlaneta\Booking\RestApi\Controllers\DashboardController;
+use MikroPlaneta\Booking\RestApi\Controllers\SettingsController;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -42,17 +49,24 @@ function register_routes(): void {
     $bed_repo = new BedRepository();
     $reservation_repo = new ReservationRepository();
     $guest_repo = new GuestRepository();
+    $pricing_repo = new PricingRepository();
+    $res_bed_repo = new ReservationBedRepository();
     
     // 2. Initialize Services
     // Availability Service needs BedRepo & ReservationRepo
     $availability_service = new AvailabilityService($bed_repo, $reservation_repo);
+    
+    // Pricing Service needs PricingRepo & BedRepo
+    $pricing_service = new PricingService($pricing_repo, $bed_repo);
     
     // Reservation Service needs ReservationRepo, GuestRepo, BedRepo, AvailabilityService
     $reservation_service = new ReservationService(
         $reservation_repo,
         $guest_repo,
         $bed_repo,
-        $availability_service
+        $availability_service,
+        $pricing_service,
+        $res_bed_repo
     );
     
     // Guest Service needs GuestRepo & ReservationRepo
@@ -70,6 +84,10 @@ function register_routes(): void {
     // Reservations Controller
     $reservations_controller = new ReservationsController($reservation_service, $reservation_repo);
     $reservations_controller->register_routes();
+
+    // Public Reservations Controller
+    $public_reservations_controller = new PublicReservationsController($reservation_service, $guest_service);
+    $public_reservations_controller->register_routes();
     
     // Guests Controller
     $guests_controller = new GuestsController($guest_service, $guest_repo);
@@ -78,6 +96,18 @@ function register_routes(): void {
     // Availability Controller
     $availability_controller = new AvailabilityController($availability_service);
     $availability_controller->register_routes();
+    
+    // Pricing Controller
+    $pricing_controller = new PricingController($pricing_repo, $pricing_service);
+    $pricing_controller->register_routes();
+    
+    // Dashboard Controller
+    $dashboard_controller = new DashboardController($room_repo, $bed_repo, $reservation_repo);
+    $dashboard_controller->register_routes();
+    
+    // Settings Controller
+    $settings_controller = new SettingsController();
+    $settings_controller->register_routes();
 }
 
 add_action('rest_api_init', __NAMESPACE__ . '\\register_routes');

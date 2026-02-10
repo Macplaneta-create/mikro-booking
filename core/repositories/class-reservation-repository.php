@@ -46,27 +46,50 @@ class ReservationRepository implements RepositoryInterface {
             ARRAY_A
         );
         
-        return $row ? Reservation::fromArray($row) : null;
+        if (!$row) {
+            return null;
+        }
+        
+        // Fetch bed IDs
+        $reservation_beds_table = Schema::get_table_name('reservation_beds');
+        $bed_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT bed_id FROM {$reservation_beds_table} WHERE reservation_id = %d",
+            $id
+        ));
+        
+        $row['bed_ids'] = array_map('intval', $bed_ids);
+        
+        return Reservation::fromArray($row);
     }
     
     /**
      * Get all reservations
+     * Returns a flattened list where each row represents a bed occupancy.
+     * Group reservations will appear as multiple rows (one per bed).
      */
     public function all(array $args = []): array {
         global $wpdb;
         
-        $where = '1=1';
+        $reservation_beds_table = Schema::get_table_name('reservation_beds');
+        
+        // Base query - join with reservation_beds to get bed_id
+        $sql = "SELECT r.*, rb.bed_id, g.first_name, g.last_name 
+                FROM {$this->table} r 
+                JOIN {$reservation_beds_table} rb ON r.id = rb.reservation_id
+                LEFT JOIN {$this->guests_table} g ON r.guest_id = g.id 
+                WHERE 1=1";
+        
         $params = [];
         
         // Filter by bed
         if (!empty($args['bed_id'])) {
-            $where .= ' AND r.bed_id = %d';
+            $sql .= ' AND rb.bed_id = %d';
             $params[] = $args['bed_id'];
         }
         
         // Filter by guest
         if (!empty($args['guest_id'])) {
-            $where .= ' AND r.guest_id = %d';
+            $sql .= ' AND r.guest_id = %d';
             $params[] = $args['guest_id'];
         }
         
@@ -74,61 +97,51 @@ class ReservationRepository implements RepositoryInterface {
         if (!empty($args['status'])) {
             if (is_array($args['status'])) {
                 $placeholders = implode(',', array_fill(0, count($args['status']), '%s'));
-                $where .= " AND r.status IN ({$placeholders})";
+                $sql .= " AND r.status IN ({$placeholders})";
                 $params = array_merge($params, $args['status']);
             } else {
-                $where .= ' AND r.status = %s';
+                $sql .= ' AND r.status = %s';
                 $params[] = $args['status'];
             }
         }
         
         // Filter by date range
         if (!empty($args['check_in_from'])) {
-            $where .= ' AND r.check_in >= %s';
+            $sql .= ' AND r.check_in >= %s';
             $params[] = $args['check_in_from'];
         }
         
         if (!empty($args['check_in_to'])) {
-            $where .= ' AND r.check_in <= %s';
+            $sql .= ' AND r.check_in <= %s';
             $params[] = $args['check_in_to'];
         }
         
         if (!empty($args['check_out_from'])) {
-            $where .= ' AND r.check_out >= %s';
+            $sql .= ' AND r.check_out >= %s';
             $params[] = $args['check_out_from'];
         }
         
         if (!empty($args['check_out_to'])) {
-            $where .= ' AND r.check_out <= %s';
+            $sql .= ' AND r.check_out <= %s';
             $params[] = $args['check_out_to'];
         }
         
-        // Order by
-        $order_field = $args['order_by'] ?? 'check_in';
-        $order_by = "r.{$order_field}";
-        $order = $args['order'] ?? 'DESC';
-        
-        // Limit
-        $limit = isset($args['limit']) ? (int) $args['limit'] : null;
-        $offset = isset($args['offset']) ? (int) $args['offset'] : 0;
-        
-        $sql = "SELECT r.*, g.first_name, g.last_name 
-                FROM {$this->table} r 
-                LEFT JOIN {$this->guests_table} g ON r.guest_id = g.id 
-                WHERE {$where} ORDER BY {$order_by} {$order}";
-        
-        if ($limit) {
-            $sql .= " LIMIT {$offset}, {$limit}";
-        }
+        // Order by check-in date
+        // Note: Simple ordering, we ignore complex args['order_by'] for now as this is mainly for calendar
+        $sql .= ' ORDER BY r.check_in ASC';
         
         if (!empty($params)) {
-            $sql = $wpdb->prepare($sql, ...$params);
+            $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        } else {
+            $rows = $wpdb->get_results($sql, ARRAY_A);
         }
         
-        $rows = $wpdb->get_results($sql, ARRAY_A);
-        
+        // Return Model objects
         return array_map(function($row) {
-            return Reservation::fromArray($row);
+            $reservation = Reservation::fromArray($row);
+            // We attach bed_id to the object dynamically for calendar usage
+            $reservation->bed_id = (int) $row['bed_id'];
+            return $reservation;
         }, $rows);
     }
     
@@ -139,7 +152,6 @@ class ReservationRepository implements RepositoryInterface {
         global $wpdb;
         
         $insert_data = [
-            'bed_id' => $data['bed_id'],
             'guest_id' => $data['guest_id'],
             'check_in' => $data['check_in'],
             'check_out' => $data['check_out'],
@@ -169,12 +181,16 @@ class ReservationRepository implements RepositoryInterface {
         global $wpdb;
         
         $update_data = [];
-        $fields = ['bed_id', 'check_in', 'check_out', 'status', 'total_price', 'adults', 'children', 'notes'];
+        $fields = ['check_in', 'check_out', 'status', 'total_price', 'adults', 'children', 'notes'];
         
         foreach ($fields as $field) {
             if (isset($data[$field])) {
                 $update_data[$field] = $data[$field];
             }
+        }
+        
+        if (isset($data['updated_at'])) {
+            $update_data['updated_at'] = $data['updated_at'];
         }
         
         if (empty($update_data)) {
@@ -212,79 +228,51 @@ class ReservationRepository implements RepositoryInterface {
     }
     
     /**
-     * Find reservations by guest
+     * Check if bed is available for given dates
      */
-    public function findByGuest(int $guest_id): array {
-        return $this->all(['guest_id' => $guest_id]);
+    public function isBedAvailable(int $bed_id, string $check_in, string $check_out, ?int $exclude_reservation_id = null): bool {
+        global $wpdb;
+        
+        $reservation_beds_table = Schema::get_table_name('reservation_beds');
+         
+        // Join reservation_beds with reservations to check dates and status
+        $sql = "SELECT COUNT(*) FROM {$this->table} r
+                JOIN {$reservation_beds_table} rb ON r.id = rb.reservation_id
+                WHERE rb.bed_id = %d
+                AND r.status IN (%s, %s, %s)
+                AND r.check_in < %s 
+                AND r.check_out > %s";
+                 
+        $params = [
+            $bed_id,
+            Reservation::STATUS_CONFIRMED,
+            Reservation::STATUS_CHECKED_IN,
+            Reservation::STATUS_PENDING,
+            $check_out,
+            $check_in,
+        ];
+        
+        if ($exclude_reservation_id) {
+            $sql .= ' AND r.id != %d';
+            $params[] = $exclude_reservation_id;
+        }
+        
+        $count = $wpdb->get_var($wpdb->prepare($sql, $params));
+        
+        return $count == 0;
     }
-    
+
     /**
      * Find reservations by bed
      */
     public function findByBed(int $bed_id): array {
         return $this->all(['bed_id' => $bed_id]);
     }
-    
+
     /**
-     * Find active reservations
+     * Find reservations by guest
      */
-    public function findActive(): array {
-        return $this->all([
-            'status' => [
-                Reservation::STATUS_CONFIRMED,
-                Reservation::STATUS_CHECKED_IN,
-            ],
-        ]);
-    }
-    
-    /**
-     * Find upcoming reservations
-     */
-    public function findUpcoming(int $days = 7): array {
-        $today = current_time('Y-m-d');
-        $future = date('Y-m-d', strtotime("+{$days} days"));
-        
-        return $this->all([
-            'check_in_from' => $today,
-            'check_in_to' => $future,
-            'status' => Reservation::STATUS_CONFIRMED,
-        ]);
-    }
-    
-    /**
-     * Check if bed is available for dates
-     */
-    public function isBedAvailable(int $bed_id, string $check_in, string $check_out, ?int $exclude_reservation_id = null): bool {
-        global $wpdb;
-        
-        $where = 'bed_id = %d AND status IN (%s, %s, %s) AND (
-            (check_in <= %s AND check_out > %s) OR
-            (check_in < %s AND check_out >= %s) OR
-            (check_in >= %s AND check_out <= %s)
-        )';
-        
-        $params = [
-            $bed_id,
-            Reservation::STATUS_CONFIRMED,
-            Reservation::STATUS_CHECKED_IN,
-            Reservation::STATUS_PENDING,
-            $check_in, $check_in,
-            $check_out, $check_out,
-            $check_in, $check_out,
-        ];
-        
-        if ($exclude_reservation_id) {
-            $where .= ' AND id != %d';
-            $params[] = $exclude_reservation_id;
-        }
-        
-        $sql = $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$this->table} WHERE {$where}",
-            ...$params
-        );
-        
-        $count = (int) $wpdb->get_var($sql);
-        
-        return $count === 0;
+    public function findByGuest(int $guest_id): array {
+        return $this->all(['guest_id' => $guest_id]);
     }
 }

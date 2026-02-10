@@ -8,6 +8,16 @@ const GuestsView: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [stats, setStats] = useState({ total_guests: 0, returning_guests: 0 });
 
+    // Add Guest Modal State
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [newGuest, setNewGuest] = useState({
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: ''
+    });
+
     useEffect(() => {
         fetchData();
         fetchStats();
@@ -37,6 +47,23 @@ const GuestsView: React.FC = () => {
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         fetchData(searchQuery);
+    };
+
+    const handleAddGuest = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSaving(true);
+        try {
+            await GuestsAPI.create(newGuest);
+            setIsModalOpen(false);
+            setNewGuest({ first_name: '', last_name: '', email: '', phone: '' });
+            fetchData();
+            fetchStats();
+        } catch (error) {
+            alert("Błąd podczas dodawania gościa. Sprawdź czy email jest unikalny.");
+            console.error(error);
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -86,8 +113,12 @@ const GuestsView: React.FC = () => {
                     <button className="px-4 py-2 border border-gray-200 rounded-xl text-gray-600 bg-white hover:bg-gray-50 font-medium transition-all shadow-sm">
                         Eksportuj CSV
                     </button>
-                    <button className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 transition-all shadow-md">
-                        + Dodaj Gościa
+                    <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 transition-all shadow-md flex items-center gap-2"
+                    >
+                        <UserPlus size={18} />
+                        Dodaj Gościa
                     </button>
                 </div>
             </div>
@@ -158,6 +189,77 @@ const GuestsView: React.FC = () => {
                     </table>
                 )}
             </div>
+
+            {/* Add Guest Modal */}
+            {isModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95">
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                            <h3 className="text-xl font-bold">Dodaj Nowego Gościa</h3>
+                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                                <ArrowRight className="rotate-180" size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleAddGuest} className="p-6 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Imię</label>
+                                    <input
+                                        required
+                                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500"
+                                        value={newGuest.first_name}
+                                        onChange={e => setNewGuest({ ...newGuest, first_name: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nazwisko</label>
+                                    <input
+                                        required
+                                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500"
+                                        value={newGuest.last_name}
+                                        onChange={e => setNewGuest({ ...newGuest, last_name: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
+                                <input
+                                    required
+                                    type="email"
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500"
+                                    value={newGuest.email}
+                                    onChange={e => setNewGuest({ ...newGuest, email: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Telefon</label>
+                                <input
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500"
+                                    value={newGuest.phone}
+                                    onChange={e => setNewGuest({ ...newGuest, phone: e.target.value })}
+                                />
+                            </div>
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsModalOpen(false)}
+                                    className="flex-1 py-3 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50"
+                                >
+                                    Anuluj
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="flex-1 py-3 bg-brand-600 text-white rounded-xl font-bold flex items-center justify-center gap-2"
+                                >
+                                    {saving ? <Loader2 size={18} className="animate-spin" /> : <UserPlus size={18} />}
+                                    Zapisz
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

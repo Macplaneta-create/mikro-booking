@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { TrendingUp, Users, LogOut, CheckCircle2, Calendar, Bed, AlertCircle, Loader2 } from 'lucide-react';
-import { ReservationsAPI, AvailabilityAPI, Reservation } from '../services/api';
+import { TrendingUp, Users, LogOut, CheckCircle2, Calendar, Bed, AlertCircle, Loader2, Home, LayoutList } from 'lucide-react';
+import { ReservationsAPI, DashboardAPI, Reservation } from '../services/api';
 
 const DashboardContent: React.FC = () => {
     const [loading, setLoading] = useState(true);
@@ -8,7 +8,10 @@ const DashboardContent: React.FC = () => {
         arrivals: 0,
         departures: 0,
         occupancy: 0,
-        revenue: '0 zł'
+        revenue: '0 zł',
+        totalRooms: 0,
+        totalBeds: 0,
+        activeBookings: 0
     });
     const [todayArrivals, setTodayArrivals] = useState<Reservation[]>([]);
 
@@ -18,33 +21,27 @@ const DashboardContent: React.FC = () => {
                 // Get today's date YYYY-MM-DD
                 const today = new Date().toISOString().split('T')[0];
 
-                // Fetch Arrivals
+                // Fetch Optimized Stats
+                const dashboardStats = await DashboardAPI.getStats();
+
+                // Fetch Today's Arrivals (Detailed list for the list component)
                 const arrivals = await ReservationsAPI.getAll({
                     check_in_from: today,
                     check_in_to: today,
-                    status: ['confirmed', 'checked_in'] // Pending might count too?
+                    status: ['confirmed', 'checked_in']
                 });
-
-                // Fetch Departures
-                const departures = await ReservationsAPI.getAll({
-                    check_out_from: today,
-                    check_out_to: today,
-                    status: 'checked_in'
-                });
-
-                // Fetch Occupancy
-                const occupancyData = await AvailabilityAPI.getOccupancy(
-                    { start_date: today, end_date: today }
-                );
 
                 setStats({
-                    arrivals: arrivals.length,
-                    departures: departures.length,
-                    occupancy: occupancyData?.rate || 0,
-                    revenue: '0 zł' // Need revenue endpoint
+                    arrivals: dashboardStats.arrivals_today || 0,
+                    departures: dashboardStats.departures_today || 0,
+                    occupancy: dashboardStats.occupancy_rate || 0,
+                    revenue: '0 zł', // Still placeholder for now
+                    totalRooms: dashboardStats.total_rooms || 0,
+                    totalBeds: dashboardStats.total_beds || 0,
+                    activeBookings: dashboardStats.active_bookings || 0
                 });
 
-                setTodayArrivals(arrivals.slice(0, 5)); // Limit to 5
+                setTodayArrivals(arrivals.slice(0, 5));
 
             } catch (error) {
                 console.error("Dashboard fetch error:", error);
@@ -70,22 +67,22 @@ const DashboardContent: React.FC = () => {
             </header>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-10">
                 {[
-                    { label: 'Obłożenie', value: stats.occupancy + '%', trend: '', icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
-                    { label: 'Przyjazdy (Dziś)', value: stats.arrivals, sub: 'Gości czekających', icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                    { label: 'Wyjazdy (Dziś)', value: stats.departures, sub: 'Pokoi do sprzątania', icon: LogOut, color: 'text-orange-600', bg: 'bg-orange-50' },
-                    { label: 'Przychód (Dziś)', value: stats.revenue, trend: '', icon: CheckCircle2, color: 'text-purple-600', bg: 'bg-purple-50' },
+                    { label: 'Obłożenie', value: stats.occupancy + '%', icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
+                    { label: 'Aktywne Rezerwacje', value: stats.activeBookings, sub: 'Zajęte łóżka dziś', icon: CheckCircle2, color: 'text-purple-600', bg: 'bg-purple-50' },
+                    { label: 'Przyjazdy', value: stats.arrivals, sub: 'Dziś', icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                    { label: 'Wyjazdy', value: stats.departures, sub: 'Dziś', icon: LogOut, color: 'text-orange-600', bg: 'bg-orange-50' },
+                    { label: 'Wszystkie Pokoje', value: stats.totalRooms, icon: Home, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                    { label: 'Wszystkie Łóżka', value: stats.totalBeds, icon: LayoutList, color: 'text-pink-600', bg: 'bg-pink-50' },
                 ].map((stat, i) => (
-                    <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className={`p-2 rounded-lg ${stat.bg} ${stat.color}`}>
-                                <stat.icon size={20} />
-                            </div>
+                    <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
+                        <div className={`w-10 h-10 rounded-lg ${stat.bg} ${stat.color} flex items-center justify-center mb-4`}>
+                            <stat.icon size={20} />
                         </div>
-                        <h3 className="text-gray-500 text-sm font-medium mb-1">{stat.label}</h3>
-                        <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                        {stat.sub && <p className="text-xs text-gray-400 mt-1">{stat.sub}</p>}
+                        <h3 className="text-gray-500 text-xs font-medium mb-1 uppercase tracking-wider">{stat.label}</h3>
+                        <p className="text-xl font-extrabold text-gray-900">{stat.value}</p>
+                        {stat.sub && <p className="text-[10px] text-gray-400 mt-1">{stat.sub}</p>}
                     </div>
                 ))}
             </div>

@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
 class Reservation {
     
     public int $id;
-    public int $bed_id;
+    public array $bed_ids = [];
     public int $guest_id;
     public string $check_in;
     public string $check_out;
@@ -57,8 +57,8 @@ class Reservation {
      */
     public function fill(array $data): void {
         $this->id = (int) ($data['id'] ?? 0);
-        $this->bed_id = (int) ($data['bed_id'] ?? 0);
         $this->guest_id = (int) ($data['guest_id'] ?? 0);
+        $this->bed_ids = isset($data['bed_ids']) && is_array($data['bed_ids']) ? $data['bed_ids'] : [];
         $this->check_in = (string) ($data['check_in'] ?? '');
         $this->check_out = (string) ($data['check_out'] ?? '');
         $this->status = (string) ($data['status'] ?? self::STATUS_PENDING);
@@ -88,7 +88,7 @@ class Reservation {
     public function toArray(): array {
         return [
             'id' => $this->id,
-            'bed_id' => $this->bed_id,
+            'bed_ids' => $this->bed_ids,
             'guest_id' => $this->guest_id,
             'check_in' => $this->check_in,
             'check_out' => $this->check_out,

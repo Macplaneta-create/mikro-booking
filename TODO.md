@@ -13,28 +13,28 @@
 **Current:** Hardcoded $100 za rezerwację
 
 **Tasks:**
-- [ ] Stworzyć `class-pricing-service.php` z logiką kalkulacji
-- [ ] Tabela `wp_hotel_pricing` (room_id, date_range, base_price, weekend_price)
-  - [ ] Schema (migration 010)
+- [x] Stworzyć `class-pricing-service.php` z logiką kalkulacji
+- [x] Tabela `wp_hotel_pricing` (room_id, date_range, base_price, weekend_price)
+  - [x] Schema (migration 010)
 - [ ] Admin UI do zarządzania cenami
   - [ ] Nowa zakładka: "Cennik" w admin panelu
   - [ ] Calendar picker (check-in / check-out)
   - [ ] Price input dla weekday/weekend
-- [ ] REST API endpoint: `GET /pricing/calculate`
-  - [ ] Parameters: room_id, check_in, check_out
-  - [ ] Response: { base_price, weekend_surcharge, total }
-- [ ] Integration w ReservationService
+- [x] REST API endpoint: `GET /pricing/calculate`
+  - [x] Parameters: room_id, check_in, check_out
+  - [x] Response: { base_price, weekend_surcharge, total }
+- [x] Integration w ReservationService
 - [ ] Tests: `test-pricing.php`
 
 **Files to create/modify:**
 ```
-core/services/class-pricing-service.php        (NEW)
-core/repositories/class-pricing-repository.php (NEW)
-core/database/migrations/010-create-pricing.php (NEW)
-core/models/class-pricing.php                  (NEW)
-rest-api/controllers/class-pricing-controller.php (NEW)
-admin/src/components/PricingTab.tsx            (UPDATE)
-tests/unit/test-pricing.php                    (NEW)
+core/services/class-pricing-service.php        (DONE)
+core/repositories/class-pricing-repository.php (DONE)
+core/database/migrations/010-create-pricing.php (DONE)
+core/models/class-pricing.php                  (DONE)
+rest-api/controllers/class-pricing-controller.php (DONE)
+admin/src/components/PricingTab.tsx            (TODO)
+tests/unit/test-pricing.php                    (TODO)
 ```
 
 ---

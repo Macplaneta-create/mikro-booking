@@ -62,6 +62,9 @@ class Activator {
         // Set default plugin options
         self::set_default_options();
         
+        // Schedule cron events
+        self::schedule_cron_events();
+        
         // Flush rewrite rules
         flush_rewrite_rules();
     }
@@ -73,12 +76,25 @@ class Activator {
         $defaults = [
             'mikroplaneta_booking_version' => MIKROPLANETA_BOOKING_VERSION,
             'mikroplaneta_booking_installed_at' => current_time('mysql'),
+            'mikroplaneta_booking_pending_timeout_hours' => 48,
+            'mikroplaneta_booking_auto_expire_pending' => true,
+            'mikroplaneta_booking_require_payment_confirmation' => true,
         ];
         
         foreach ($defaults as $key => $value) {
             if (get_option($key) === false) {
                 add_option($key, $value);
             }
+        }
+    }
+    
+    /**
+     * Schedule cron events
+     */
+    private static function schedule_cron_events(): void {
+        // Schedule hourly cron for expiring pending reservations
+        if (!wp_next_scheduled('mikroplaneta_booking_expire_reservations')) {
+            wp_schedule_event(time(), 'hourly', 'mikroplaneta_booking_expire_reservations');
         }
     }
 }

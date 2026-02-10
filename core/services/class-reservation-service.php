@@ -14,6 +14,8 @@ use MikroPlaneta\Booking\Core\Repositories\ReservationRepository;
 use MikroPlaneta\Booking\Core\Repositories\GuestRepository;
 use MikroPlaneta\Booking\Core\Repositories\BedRepository;
 use MikroPlaneta\Booking\Core\Models\Reservation;
+use MikroPlaneta\Booking\Core\Services\PricingService;
+use MikroPlaneta\Booking\Core\Repositories\ReservationBedRepository;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -25,6 +27,8 @@ class ReservationService {
     private GuestRepository $guest_repository;
     private BedRepository $bed_repository;
     private AvailabilityService $availability_service;
+    private PricingService $pricing_service;
+    private ReservationBedRepository $reservation_bed_repository;
     
     /**
      * Constructor
@@ -33,38 +37,35 @@ class ReservationService {
         ReservationRepository $reservation_repository,
         GuestRepository $guest_repository,
         BedRepository $bed_repository,
-        AvailabilityService $availability_service
+        AvailabilityService $availability_service,
+        PricingService $pricing_service,
+        ReservationBedRepository $reservation_bed_repository
     ) {
         $this->reservation_repository = $reservation_repository;
         $this->guest_repository = $guest_repository;
         $this->bed_repository = $bed_repository;
         $this->availability_service = $availability_service;
+        $this->pricing_service = $pricing_service;
+        $this->reservation_bed_repository = $reservation_bed_repository;
     }
     
     /**
      * Create new reservation with validation
+     * Always expects bed_ids array for single or group reservations
      */
     public function createReservation(array $data): Reservation {
         // Validate required fields
         $this->validateReservationData($data);
         
-        // Check bed availability
-        if (!$this->availability_service->isBedAvailable(
-            $data['bed_id'],
-            $data['check_in'],
-            $data['check_out']
-        )) {
-            throw new \Exception('Bed is not available for selected dates');
+        // Ensure bed_ids is always an array
+        if (!isset($data['bed_ids']) || !is_array($data['bed_ids']) || empty($data['bed_ids'])) {
+            throw new \Exception('At least one bed must be selected (bed_ids required)');
         }
+        
+        $bed_ids = $data['bed_ids'];
         
         // Validate dates
         $this->validateDates($data['check_in'], $data['check_out']);
-        
-        // Verify bed exists and is active
-        $bed = $this->bed_repository->find($data['bed_id']);
-        if (!$bed || !$bed->is_active) {
-            throw new \Exception('Bed not found or inactive');
-        }
         
         // Verify guest exists
         $guest = $this->guest_repository->find($data['guest_id']);
@@ -72,20 +73,58 @@ class ReservationService {
             throw new \Exception('Guest not found');
         }
         
-        // Calculate price if not provided
-        if (!isset($data['total_price'])) {
-            $data['total_price'] = $this->calculatePrice(
-                $data['bed_id'],
+        // Validate all beds and check availability
+        $total_price = 0;
+        foreach ($bed_ids as $bed_id) {
+            // Verify bed exists and is active
+            $bed = $this->bed_repository->find($bed_id);
+            if (!$bed || !$bed->is_active) {
+                throw new \Exception("Bed #{$bed_id} not found or inactive");
+            }
+            
+            // Check bed availability
+            if (!$this->availability_service->isBedAvailable(
+                $bed_id,
+                $data['check_in'],
+                $data['check_out']
+            )) {
+                throw new \Exception("Bed #{$bed_id} is not available for selected dates");
+            }
+            
+            // Calculate price for this bed
+            $total_price += $this->calculatePrice(
+                $bed_id,
                 $data['check_in'],
                 $data['check_out']
             );
         }
         
+        // Use calculated price if not provided
+        if (!isset($data['total_price'])) {
+            $data['total_price'] = $total_price;
+        }
+        
+        // CRITICAL: Force all reservations to start as PENDING
+        // This ensures they must be explicitly confirmed before finalization
+        $data['status'] = Reservation::STATUS_PENDING;
+        
+        // Remove bed_ids from data before creating reservation
+        unset($data['bed_ids']);
+        
         // Create reservation
         $reservation = $this->reservation_repository->create($data);
         
+        // Link all beds to this reservation
+        $this->reservation_bed_repository->setBedsForReservation(
+            $reservation->id,
+            $bed_ids
+        );
+        
+        // Re-fetch to get beds and updated data
+        $reservation = $this->reservation_repository->find($reservation->id);
+        
         // Fire WordPress action
-        do_action('mikroplaneta_booking_reservation_created', $reservation);
+        do_action('mikroplaneta_booking_reservation_created', $reservation, $bed_ids);
         
         return $reservation;
     }
@@ -100,21 +139,23 @@ class ReservationService {
             throw new \Exception('Reservation not found');
         }
         
-        // If dates are being changed, check availability
-        if (isset($data['check_in']) || isset($data['check_out']) || isset($data['bed_id'])) {
+        // If dates or beds are being changed, check availability
+        if (isset($data['check_in']) || isset($data['check_out']) || isset($data['bed_ids'])) {
             $check_in = $data['check_in'] ?? $reservation->check_in;
             $check_out = $data['check_out'] ?? $reservation->check_out;
-            $bed_id = $data['bed_id'] ?? $reservation->bed_id;
+            $bed_ids = $data['bed_ids'] ?? $reservation->bed_ids;
             
             $this->validateDates($check_in, $check_out);
             
-            if (!$this->availability_service->isBedAvailable(
-                $bed_id,
-                $check_in,
-                $check_out,
-                $id // Exclude current reservation
-            )) {
-                throw new \Exception('Bed is not available for selected dates');
+            foreach ($bed_ids as $bed_id) {
+                if (!$this->availability_service->isBedAvailable(
+                    $bed_id,
+                    $check_in,
+                    $check_out,
+                    $id // Exclude current reservation
+                )) {
+                    throw new \Exception("Bed #{$bed_id} is not available for selected dates");
+                }
             }
         }
         
@@ -245,7 +286,7 @@ class ReservationService {
      * Validate reservation data
      */
     private function validateReservationData(array $data): void {
-        $required = ['bed_id', 'guest_id', 'check_in', 'check_out'];
+        $required = ['bed_ids', 'guest_id', 'check_in', 'check_out'];
         
         foreach ($required as $field) {
             if (!isset($data[$field]) || empty($data[$field])) {
@@ -275,14 +316,8 @@ class ReservationService {
      * Calculate price for reservation
      */
     private function calculatePrice(int $bed_id, string $check_in, string $check_out): float {
-        $check_in_dt = new \DateTime($check_in);
-        $check_out_dt = new \DateTime($check_out);
-        $nights = $check_in_dt->diff($check_out_dt)->days;
-        
-        // TODO: Implement dynamic pricing based on bed type, season, etc.
-        $price_per_night = 100.00;
-        
-        return $nights * $price_per_night;
+        $result = $this->pricing_service->calculateTotalPrice($bed_id, $check_in, $check_out);
+        return (float) $result['total'];
     }
     
     /**
