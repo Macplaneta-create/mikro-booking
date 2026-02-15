@@ -37,4 +37,4 @@ Zwiększenie elastyczności rezerwacji obejmujących wiele łóżek.
 
 ---
 
-**Status bieżący:** ✅ Podstawowa logika kalendarza (turnovers, group booking, pricing) - **USTABILIZOWANA** (v1.0.6).
+**Status bieżący:** ✅ Interaktywność kalendarza, rezerwacje grupowe i dynamiczne ceny - **USTABILIZOWANE** (v1.0.7).
