@@ -242,9 +242,13 @@ export const PricingAPI = {
     calculate: async (params: { bed_id: number; check_in: string; check_out: string }) => {
         const res = await api.get('/pricing/calculate', { params });
         return res.data.data as {
-            base_price: number;
-            weekend_surcharge: number;
             total: number;
+            nights: number;
+            details: Array<{
+                date: string;
+                price: number;
+                is_weekend: boolean;
+            }>;
         };
     }
 };

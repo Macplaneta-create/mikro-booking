@@ -1,7 +1,8 @@
 # 📝 TODO - MikroPlaneta Booking Development Roadmap
 
-**Last Updated:** 2026-02-05  
+**Last Updated:** 2026-02-15  
 **Status:** In Production (Ongoing Development)
+**Latest Achievement:** ✅ Calendar turnover clickability & segment rendering (v1.0.6)
 
 ---
 

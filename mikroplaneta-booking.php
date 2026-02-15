@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('MIKROPLANETA_BOOKING_VERSION', '1.0.6');
+define('MIKROPLANETA_BOOKING_VERSION', '1.0.7');
 define('MIKROPLANETA_BOOKING_PLUGIN_FILE', __FILE__);
 define('MIKROPLANETA_BOOKING_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MIKROPLANETA_BOOKING_PLUGIN_URL', plugin_dir_url(__FILE__));

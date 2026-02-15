@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Save, Loader2, UserPlus, Users, Baby, Calendar as CalendarIcon, MapPin } from 'lucide-react';
-import { AvailabilityAPI, GuestsAPI, ReservationsAPI, Guest, Room } from '../services/api';
+import { X, Search, Save, Loader2, UserPlus, Users, Baby, Calendar as CalendarIcon, MapPin, CreditCard, Coins } from 'lucide-react';
+import { AvailabilityAPI, GuestsAPI, ReservationsAPI, PricingAPI, Guest, Room } from '../services/api';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -68,6 +68,59 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
             setNewGuestData({ first_name: '', last_name: '', email: '', phone: '' });
         }
     }, [isOpen, initialData]);
+
+    // --- DYNAMIC PRICING CALCULATION ---
+    const [pricingLoading, setPricingLoading] = useState(false);
+    const [nightsCount, setNightsCount] = useState(0);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const calculatePrice = async () => {
+            const bedIds = initialData?.bedIds?.length
+                ? initialData.bedIds
+                : (formData.bed_id ? [formData.bed_id] : []);
+
+            if (bedIds.length === 0 || !formData.check_in || !formData.check_out) {
+                setFormData(f => ({ ...f, total_price: 0 }));
+                setNightsCount(0);
+                return;
+            }
+
+            // Don't calculate if check-out <= check-in
+            if (parseISO(formData.check_out) <= parseISO(formData.check_in)) {
+                setFormData(f => ({ ...f, total_price: 0 }));
+                setNightsCount(0);
+                return;
+            }
+
+            setPricingLoading(true);
+            try {
+                let total = 0;
+                let nights = 0;
+
+                for (const bid of bedIds) {
+                    const priceData = await PricingAPI.calculate({
+                        bed_id: bid,
+                        check_in: formData.check_in,
+                        check_out: formData.check_out
+                    });
+                    total += priceData.total;
+                    nights = priceData.nights;
+                }
+
+                setFormData(f => ({ ...f, total_price: total }));
+                setNightsCount(nights);
+            } catch (error) {
+                console.error('Pricing calculation error:', error);
+            } finally {
+                setPricingLoading(false);
+            }
+        };
+
+        const timeoutId = setTimeout(calculatePrice, 300); // Debounce to avoid too many requests
+        return () => clearTimeout(timeoutId);
+    }, [isOpen, formData.check_in, formData.check_out, formData.bed_id, initialData?.bedIds]);
 
     // Simple guest search
     useEffect(() => {
@@ -433,6 +486,36 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                         className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all resize-none"
                                         placeholder="Uwagi do rezerwacji..."
                                     />
+                                </div>
+
+                                {/* PRICE DISPLAY */}
+                                <div className="mt-2 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-between shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white">
+                                            <CreditCard size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[11px] font-bold text-emerald-700 uppercase leading-none mb-1">Razem do zapłaty</p>
+                                            <p className="text-xs text-emerald-600 font-medium">{nightsCount} {nightsCount === 1 ? 'noc' : 'noce'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        {pricingLoading ? (
+                                            <div className="flex items-center gap-2 text-emerald-600 font-bold">
+                                                <Loader2 size={16} className="animate-spin" />
+                                                Przeliczanie...
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-end">
+                                                <span className="text-2xl font-black text-emerald-700 leading-none">
+                                                    {new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(formData.total_price)}
+                                                </span>
+                                                <span className="text-[10px] text-emerald-600/70 font-bold flex items-center gap-1 mt-1">
+                                                    <Coins size={10} /> Średnio {new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(formData.total_price / (nightsCount || 1))} / noc
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         )}

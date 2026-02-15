@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, BedDouble, Loader2, ChevronDown, ChevronRight as ChevronRightIcon, Home, Check, X, History } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BedDouble, Loader2, ChevronDown, ChevronRight as ChevronRightIcon, Home, Check, X, History, CreditCard } from 'lucide-react';
 import { format, addDays, startOfWeek, addWeeks, subWeeks, isSameDay, parseISO, differenceInDays, isAfter, isBefore } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { RoomsAPI, ReservationsAPI, Room, Reservation } from '../services/api';
@@ -712,6 +712,19 @@ const CalendarView: React.FC = () => {
                                             <p className="text-sm text-gray-700">{selectedReservation.notes}</p>
                                         </div>
                                     )}
+                                    <div className="pt-2 border-t border-gray-100 mt-2">
+                                        <div className="bg-emerald-50 p-4 rounded-xl flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-emerald-700">
+                                                <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white">
+                                                    <CreditCard size={16} />
+                                                </div>
+                                                <span className="text-xs font-bold uppercase tracking-wider">Do zapłaty</span>
+                                            </div>
+                                            <span className="text-xl font-black text-emerald-700">
+                                                {new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(selectedReservation.total_price || 0)}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </>
                             )}
                         </div>
@@ -735,14 +748,17 @@ const CalendarView: React.FC = () => {
                                 </button>
                             )}
                             <button
-                                onClick={async () => {
-                                    if (confirm('Czy na pewno chcesz anulować tę rezerwację?')) {
+                                onClick={async (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (window.confirm('Czy na pewno chcesz anulować tę rezerwację?')) {
                                         try {
                                             await ReservationsAPI.cancel(selectedReservation.id!, 'Anulowano przez użytkownika');
                                             setIsDetailsModalOpen(false);
                                             fetchData();
                                         } catch (error) {
                                             alert('Błąd podczas anulowania rezerwacji');
+                                            console.error(error);
                                         }
                                     }
                                 }}
