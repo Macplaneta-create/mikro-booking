@@ -15,6 +15,7 @@ use MikroPlaneta\Booking\Core\Repositories\GuestRepository;
 use MikroPlaneta\Booking\Core\Repositories\BedRepository;
 use MikroPlaneta\Booking\Core\Models\Reservation;
 use MikroPlaneta\Booking\Core\Services\PricingService;
+use MikroPlaneta\Booking\Core\Services\NotificationService;
 use MikroPlaneta\Booking\Core\Repositories\ReservationBedRepository;
 
 if (!defined('ABSPATH')) {
@@ -29,6 +30,7 @@ class ReservationService {
     private AvailabilityService $availability_service;
     private PricingService $pricing_service;
     private ReservationBedRepository $reservation_bed_repository;
+    private NotificationService $notification_service;
     
     /**
      * Constructor
@@ -39,7 +41,8 @@ class ReservationService {
         BedRepository $bed_repository,
         AvailabilityService $availability_service,
         PricingService $pricing_service,
-        ReservationBedRepository $reservation_bed_repository
+        ReservationBedRepository $reservation_bed_repository,
+        NotificationService $notification_service
     ) {
         $this->reservation_repository = $reservation_repository;
         $this->guest_repository = $guest_repository;
@@ -47,6 +50,7 @@ class ReservationService {
         $this->availability_service = $availability_service;
         $this->pricing_service = $pricing_service;
         $this->reservation_bed_repository = $reservation_bed_repository;
+        $this->notification_service = $notification_service;
     }
     
     /**
@@ -123,6 +127,17 @@ class ReservationService {
         // Re-fetch to get beds and updated data
         $reservation = $this->reservation_repository->find($reservation->id);
         
+        // Send confirmation email if enabled in settings
+        $email_notifications = (bool) get_option('mikroplaneta_booking_email_notifications', true);
+        if ($email_notifications && $guest->email) {
+            try {
+                $this->notification_service->sendReservationConfirmation($reservation, $guest);
+            } catch (\Exception $e) {
+                // Log error but don't fail the reservation
+                error_log('Failed to send reservation confirmation email: ' . $e->getMessage());
+            }
+        }
+        
         // Fire WordPress action
         do_action('mikroplaneta_booking_reservation_created', $reservation, $bed_ids);
         
@@ -194,6 +209,19 @@ class ReservationService {
             'status' => $reservation->status,
             'notes' => $reservation->notes . "\n\nCancelled: " . $reason,
         ]);
+        
+        // Send cancellation email if enabled
+        $email_notifications = (bool) get_option('mikroplaneta_booking_email_notifications', true);
+        if ($email_notifications) {
+            $guest = $this->guest_repository->find($updated->guest_id);
+            if ($guest && $guest->email) {
+                try {
+                    $this->notification_service->sendReservationCancellation($updated, $guest, $reason);
+                } catch (\Exception $e) {
+                    error_log('Failed to send cancellation email: ' . $e->getMessage());
+                }
+            }
+        }
         
         // Fire WordPress action
         do_action('mikroplaneta_booking_reservation_cancelled', $updated, $reason);

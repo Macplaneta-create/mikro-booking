@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, BedDouble, Loader2, ChevronDown, ChevronRight as ChevronRightIcon, Home, Check, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BedDouble, Loader2, ChevronDown, ChevronRight as ChevronRightIcon, Home, Check, X, History } from 'lucide-react';
 import { format, addDays, startOfWeek, addWeeks, subWeeks, isSameDay, parseISO, differenceInDays, isAfter, isBefore } from 'date-fns';
 import { pl } from 'date-fns/locale';
 import { RoomsAPI, ReservationsAPI, Room, Reservation } from '../services/api';
 import ReservationModal from './ReservationModal';
+import BookingHistory from './BookingHistory';
 
 const CalendarView: React.FC = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -22,6 +23,7 @@ const CalendarView: React.FC = () => {
     // Reservation details modal
     const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
     const days = Array.from({ length: 14 }).map((_, i) => addDays(startDate, i));
@@ -129,9 +131,23 @@ const CalendarView: React.FC = () => {
 
     // --- MULTI-BED SELECTION LOGIC ---
     const handleCellClick = (bedId: number, roomId: number, date: Date, event: React.MouseEvent) => {
-        const isOccupied = bookings.some(b => b.bed_id === bedId &&
-            (isSameDay(parseISO(b.check_in), date) || (isAfter(date, parseISO(b.check_in)) && isBefore(date, parseISO(b.check_out))))
-        );
+        // Turnover-aware occupancy check
+        const isOccupied = bookings.some(b => {
+            if (b.bed_id !== bedId || b.status === 'cancelled') return false;
+            const bIn = parseISO(b.check_in);
+            const bOut = parseISO(b.check_out);
+
+            if (!selection) {
+                // Starting selection: block if the night starting on this day is occupied
+                // A night is occupied if date >= check_in AND date < check_out
+                return !isBefore(date, bIn) && isBefore(date, bOut);
+            } else {
+                // Ending selection: block if our range overlaps existing nights
+                // Our nights: [selection.start, date-1]. Existing nights: [bIn, bOut-1]
+                return isBefore(selection.start!, bOut) && isAfter(date, bIn);
+            }
+        });
+
         if (isOccupied) return;
 
         // Ctrl+Click for multi-bed selection
@@ -150,11 +166,7 @@ const CalendarView: React.FC = () => {
                 const isAvailable = !bookings.some(b =>
                     b.bed_id === bedId &&
                     b.status !== 'cancelled' &&
-                    (
-                        (parseISO(b.check_in) < selection.end! && parseISO(b.check_out) > selection.start!) ||
-                        isSameDay(parseISO(b.check_in), selection.start!) ||
-                        isSameDay(parseISO(b.check_out), selection.end!)
-                    )
+                    (parseISO(b.check_in) < selection.end! && parseISO(b.check_out) > selection.start!)
                 );
 
                 if (isAvailable) {
@@ -170,24 +182,21 @@ const CalendarView: React.FC = () => {
 
         // Normal single-bed date selection
         if (!selection || selection.bedId !== bedId) {
-            // Start new selection - clear multi-bed selection
+            // Start new selection
             setSelectedBeds(new Set());
             setSelection({ bedId, roomId, start: date, end: null });
         } else if (selection.start && !selection.end) {
             // Set end date
             if (isSameDay(date, selection.start)) {
-                setSelection(null); // Deselect if clicked same day
+                setSelection(null);
                 setSelectedBeds(new Set());
             } else if (isBefore(date, selection.start)) {
-                // If clicked earlier date, make it the new start
                 setSelection({ ...selection, start: date, end: null });
             } else {
-                // Valid range selected - automatically add this bed to selection
                 setSelection({ ...selection, end: date });
                 setSelectedBeds(new Set([bedId]));
             }
         } else {
-            // Already have range, click again allows resetting or changing
             setSelectedBeds(new Set());
             setSelection({ bedId, roomId, start: date, end: null });
         }
@@ -215,39 +224,63 @@ const CalendarView: React.FC = () => {
     };
 
 
-    const getBookingStyle = (booking: Reservation) => {
+    const getBookingSlices = (booking: Reservation) => {
         const checkIn = parseISO(booking.check_in);
         const checkOut = parseISO(booking.check_out);
+        const slices = [];
 
-        const effectiveStart = checkIn < startDate ? startDate : checkIn;
-        const diffStart = differenceInDays(effectiveStart, startDate);
-        const visibleDuration = differenceInDays(checkOut, effectiveStart);
+        // Determine which days (indices 0-13) this reservation covers
+        for (let i = 0; i < 14; i++) {
+            const day = addDays(startDate, i);
+            const isStartDay = isSameDay(day, checkIn);
+            const isEndDay = isSameDay(day, checkOut);
+            const isMiddle = isAfter(day, checkIn) && isBefore(day, checkOut);
 
-        const dayWidth = 100 / 14;
-        const left = diffStart * dayWidth;
-        const width = Math.max(0.5, Math.min(visibleDuration, 14 - diffStart)) * dayWidth;
+            if (!isStartDay && !isEndDay && !isMiddle) continue;
 
-        if (checkOut <= startDate || checkIn > endDate) return { display: 'none' };
+            // Visual boundaries within the day segment (0.0 to 1.0)
+            let startOfSlice = 0;
+            let endOfSlice = 1;
 
-        const statusClass = booking.status === 'cancelled'
-            ? 'opacity-40'
-            : booking.status === 'checked_out'
-                ? 'opacity-70'
-                : booking.status === 'checked_in'
-                    ? 'ring-2 ring-emerald-700'
-                    : booking.status === 'pending'
-                        ? 'animate-pulse'
-                        : booking.status === 'selecting'
-                            ? 'ring-2 ring-brand-700 shadow-lg'
-                            : 'ring-1 ring-white/40';
+            if (isStartDay) startOfSlice = 0.6; // Arrives afternoon
+            if (isEndDay) endOfSlice = 0.4;     // Leaves morning
 
-        const colorClass = getStatusColor(booking.status);
+            // If a booking starts and ends on the same day (rare/illegal in nights system)
+            // our logic would give a negative or zero width. Skip or handle.
+            if (isStartDay && isEndDay) continue;
 
-        return {
-            left: `${left}%`,
-            width: `${width}%`,
-            className: `absolute top-1 bottom-1 rounded-md px-2 flex items-center text-[10px] text-white shadow-sm cursor-pointer hover:brightness-110 transition z-10 overflow-hidden ${colorClass} ${statusClass}`
-        };
+            const left = (i + startOfSlice) * (100 / 14);
+            const width = (endOfSlice - startOfSlice) * (100 / 14);
+
+            if (width <= 0) continue;
+
+            const statusClass = booking.status === 'cancelled'
+                ? 'opacity-40'
+                : booking.status === 'checked_out'
+                    ? 'opacity-70'
+                    : booking.status === 'checked_in'
+                        ? 'ring-2 ring-emerald-700'
+                        : booking.status === 'pending'
+                            ? 'animate-pulse'
+                            : booking.status === 'selecting'
+                                ? 'ring-2 ring-brand-700 shadow-lg'
+                                : 'ring-1 ring-white/40';
+
+            const colorClass = getStatusColor(booking.status);
+
+            // Rounded corners only for the very start and very end of the whole trip
+            const isFirstDayOfBooking = isStartDay;
+            const isLastDayOfBooking = isEndDay;
+
+            slices.push({
+                key: `${booking.id}-${i}`,
+                style: { left: `${left}%`, width: `${width}%` },
+                className: `absolute top-1 bottom-1 flex items-center text-[10px] text-white shadow-sm cursor-pointer hover:brightness-110 transition z-10 overflow-hidden ${colorClass} ${statusClass} ${isFirstDayOfBooking ? 'rounded-l-sm' : ''} ${isLastDayOfBooking ? 'rounded-r-sm' : ''}`,
+                booking,
+                showLabel: isFirstDayOfBooking || (i === 0 && isMiddle)
+            });
+        }
+        return slices;
     };
 
     const statusColors = {
@@ -284,15 +317,19 @@ const CalendarView: React.FC = () => {
         const checkIn = parseISO(check_in);
         const checkOut = parseISO(check_out);
 
-        const effectiveStart = checkIn < startDate ? startDate : checkIn;
-        const diffStart = differenceInDays(effectiveStart, startDate);
-        const visibleDuration = differenceInDays(checkOut, effectiveStart);
+        const isStartVisible = !isBefore(checkIn, startDate);
 
-        const dayWidth = 100 / 14;
-        const left = diffStart * dayWidth;
-        const width = Math.max(0.5, Math.min(visibleDuration, 14 - diffStart)) * dayWidth;
+        const startDayIndex = differenceInDays(checkIn, startDate);
+        const endDayIndex = differenceInDays(checkOut, startDate);
 
-        if (checkOut <= startDate || checkIn > endDate) return { display: 'none' } as const;
+        let left = (Math.max(0, startDayIndex) + (isStartVisible ? 0.6 : 0)) * (100 / 14);
+
+        const rightEdgeIndex = Math.min(14, endDayIndex + 0.4);
+        const leftEdgeIndex = Math.max(0, startDayIndex + (isStartVisible ? 0.6 : 0));
+
+        let width = (rightEdgeIndex - leftEdgeIndex) * (100 / 14);
+
+        if (isBefore(checkOut, startDate) || isSameDay(checkOut, startDate) || isAfter(checkIn, endDate)) return { display: 'none' } as const;
 
         return {
             left: `${left}%`,
@@ -372,7 +409,7 @@ const CalendarView: React.FC = () => {
                         <span className="flex items-center gap-2">✨ Kliknij datę przyjazdu i wyjazdu | Ctrl+klik aby dodać więcej łóżek (rezerwacja grupowa)</span>
                         <span className="text-brand-300">•</span>
                         <span>
-                            {`Rezerwacje: ${getVisibleStats().reservations} • Zajęte łóżka: ${getVisibleStats().beds}`}
+                            {`Rezerwacje: ${getVisibleStats().reservations} • Zajęte łóżka: ${getVisibleStats().beds} `}
                         </span>
                     </div>
                     {getVisibleStatusLegend().length > 0 && (
@@ -481,8 +518,11 @@ const CalendarView: React.FC = () => {
                                                 <div
                                                     key={day.toString()}
                                                     onClick={(e) => handleCellClick(bed.id!, room.id!, day, e)}
-                                                    className={`flex-1 min-w-[80px] border-r border-gray-50 cursor-pointer hover:bg-brand-50/20 transition-colors ${isSameDay(day, new Date()) ? 'bg-brand-50/10' : ''}`}
-                                                />
+                                                    className={`flex-1 min-w-[80px] border-r border-gray-200 relative cursor-pointer hover:bg-brand-50/20 transition-colors ${isSameDay(day, new Date()) ? 'bg-brand-50/10' : ''}`}
+                                                >
+                                                    {/* Noon marker (Check-in/Check-out time) */}
+                                                    <div className="absolute left-1/2 top-1 bottom-1 w-px border-l border-dashed border-gray-300 pointer-events-none opacity-40" />
+                                                </div>
                                             ))}
 
                                             {/* SELECTION PREVIEW - Updated for Multi-Bed */}
@@ -490,10 +530,10 @@ const CalendarView: React.FC = () => {
                                                 <>
                                                     {/* Start Day Indicator */}
                                                     <div
-                                                        className="absolute top-1 bottom-1 bg-emerald-600 rounded-l-md z-20 flex items-center justify-center text-[10px] text-white font-bold animate-in fade-in"
+                                                        className="absolute top-1 bottom-1 bg-emerald-600 rounded-l-md z-20 flex items-center justify-center text-[10px] text-white font-bold animate-in fade-in pointer-events-none"
                                                         style={{
-                                                            left: `${(differenceInDays(selection.start, startDate)) * (100 / 14)}%`,
-                                                            width: `${100 / 14}%`
+                                                            left: `${(differenceInDays(selection.start, startDate)) * (100 / 14)}% `,
+                                                            width: `${100 / 14}% `
                                                         }}
                                                     >
                                                         PRZYJAZD
@@ -506,11 +546,11 @@ const CalendarView: React.FC = () => {
                                                                 if (isAfter(day, selection.start!) && isBefore(day, selection.end!)) {
                                                                     return (
                                                                         <div
-                                                                            key={`range-${day.toString()}`}
-                                                                            className="absolute top-1.5 bottom-1.5 bg-brand-200/60 z-10"
+                                                                            key={`range - ${day.toString()} `}
+                                                                            className="absolute top-1.5 bottom-1.5 bg-brand-200/60 z-10 pointer-events-none"
                                                                             style={{
-                                                                                left: `${(differenceInDays(day, startDate)) * (100 / 14)}%`,
-                                                                                width: `${100 / 14}%`
+                                                                                left: `${(differenceInDays(day, startDate)) * (100 / 14)}% `,
+                                                                                width: `${100 / 14}% `
                                                                             }}
                                                                         />
                                                                     );
@@ -522,8 +562,8 @@ const CalendarView: React.FC = () => {
                                                             <div
                                                                 className="absolute top-1 bottom-1 bg-amber-600 rounded-r-md z-20 flex items-center justify-center text-[10px] text-white font-bold animate-in fade-in pointer-events-none"
                                                                 style={{
-                                                                    left: `${(differenceInDays(selection.end, startDate)) * (100 / 14)}%`,
-                                                                    width: `${100 / 14}%`
+                                                                    left: `${(differenceInDays(selection.end, startDate)) * (100 / 14)}% `,
+                                                                    width: `${100 / 14}% `
                                                                 }}
                                                             >
                                                                 WYJAZD
@@ -533,7 +573,7 @@ const CalendarView: React.FC = () => {
                                                             {selection.bedId === bed.id && (
                                                                 <div
                                                                     className="absolute -bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-2"
-                                                                    style={{ left: `${(differenceInDays(selection.start, startDate) + differenceInDays(selection.end, selection.start) / 2 + 0.5) * (100 / 14)}%` }}
+                                                                    style={{ left: `${(differenceInDays(selection.start, startDate) + differenceInDays(selection.end, selection.start) / 2 + 0.5) * (100 / 14)}% ` }}
                                                                 >
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); handleConfirmSelection(); }}
@@ -551,28 +591,26 @@ const CalendarView: React.FC = () => {
 
                                             {bookings
                                                 .filter(b => b.bed_id === bed.id && b.status !== 'cancelled')
-                                                .map(booking => {
-                                                    const style = getBookingStyle(booking);
-                                                    if (style.display === 'none') return null;
-
-                                                    return (
-                                                        <div
-                                                            key={booking.id}
-                                                            className={style.className}
-                                                            style={{ left: style.left, width: style.width }}
-                                                            title={`${booking.first_name} ${booking.last_name} | Rezerwacja #${booking.id}`}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedReservation(booking);
-                                                                setIsDetailsModalOpen(true);
-                                                            }}
-                                                        >
-                                                            <span className="truncate flex-1 font-bold">
-                                                                {booking.first_name?.[0]}. {booking.last_name}
+                                                .flatMap(booking => getBookingSlices(booking))
+                                                .map(slice => (
+                                                    <div
+                                                        key={slice.key}
+                                                        className={slice.className}
+                                                        style={slice.style}
+                                                        title={`${slice.booking.first_name} ${slice.booking.last_name} | Rezerwacja #${slice.booking.id}`}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedReservation(slice.booking);
+                                                            setIsDetailsModalOpen(true);
+                                                        }}
+                                                    >
+                                                        {slice.showLabel && (
+                                                            <span className="truncate flex-1 font-bold px-1">
+                                                                {slice.booking.first_name?.[0]}. {slice.booking.last_name}
                                                             </span>
-                                                        </div>
-                                                    );
-                                                })
+                                                        )}
+                                                    </div>
+                                                ))
                                             }
                                         </div>
                                     </div>
@@ -604,57 +642,77 @@ const CalendarView: React.FC = () => {
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
                         <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50/50">
-                            <h3 className="text-xl font-bold text-gray-900">Rezerwacja #{selectedReservation.id}</h3>
-                            <button onClick={() => setIsDetailsModalOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-xl transition-all shadow-sm">
+                            <div className="flex items-center gap-3">
+                                <h3 className="text-xl font-bold text-gray-900">Rezerwacja #{selectedReservation.id}</h3>
+                                <button
+                                    onClick={() => setShowHistory(!showHistory)}
+                                    className={`p-2 rounded-lg transition-colors ${showHistory ? 'bg-brand-100 text-brand-700' : 'bg-white text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                                    title="Historia zmian"
+                                >
+                                    <History size={18} />
+                                </button>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setIsDetailsModalOpen(false);
+                                    setShowHistory(false);
+                                }}
+                                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-xl transition-all shadow-sm"
+                            >
                                 <X size={20} />
                             </button>
                         </div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <p className="text-xs text-gray-500 uppercase font-bold mb-1">Gość</p>
-                                <p className="text-lg font-bold text-gray-900">{selectedReservation.first_name} {selectedReservation.last_name}</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Przyjazd</p>
-                                    <p className="font-medium">{format(parseISO(selectedReservation.check_in), 'd MMM yyyy', { locale: pl })}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Wyjazd</p>
-                                    <p className="font-medium">{format(parseISO(selectedReservation.check_out), 'd MMM yyyy', { locale: pl })}</p>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Dorośli</p>
-                                    <p className="font-medium">{selectedReservation.adults || 1}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Dzieci</p>
-                                    <p className="font-medium">{selectedReservation.children || 0}</p>
-                                </div>
-                            </div>
-                            <div>
-                                <p className="text-xs text-gray-500 uppercase font-bold mb-1">Status</p>
-                                <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${
-                                    selectedReservation.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                                    selectedReservation.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                                    selectedReservation.status === 'checked_in' ? 'bg-emerald-100 text-emerald-700' :
-                                    selectedReservation.status === 'checked_out' ? 'bg-gray-100 text-gray-700' :
-                                    'bg-gray-100 text-gray-700'
-                                }`}>
-                                    {selectedReservation.status === 'confirmed' ? 'Potwierdzona' :
-                                    selectedReservation.status === 'pending' ? 'Oczekująca' :
-                                    selectedReservation.status === 'checked_in' ? 'Zalogowana' :
-                                    selectedReservation.status === 'checked_out' ? 'Wylogowana' :
-                                    'Anulowana'}
-                                </span>
-                            </div>
-                            {selectedReservation.notes && (
-                                <div>
-                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Notatki</p>
-                                    <p className="text-sm text-gray-700">{selectedReservation.notes}</p>
-                                </div>
+                        <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                            {showHistory ? (
+                                <BookingHistory reservationId={selectedReservation.id!} />
+                            ) : (
+                                <>
+                                    <div>
+                                        <p className="text-xs text-gray-500 uppercase font-bold mb-1">Gość</p>
+                                        <p className="text-lg font-bold text-gray-900">{selectedReservation.first_name} {selectedReservation.last_name}</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase font-bold mb-1">Przyjazd</p>
+                                            <p className="font-medium">{format(parseISO(selectedReservation.check_in), 'd MMM yyyy', { locale: pl })}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase font-bold mb-1">Wyjazd</p>
+                                            <p className="font-medium">{format(parseISO(selectedReservation.check_out), 'd MMM yyyy', { locale: pl })}</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase font-bold mb-1">Dorośli</p>
+                                            <p className="font-medium">{selectedReservation.adults || 1}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase font-bold mb-1">Dzieci</p>
+                                            <p className="font-medium">{selectedReservation.children || 0}</p>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 uppercase font-bold mb-1">Status</p>
+                                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${selectedReservation.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                                            selectedReservation.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                                                selectedReservation.status === 'checked_in' ? 'bg-emerald-100 text-emerald-700' :
+                                                    selectedReservation.status === 'checked_out' ? 'bg-gray-100 text-gray-700' :
+                                                        'bg-gray-100 text-gray-700'
+                                            }`}>
+                                            {selectedReservation.status === 'confirmed' ? 'Potwierdzona' :
+                                                selectedReservation.status === 'pending' ? 'Oczekująca' :
+                                                    selectedReservation.status === 'checked_in' ? 'Zalogowana' :
+                                                        selectedReservation.status === 'checked_out' ? 'Wylogowana' :
+                                                            'Anulowana'}
+                                        </span>
+                                    </div>
+                                    {selectedReservation.notes && (
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase font-bold mb-1">Notatki</p>
+                                            <p className="text-sm text-gray-700">{selectedReservation.notes}</p>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                         <div className="p-6 border-t border-gray-100 flex gap-3">

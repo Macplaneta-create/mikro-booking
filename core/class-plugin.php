@@ -74,6 +74,7 @@ class Plugin {
         require_once $dir . 'core/repositories/class-reservation-repository.php';
         require_once $dir . 'core/repositories/class-reservation-bed-repository.php';
         require_once $dir . 'core/repositories/class-pricing-repository.php';
+        require_once $dir . 'core/repositories/class-changes-log-repository.php';
         
         // 4. Services
         require_once $dir . 'core/services/class-availability-service.php';
@@ -82,6 +83,7 @@ class Plugin {
         require_once $dir . 'core/services/class-guest-service.php';
         require_once $dir . 'core/services/class-pricing-service.php';
         require_once $dir . 'core/services/class-reservation-expiry-service.php';
+        require_once $dir . 'core/services/class-logger-service.php';
         
         // 5. REST API Controllers
         require_once $dir . 'rest-api/controllers/class-rooms-controller.php';
@@ -92,6 +94,7 @@ class Plugin {
         require_once $dir . 'rest-api/controllers/class-pricing-controller.php';
         require_once $dir . 'rest-api/controllers/class-dashboard-controller.php';
         require_once $dir . 'rest-api/controllers/class-settings-controller.php';
+        require_once $dir . 'rest-api/controllers/class-logs-controller.php';
         
         // 6. Routes
         require_once $dir . 'rest-api/routes.php';
@@ -100,6 +103,7 @@ class Plugin {
         require_once $dir . 'core/class-admin.php';
         require_once $dir . 'public/class-frontend.php';
         require_once $dir . 'core/class-cron-handler.php';
+        require_once $dir . 'core/class-logging-handler.php';
 
         // 8. Utilities
         if (file_exists($dir . 'force-update.php')) {

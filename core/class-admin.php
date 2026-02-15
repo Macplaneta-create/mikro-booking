@@ -77,6 +77,15 @@ class Admin {
         
         add_submenu_page(
             'mikroplaneta-booking',
+            __('Pricing', 'mikroplaneta-booking'),
+            __('Pricing', 'mikroplaneta-booking'),
+            'manage_options',
+            'mikroplaneta-booking-pricing',
+            [$this, 'render_admin_page']
+        );
+        
+        add_submenu_page(
+            'mikroplaneta-booking',
             __('Settings', 'mikroplaneta-booking'),
             __('Settings', 'mikroplaneta-booking'),
             'manage_options',

@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Save, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, Save, AlertCircle, Building2, Mail, Globe } from 'lucide-react';
 import { SettingsAPI } from '../services/api';
 
 interface PluginSettings {
+    hotel_name: string;
+    check_in_time: string;
+    check_out_time: string;
+    currency: string;
+    timezone: string;
+    email_notifications: boolean;
     pending_timeout_hours: number;
     auto_expire_pending: boolean;
     require_payment_confirmation: boolean;
@@ -12,6 +18,12 @@ const Settings: React.FC = () => {
     const [licenseKey, setLicenseKey] = useState('');
     const [status, setStatus] = useState<'inactive' | 'active'>('inactive');
     const [settings, setSettings] = useState<PluginSettings>({
+        hotel_name: 'Mój Hotel',
+        check_in_time: '14:00',
+        check_out_time: '11:00',
+        currency: 'PLN',
+        timezone: 'Europe/Warsaw',
+        email_notifications: true,
         pending_timeout_hours: 48,
         auto_expire_pending: true,
         require_payment_confirmation: true,
@@ -65,6 +77,131 @@ const Settings: React.FC = () => {
     return (
         <div className="max-w-2xl">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Ustawienia & Licencja</h2>
+
+            {/* Hotel Information Section */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Building2 className="text-brand-600" size={20} />
+                    Informacje o Hotelu
+                </h3>
+                <p className="text-gray-600 mb-6 text-sm">
+                    Podstawowe dane dotyczące Twojego obiektu.
+                </p>
+
+                {loading ? (
+                    <p className="text-gray-500">Ładowanie ustawień...</p>
+                ) : (
+                    <form onSubmit={handleSaveSettings} className="space-y-4">
+                        {/* Hotel Name */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Nazwa hotelu / obiektu
+                            </label>
+                            <input
+                                type="text"
+                                value={settings.hotel_name}
+                                onChange={(e) => setSettings({ ...settings, hotel_name: e.target.value })}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                placeholder="np. Hotel Słoneczny"
+                            />
+                        </div>
+
+                        {/* Check-in / Check-out Times */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Godzina zameldowania
+                                </label>
+                                <input
+                                    type="time"
+                                    value={settings.check_in_time}
+                                    onChange={(e) => setSettings({ ...settings, check_in_time: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Godzina wymeldowania
+                                </label>
+                                <input
+                                    type="time"
+                                    value={settings.check_out_time}
+                                    onChange={(e) => setSettings({ ...settings, check_out_time: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Currency & Timezone */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                                    <Globe size={14} />
+                                    Waluta
+                                </label>
+                                <select
+                                    value={settings.currency}
+                                    onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-border-500"
+                                >
+                                    <option value="PLN">PLN (zł)</option>
+                                    <option value="EUR">EUR (€)</option>
+                                    <option value="USD">USD ($)</option>
+                                    <option value="GBP">GBP (£)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Strefa czasowa
+                                </label>
+                                <select
+                                    value={settings.timezone}
+                                    onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                >
+                                    <option value="Europe/Warsaw">Europa/Warszawa (GMT+1)</option>
+                                    <option value="Europe/London">Europa/Londyn (GMT+0)</option>
+                                    <option value="Europe/Berlin">Europa/Berlin (GMT+1)</option>
+                                    <option value="America/New_York">Ameryka/Nowy Jork (GMT-5)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Email Notifications */}
+                        <div className="flex items-center gap-3 py-2 border-t border-gray-200 mt-4 pt-4">
+                            <input
+                                type="checkbox"
+                                id="email_notifications"
+                                checked={settings.email_notifications}
+                                onChange={(e) => setSettings({ ...settings, email_notifications: e.target.checked })}
+                                className="w-4 h-4 rounded text-brand-600 cursor-pointer"
+                            />
+                            <label htmlFor="email_notifications" className="text-sm font-medium text-gray-700 cursor-pointer flex items-center gap-2">
+                                <Mail size={16} />
+                                Włącz powiadomienia email dla gości
+                            </label>
+                        </div>
+
+                        {/* Save button */}
+                        <div className="flex items-center gap-2 mt-6 pt-4 border-t border-gray-200">
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700 transition disabled:opacity-50"
+                            >
+                                <Save className="inline-block mr-2" size={16} />
+                                {saving ? 'Zapisywanie...' : 'Zapisz ustawienia'}
+                            </button>
+                            {saved && (
+                                <span className="text-green-600 text-sm flex items-center gap-1">
+                                    <AlertCircle size={16} />
+                                    Zapisano pomyślnie
+                                </span>
+                            )}
+                        </div>
+                    </form>
+                )}
+            </div>
 
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">

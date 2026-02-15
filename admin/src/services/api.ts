@@ -213,22 +213,86 @@ export const DashboardAPI = {
     }
 };
 
+export const PricingAPI = {
+    getAll: async (params?: { room_id?: number }) => {
+        const res = await api.get('/pricing', { params });
+        return res.data.data as Array<{
+            id: number;
+            room_id: number;
+            start_date: string;
+            end_date: string;
+            base_price: number;
+            weekend_price: number;
+        }>;
+    },
+    create: async (data: {
+        room_id: number;
+        start_date: string;
+        end_date: string;
+        base_price: number;
+        weekend_price: number;
+    }) => {
+        const res = await api.post('/pricing', data);
+        return res.data.data;
+    },
+    delete: async (id: number) => {
+        const res = await api.delete(`/pricing/${id}`);
+        return res.data;
+    },
+    calculate: async (params: { bed_id: number; check_in: string; check_out: string }) => {
+        const res = await api.get('/pricing/calculate', { params });
+        return res.data.data as {
+            base_price: number;
+            weekend_surcharge: number;
+            total: number;
+        };
+    }
+};
+
 export const SettingsAPI = {
     getAll: async () => {
         const res = await api.get('/settings');
         return res.data.data as {
+            hotel_name: string;
+            check_in_time: string;
+            check_out_time: string;
+            currency: string;
+            timezone: string;
+            email_notifications: boolean;
             pending_timeout_hours: number;
             auto_expire_pending: boolean;
             require_payment_confirmation: boolean;
         };
     },
     update: async (data: {
+        hotel_name?: string;
+        check_in_time?: string;
+        check_out_time?: string;
+        currency?: string;
+        timezone?: string;
+        email_notifications?: boolean;
         pending_timeout_hours?: number;
         auto_expire_pending?: boolean;
         require_payment_confirmation?: boolean;
     }) => {
         const res = await api.post('/settings', data);
         return res.data.data;
+    }
+};
+
+export const LogsAPI = {
+    getByReservation: async (reservationId: number) => {
+        const res = await api.get(`/logs/${reservationId}`);
+        return res.data.data as Array<{
+            id: number;
+            reservation_id: number;
+            changed_by: number;
+            change_type: string;
+            old_value: any;
+            new_value: any;
+            created_at: string;
+            user_name: string;
+        }>;
     }
 };
 

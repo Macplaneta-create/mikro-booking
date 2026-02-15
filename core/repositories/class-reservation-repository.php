@@ -61,6 +61,37 @@ class ReservationRepository implements RepositoryInterface {
         
         return Reservation::fromArray($row);
     }
+
+    /**
+     * Find reservations by specific date field (check_in or check_out)
+     * Used for cron reminders to avoid duplicates from bed joins
+     */
+    public function findByDate(string $field, string $date, array $statuses = []): array {
+        global $wpdb;
+        
+        if (!in_array($field, ['check_in', 'check_out'])) {
+            return [];
+        }
+        
+        $sql = "SELECT r.*, g.first_name, g.last_name 
+                FROM {$this->table} r 
+                LEFT JOIN {$this->guests_table} g ON r.guest_id = g.id 
+                WHERE r.$field = %s";
+        
+        $params = [$date];
+        
+        if (!empty($statuses)) {
+            $placeholders = implode(',', array_fill(0, count($statuses), '%s'));
+            $sql .= " AND r.status IN ({$placeholders})";
+            $params = array_merge($params, $statuses);
+        }
+        
+        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        
+        return array_map(function($row) {
+            return Reservation::fromArray($row);
+        }, $rows);
+    }
     
     /**
      * Get all reservations
@@ -240,8 +271,8 @@ class ReservationRepository implements RepositoryInterface {
                 JOIN {$reservation_beds_table} rb ON r.id = rb.reservation_id
                 WHERE rb.bed_id = %d
                 AND r.status IN (%s, %s, %s)
-                AND r.check_in < %s 
-                AND r.check_out > %s";
+                AND CAST(r.check_in AS DATE) < CAST(%s AS DATE) 
+                AND CAST(r.check_out AS DATE) > CAST(%s AS DATE)";
                  
         $params = [
             $bed_id,
