@@ -6,6 +6,7 @@ interface Room {
     id?: number;
     name: string;
     room_type: string;
+    pricing_mode: 'per_room' | 'per_bed';
     beds?: any[];
 }
 
@@ -102,13 +103,7 @@ const PricingView: React.FC = () => {
 
     return (
         <div className="max-w-4xl">
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Cennik</h2>
-                    <p className="text-gray-600 text-sm mt-1">
-                        Zarządzaj cenami dla poszczególnych pokoi i okresów
-                    </p>
-                </div>
+            <div className="flex items-center justify-end mb-6">
                 <button
                     onClick={() => setShowAddForm(!showAddForm)}
                     className="bg-brand-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-brand-700 transition flex items-center gap-2"
@@ -140,7 +135,7 @@ const PricingView: React.FC = () => {
                                 <option value={0}>Wybierz pokój</option>
                                 {rooms.map((room) => (
                                     <option key={room.id} value={room.id}>
-                                        {room.name} ({room.room_type})
+                                        {room.name} ({room.room_type} - {room.pricing_mode === 'per_room' ? 'Pokój' : 'Łóżko'})
                                     </option>
                                 ))}
                             </select>
@@ -254,6 +249,9 @@ const PricingView: React.FC = () => {
                                                 </h4>
                                                 <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded">
                                                     {room?.room_type}
+                                                </span>
+                                                <span className={`px-2 py-0.5 text-xs font-medium rounded ${room?.pricing_mode === 'per_room' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                                                    {room?.pricing_mode === 'per_room' ? 'Cena za pokój' : 'Cena za łóżko (baza)'}
                                                 </span>
                                             </div>
 

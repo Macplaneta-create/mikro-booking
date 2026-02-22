@@ -5,13 +5,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, CalendarDays, BedDouble, Users, Settings as SettingsIcon, DollarSign } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, BedDouble, Users, Settings as SettingsIcon, DollarSign, Coins } from 'lucide-react';
 import RoomManager from './components/RoomManager';
 import DashboardContent from './components/DashboardContent';
 import CalendarView from './components/CalendarView';
-import Settings from './components/Settings';
 import GuestsView from './components/GuestsView';
 import PricingView from './components/PricingView';
+import ExtrasManager from '@/components/ExtrasManager';
+import Settings from './components/Settings';
 
 const App: React.FC = () => {
     // Determine current view based on URL parameter 'page'
@@ -20,17 +21,26 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const page = params.get('page') || '';
+        let page = params.get('page') || '';
 
-        if (page.endsWith('-rooms')) {
+        // Fallback to the variable passed from PHP if URL params are wonky
+        if (!page && (window as any).mikroplanetaBooking?.currentPage) {
+            page = (window as any).mikroplanetaBooking.currentPage;
+        }
+
+        console.log('Current Page Slug:', page);
+
+        if (page.includes('rooms')) {
             setCurrentView('rooms');
-        } else if (page.endsWith('-reservations')) {
+        } else if (page.includes('reservations')) {
             setCurrentView('reservations');
-        } else if (page.endsWith('-guests')) {
+        } else if (page.includes('guests')) {
             setCurrentView('guests');
-        } else if (page.endsWith('-pricing')) {
+        } else if (page.includes('pricing')) {
             setCurrentView('pricing');
-        } else if (page.endsWith('-settings')) {
+        } else if (page.includes('services') || page.includes('extras')) {
+            setCurrentView('extras');
+        } else if (page.includes('settings')) {
             setCurrentView('settings');
         } else {
             setCurrentView('dashboard');
@@ -48,6 +58,8 @@ const App: React.FC = () => {
                 return <GuestsView />;
             case 'pricing':
                 return <PricingView />;
+            case 'extras':
+                return <ExtrasManager />;
             case 'settings':
                 return <Settings />;
             case 'dashboard':
@@ -66,9 +78,10 @@ const App: React.FC = () => {
                     {currentView === 'reservations' && <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><CalendarDays className="text-brand-600" /> Rezerwacje</h1>}
                     {currentView === 'guests' && <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><Users className="text-brand-600" /> Baza Gości</h1>}
                     {currentView === 'pricing' && <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><DollarSign className="text-brand-600" /> Cennik</h1>}
+                    {currentView === 'extras' && <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><Coins className="text-brand-600" /> Usługi Dodatkowe</h1>}
                     {currentView === 'settings' && <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><SettingsIcon className="text-brand-600" /> Ustawienia</h1>}
 
-                    <p className="text-gray-500 mt-2 ml-1">MikroPlaneta Booking System v1.0</p>
+                    <p className="text-gray-500 mt-2 ml-1">MikroPlaneta Booking System v{window.mikroplanetaBooking?.version || '1.1.2'}</p>
                 </div>
             </header>
 

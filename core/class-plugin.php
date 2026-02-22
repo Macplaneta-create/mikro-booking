@@ -23,11 +23,6 @@ class Plugin {
     private static ?Plugin $instance = null;
     
     /**
-     * Plugin version
-     */
-    private const VERSION = '1.0.0';
-    
-    /**
      * Get singleton instance
      */
     public static function get_instance(): Plugin {
@@ -66,6 +61,8 @@ class Plugin {
         require_once $dir . 'core/models/class-reservation.php';
         require_once $dir . 'core/models/class-reservation-bed.php';
         require_once $dir . 'core/models/class-pricing.php';
+        require_once $dir . 'core/models/class-extra-service.php';
+        require_once $dir . 'core/models/class-reservation-extra.php';
         
         // 3. Repositories
         require_once $dir . 'core/repositories/class-room-repository.php';
@@ -75,6 +72,8 @@ class Plugin {
         require_once $dir . 'core/repositories/class-reservation-bed-repository.php';
         require_once $dir . 'core/repositories/class-pricing-repository.php';
         require_once $dir . 'core/repositories/class-changes-log-repository.php';
+        require_once $dir . 'core/repositories/class-extra-service-repository.php';
+        require_once $dir . 'core/repositories/class-reservation-extra-repository.php';
         
         // 4. Services
         require_once $dir . 'core/services/class-availability-service.php';
@@ -84,6 +83,7 @@ class Plugin {
         require_once $dir . 'core/services/class-pricing-service.php';
         require_once $dir . 'core/services/class-reservation-expiry-service.php';
         require_once $dir . 'core/services/class-logger-service.php';
+        require_once $dir . 'core/services/class-extra-service-service.php';
         
         // 5. REST API Controllers
         require_once $dir . 'rest-api/controllers/class-rooms-controller.php';
@@ -95,6 +95,7 @@ class Plugin {
         require_once $dir . 'rest-api/controllers/class-dashboard-controller.php';
         require_once $dir . 'rest-api/controllers/class-settings-controller.php';
         require_once $dir . 'rest-api/controllers/class-logs-controller.php';
+        require_once $dir . 'rest-api/controllers/class-extras-controller.php';
         
         // 6. Routes
         require_once $dir . 'rest-api/routes.php';
@@ -128,6 +129,6 @@ class Plugin {
      * Get plugin version
      */
     public function get_version(): string {
-        return self::VERSION;
+        return MIKROPLANETA_BOOKING_VERSION;
     }
 }

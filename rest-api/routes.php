@@ -34,6 +34,7 @@ use MikroPlaneta\Booking\RestApi\Controllers\AvailabilityController;
 use MikroPlaneta\Booking\RestApi\Controllers\PricingController;
 use MikroPlaneta\Booking\RestApi\Controllers\DashboardController;
 use MikroPlaneta\Booking\RestApi\Controllers\SettingsController;
+use MikroPlaneta\Booking\RestApi\Controllers\ExtrasController;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -51,19 +52,28 @@ function register_routes(): void {
     $guest_repo = new GuestRepository();
     $pricing_repo = new PricingRepository();
     $res_bed_repo = new ReservationBedRepository();
+    $extra_service_repo = new \MikroPlaneta\Booking\Core\Repositories\ExtraServiceRepository();
+    $res_extra_repo = new \MikroPlaneta\Booking\Core\Repositories\ReservationExtraRepository();
     
     // 2. Initialize Services
     // Availability Service needs BedRepo & ReservationRepo
     $availability_service = new AvailabilityService($bed_repo, $reservation_repo);
     
-    // Pricing Service needs PricingRepo & BedRepo
-    $pricing_service = new PricingService($pricing_repo, $bed_repo);
+    // Pricing Service needs PricingRepo, BedRepo & RoomRepo
+    $pricing_service = new PricingService($pricing_repo, $bed_repo, $room_repo);
     
     // Guest Service needs GuestRepo & ReservationRepo
     $guest_service = new GuestService($guest_repo, $reservation_repo);
     
     // Notification Service (no deps)
     $notification_service = new NotificationService();
+    
+    // Extra Service Service
+    $extra_service_service = new \MikroPlaneta\Booking\Core\Services\ExtraServiceService(
+        $extra_service_repo,
+        $res_extra_repo,
+        $reservation_repo
+    );
     
     // Reservation Service needs ReservationRepo, GuestRepo, BedRepo, AvailabilityService, PricingService, ReservationBedRepo, NotificationService
     $reservation_service = new ReservationService(
@@ -115,6 +125,10 @@ function register_routes(): void {
     $logger_service = new \MikroPlaneta\Booking\Core\Services\LoggerService($logs_repo);
     $logs_controller = new \MikroPlaneta\Booking\RestApi\Controllers\LogsController($logger_service);
     $logs_controller->register_routes();
+
+    // Extras Controller
+    $extras_controller = new ExtrasController($extra_service_repo, $extra_service_service);
+    $extras_controller->register_routes();
 }
 
 add_action('rest_api_init', __NAMESPACE__ . '\\register_routes');

@@ -170,8 +170,10 @@ class ReservationRepository implements RepositoryInterface {
         // Return Model objects
         return array_map(function($row) {
             $reservation = Reservation::fromArray($row);
-            // We attach bed_id to the object dynamically for calendar usage
-            $reservation->bed_id = (int) $row['bed_id'];
+            // NEW: Ensure bed_ids is populated for the frontend filters to work
+            // Even if it's a flattened join, we put the current bed_id into the array
+            $reservation->bed_ids = [(int) $row['bed_id']];
+            $reservation->bed_id = (int) $row['bed_id']; // Keep temporary for back-compat if needed
             return $reservation;
         }, $rows);
     }

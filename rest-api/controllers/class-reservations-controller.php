@@ -196,13 +196,12 @@ class ReservationsController extends RestController {
         }
     }
     
-    /**
-     * Confirm reservation
-     */
     public function confirm_item($request): WP_REST_Response {
         $id = (int) $request['id'];
+        $reason = $request->get_param('reason') ?? '';
+        
         try {
-            $reservation = $this->reservation_service->confirmReservation($id);
+            $reservation = $this->reservation_service->confirmReservation($id, $reason);
             return $this->success($reservation->toArray());
         } catch (\Exception $e) {
             return $this->error($e->getMessage());
@@ -214,8 +213,14 @@ class ReservationsController extends RestController {
      */
     public function checkin_item($request): WP_REST_Response {
         $id = (int) $request['id'];
+        $adjustment = [];
+        
+        if (isset($request['adults'])) $adjustment['adults'] = $request['adults'];
+        if (isset($request['children'])) $adjustment['children'] = $request['children'];
+        if (isset($request['bed_ids'])) $adjustment['bed_ids'] = $request['bed_ids'];
+
         try {
-            $reservation = $this->reservation_service->checkIn($id);
+            $reservation = $this->reservation_service->checkIn($id, $adjustment);
             return $this->success($reservation->toArray());
         } catch (\Exception $e) {
             return $this->error($e->getMessage());

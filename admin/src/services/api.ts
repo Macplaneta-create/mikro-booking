@@ -7,6 +7,7 @@ declare global {
             apiUrl: string;
             nonce: string;
             currentPage?: string;
+            version?: string;
         };
     }
 }
@@ -57,8 +58,14 @@ api.interceptors.response.use(
 export interface Room {
     id?: number;
     name: string;
+    description?: string;
+    image_id?: number;
+    image_url?: string;
+    amenities: string[];
     floor: number;
     room_type: string;
+    pricing_mode: 'per_room' | 'per_bed';
+    status: 'active' | 'inactive' | 'maintenance';
     beds?: Bed[];
 }
 
@@ -73,7 +80,7 @@ export interface Bed {
 export interface Reservation {
     id?: number;
     guest_id: number;
-    bed_id: number;
+    bed_ids: number[];
     check_in: string; // YYYY-MM-DD
     check_out: string; // YYYY-MM-DD
     status?: string;
@@ -99,7 +106,7 @@ export interface Guest {
 // --- API Methods ---
 
 export const RoomsAPI = {
-    getAll: async (params?: { floor?: number; room_type?: string }) => {
+    getAll: async (params?: { floor?: number; room_type?: string; status?: string }) => {
         const res = await api.get('/rooms', { params });
         return res.data.data as Room[];
     },
@@ -162,12 +169,16 @@ export const ReservationsAPI = {
         const res = await api.post(`/reservations/${id}/cancel`, { reason });
         return res.data.data as Reservation;
     },
-    checkIn: async (id: number) => {
-        const res = await api.post(`/reservations/${id}/checkin`);
+    checkIn: async (id: number, adjustment?: { adults?: number, children?: number, bed_ids?: number[] }) => {
+        const res = await api.post(`/reservations/${id}/checkin`, adjustment);
         return res.data.data as Reservation;
     },
-    confirm: async (id: number) => {
-        const res = await api.post(`/reservations/${id}/confirm`);
+    confirm: async (id: number, reason?: string) => {
+        const res = await api.post(`/reservations/${id}/confirm`, { reason });
+        return res.data.data as Reservation;
+    },
+    checkOut: async (id: number) => {
+        const res = await api.post(`/reservations/${id}/checkout`);
         return res.data.data as Reservation;
     }
 };
@@ -250,6 +261,19 @@ export const PricingAPI = {
                 is_weekend: boolean;
             }>;
         };
+    },
+    calculateGroup: async (params: { bed_ids: number[]; check_in: string; check_out: string }) => {
+        const res = await api.post('/pricing/calculate-group', params);
+        return res.data.data as {
+            total: number;
+            nights: number;
+            details: Array<{
+                date: string;
+                price: number;
+                is_weekend: boolean;
+                is_room_total?: boolean;
+            }>;
+        };
     }
 };
 
@@ -266,6 +290,9 @@ export const SettingsAPI = {
             pending_timeout_hours: number;
             auto_expire_pending: boolean;
             require_payment_confirmation: boolean;
+            multiplier_single: number;
+            multiplier_double: number;
+            multiplier_bunk: number;
         };
     },
     update: async (data: {
@@ -281,6 +308,10 @@ export const SettingsAPI = {
     }) => {
         const res = await api.post('/settings', data);
         return res.data.data;
+    },
+    triggerCron: async () => {
+        const res = await api.post('/settings/trigger-cron');
+        return res.data;
     }
 };
 
@@ -297,6 +328,53 @@ export const LogsAPI = {
             created_at: string;
             user_name: string;
         }>;
+    }
+};
+
+export interface ExtraService {
+    id?: number;
+    name: string;
+    description: string;
+    price: number;
+    pricing_type: 'per_stay' | 'per_unit' | 'per_person';
+    auto_suggest_by_beds: boolean;
+    is_active: boolean;
+    sort_order: number;
+}
+
+export interface ReservationExtra {
+    id?: number;
+    reservation_id: number;
+    service_id: number;
+    quantity: number;
+    unit_price: number;
+    total_price: number;
+    service_name?: string;
+}
+
+export const ExtrasAPI = {
+    getServices: async (params?: any) => {
+        const res = await api.get('/extras/services', { params });
+        return res.data.data as ExtraService[];
+    },
+    createService: async (data: Partial<ExtraService>) => {
+        const res = await api.post('/extras/services', data);
+        return res.data.data as ExtraService;
+    },
+    updateService: async (id: number, data: Partial<ExtraService>) => {
+        const res = await api.put(`/extras/services/${id}`, data);
+        return res.data.data as ExtraService;
+    },
+    deleteService: async (id: number) => {
+        await api.delete(`/extras/services/${id}`);
+    },
+    getReservationExtras: async (reservationId: number) => {
+        const res = await api.get(`/reservations/${reservationId}/extras`);
+        return res.data.data as ReservationExtra[];
+    },
+    setReservationExtras: async (reservationId: number, extras: Array<{ service_id: number; quantity: number }>) => {
+        const res = await api.post(`/reservations/${reservationId}/extras`, { extras });
+        return res.data.data as ReservationExtra[];
     }
 };
 

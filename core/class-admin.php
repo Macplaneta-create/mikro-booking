@@ -83,6 +83,15 @@ class Admin {
             'mikroplaneta-booking-pricing',
             [$this, 'render_admin_page']
         );
+
+        add_submenu_page(
+            'mikroplaneta-booking',
+            __('Extra Services', 'mikroplaneta-booking'),
+            __('Services', 'mikroplaneta-booking'),
+            'manage_options',
+            'mikroplaneta-booking-services',
+            [$this, 'render_admin_page']
+        );
         
         add_submenu_page(
             'mikroplaneta-booking',
@@ -240,6 +249,8 @@ class Admin {
         if (strpos($hook, 'mikroplaneta-booking') === false) {
             return;
         }
+
+        wp_enqueue_media();
         
         // Check if React app is built
         $js_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'assets/admin/index.js';
@@ -269,6 +280,7 @@ class Admin {
             'apiUrl' => rest_url('mikroplaneta/v1'),
             'nonce' => wp_create_nonce('wp_rest'),
             'currentPage' => isset($_GET['page']) ? sanitize_text_field($_GET['page']) : '',
+            'version' => MIKROPLANETA_BOOKING_VERSION,
         ]);
     }
 }

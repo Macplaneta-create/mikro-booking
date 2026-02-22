@@ -1,0 +1,8 @@
+Table: wp_hotel_rooms
+Columns:
+- id: bigint unsigned
+- name: varchar(100)
+- floor: tinyint
+- room_type: enum('standard','deluxe','suite','dormitory')
+- created_at: datetime
+- updated_at: datetime

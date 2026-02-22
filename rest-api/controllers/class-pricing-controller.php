@@ -77,6 +77,19 @@ class PricingController extends RestController {
             ],
         ]);
 
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/calculate-group', [
+            [
+                'methods' => 'POST',
+                'callback' => [$this, 'calculate_group_price'],
+                'permission_callback' => [$this, 'check_permission'],
+                'args' => [
+                    'bed_ids' => ['required' => true, 'type' => 'array'],
+                    'check_in' => ['required' => true, 'type' => 'string'],
+                    'check_out' => ['required' => true, 'type' => 'string'],
+                ],
+            ],
+        ]);
+
         register_rest_route($this->namespace, '/' . $this->rest_base . '/(?P<id>\d+)', [
             [
                 'methods' => 'DELETE',
@@ -126,6 +139,22 @@ class PricingController extends RestController {
         }
     }
     
+    /**
+     * Calculate price for multiple beds at once
+     */
+    public function calculate_group_price($request): WP_REST_Response {
+        try {
+            $bed_ids = $request->get_param('bed_ids');
+            $check_in = $request->get_param('check_in');
+            $check_out = $request->get_param('check_out');
+
+            $result = $this->pricing_service->calculateGroupPrice($bed_ids, $check_in, $check_out);
+            return $this->success($result);
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
     /**
      * Delete pricing record
      */

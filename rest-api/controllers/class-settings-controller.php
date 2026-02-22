@@ -46,7 +46,19 @@ class SettingsController extends RestController {
                     'pending_timeout_hours' => ['type' => 'integer', 'minimum' => 1],
                     'auto_expire_pending' => ['type' => 'boolean'],
                     'require_payment_confirmation' => ['type' => 'boolean'],
+                    'multiplier_single' => ['type' => 'number'],
+                    'multiplier_double' => ['type' => 'number'],
+                    'multiplier_bunk' => ['type' => 'number'],
                 ],
+            ],
+        ]);
+
+        // Trigger Cron manually (for testing)
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/trigger-cron', [
+            [
+                'methods' => 'POST',
+                'callback' => [$this, 'trigger_cron'],
+                'permission_callback' => [$this, 'check_permission'],
             ],
         ]);
     }
@@ -79,6 +91,9 @@ class SettingsController extends RestController {
                 'mikroplaneta_booking_require_payment_confirmation',
                 true
             ),
+            'multiplier_single' => (float) get_option('mikroplaneta_booking_multiplier_single', 1.0),
+            'multiplier_double' => (float) get_option('mikroplaneta_booking_multiplier_double', 2.0),
+            'multiplier_bunk' => (float) get_option('mikroplaneta_booking_multiplier_bunk', 2.0),
         ];
         
         return $this->success($settings);
@@ -129,10 +144,39 @@ class SettingsController extends RestController {
         if (isset($params['require_payment_confirmation'])) {
             update_option('mikroplaneta_booking_require_payment_confirmation', (bool) $params['require_payment_confirmation']);
         }
+
+        if (isset($params['multiplier_single'])) {
+            update_option('mikroplaneta_booking_multiplier_single', (float) $params['multiplier_single']);
+        }
+        if (isset($params['multiplier_double'])) {
+            update_option('mikroplaneta_booking_multiplier_double', (float) $params['multiplier_double']);
+        }
+        if (isset($params['multiplier_bunk'])) {
+            update_option('mikroplaneta_booking_multiplier_bunk', (float) $params['multiplier_bunk']);
+        }
         
         return $this->get_settings($request);
     }
     
+    /**
+     * Manually trigger cron expiry logic
+     */
+    public function trigger_cron($request): WP_REST_Response {
+        try {
+            // Include cron handler if not already loaded
+            if (!class_exists('\MikroPlaneta\Booking\Core\CronHandler')) {
+                require_once MIKROPLANETA_BOOKING_PLUGIN_DIR . 'core/class-cron-handler.php';
+            }
+            
+            // Re-fetch count by executing the static method from CronHandler
+            \MikroPlaneta\Booking\Core\CronHandler::expire_reservations();
+            
+            return $this->success(['message' => 'Uruchomiono sprawdzanie wygasania rezerwacji. Sprawdź logi lub kalendarz.']);
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage());
+        }
+    }
+
     /**
      * Check if user has permission to manage settings
      */

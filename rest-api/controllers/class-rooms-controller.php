@@ -59,8 +59,13 @@ class RoomsController extends RestController {
                 'permission_callback' => [$this, 'check_permission'],
                 'args' => [
                     'name' => ['required' => true, 'type' => 'string'],
+                    'description' => ['type' => 'string'],
+                    'image_id' => ['type' => 'integer'],
+                    'amenities' => ['type' => 'array'],
                     'floor' => ['type' => 'integer'],
                     'room_type' => ['type' => 'string'],
+                    'pricing_mode' => ['type' => 'string'],
+                    'status' => ['type' => 'string'],
                 ],
             ],
         ]);
@@ -77,8 +82,13 @@ class RoomsController extends RestController {
                 'permission_callback' => [$this, 'check_permission'],
                 'args' => [
                     'name' => ['type' => 'string'],
+                    'description' => ['type' => 'string'],
+                    'image_id' => ['type' => 'integer'],
+                    'amenities' => ['type' => 'array'],
                     'floor' => ['type' => 'integer'],
                     'room_type' => ['type' => 'string'],
+                    'pricing_mode' => ['type' => 'string'],
+                    'status' => ['type' => 'string'],
                 ],
             ],
             [
@@ -140,6 +150,10 @@ class RoomsController extends RestController {
         if ($request->has_param('room_type')) {
             $args['room_type'] = $request->get_param('room_type');
         }
+
+        if ($request->has_param('status')) {
+            $args['status'] = $request->get_param('status');
+        }
         
         $rooms = $this->room_repository->all($args);
         
@@ -180,6 +194,8 @@ class RoomsController extends RestController {
             $room = $this->room_repository->create($request->get_params());
             return $this->success($room->toArray(), 201);
         } catch (\Exception $e) {
+            $log_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'debug-log.txt';
+            file_put_contents($log_file, "[" . date('Y-m-d H:i:s') . "] [CONTROLLER] Room Create Exception: " . $e->getMessage() . "\n", FILE_APPEND);
             return $this->error($e->getMessage());
         }
     }
@@ -194,6 +210,8 @@ class RoomsController extends RestController {
             $room = $this->room_repository->update($id, $request->get_params());
             return $this->success($room->toArray());
         } catch (\Exception $e) {
+            $log_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'debug-log.txt';
+            file_put_contents($log_file, "[" . date('Y-m-d H:i:s') . "] [CONTROLLER] Room Update Exception: " . $e->getMessage() . "\n", FILE_APPEND);
             return $this->error($e->getMessage());
         }
     }

@@ -229,10 +229,7 @@ class ReservationService {
         return $updated;
     }
     
-    /**
-     * Confirm reservation
-     */
-    public function confirmReservation(int $id): Reservation {
+    public function confirmReservation(int $id, string $reason = ''): Reservation {
         $reservation = $this->reservation_repository->find($id);
         
         if (!$reservation) {
@@ -240,28 +237,63 @@ class ReservationService {
         }
         
         $reservation->confirm();
-        $updated = $this->reservation_repository->update($id, [
+        
+        $update_data = [
             'status' => $reservation->status,
-        ]);
+        ];
+        
+        if (!empty($reason)) {
+            $update_data['notes'] = $reservation->notes . "\n\nConfirmed: " . $reason;
+        }
+        
+        $updated = $this->reservation_repository->update($id, $update_data);
         
         // Fire WordPress action
-        do_action('mikroplaneta_booking_reservation_confirmed', $updated);
+        do_action('mikroplaneta_booking_reservation_confirmed', $updated, $reason);
         
         return $updated;
     }
     
     /**
-     * Check in guest
+     * Check in guest with optional adjustments (guest count, beds)
      */
-    public function checkIn(int $id): Reservation {
+    public function checkIn(int $id, array $adjustment = []): Reservation {
         $reservation = $this->reservation_repository->find($id);
         
         if (!$reservation) {
             throw new \Exception('Reservation not found');
         }
         
-        if ($reservation->status !== Reservation::STATUS_CONFIRMED) {
-            throw new \Exception('Only confirmed reservations can be checked in');
+        if ($reservation->status !== Reservation::STATUS_CONFIRMED && $reservation->status !== Reservation::STATUS_PENDING) {
+            throw new \Exception('Only pending or confirmed reservations can be checked in');
+        }
+
+        // Apply adjustments if provided (e.g., when fewer guests arrived)
+        if (!empty($adjustment)) {
+            $update_data = [];
+            if (isset($adjustment['adults'])) $update_data['adults'] = (int)$adjustment['adults'];
+            if (isset($adjustment['children'])) $update_data['children'] = (int)$adjustment['children'];
+            
+            if (!empty($update_data)) {
+                $this->reservation_repository->update($id, $update_data);
+            }
+            
+            if (isset($adjustment['bed_ids']) && is_array($adjustment['bed_ids'])) {
+                $this->reservation_bed_repository->setBedsForReservation($id, $adjustment['bed_ids']);
+            }
+
+            // Log the adjustment
+            $this->logger_service->log(
+                'reservation',
+                $id,
+                'adjusted_during_checkin',
+                sprintf(
+                    'Korekta podczas zameldowania: %d dorosłych, %d dzieci. Łóżka: %s',
+                    $update_data['adults'] ?? $reservation->adults,
+                    $update_data['children'] ?? $reservation->children,
+                    isset($adjustment['bed_ids']) ? implode(', ', $adjustment['bed_ids']) : 'bez zmian'
+                )
+            );
         }
         
         $reservation->checkIn();
@@ -320,6 +352,16 @@ class ReservationService {
             if (!isset($data[$field]) || empty($data[$field])) {
                 throw new \Exception("Field '{$field}' is required");
             }
+        }
+
+        // Validate guest count vs beds count
+        $adults = isset($data['adults']) ? (int) $data['adults'] : 1;
+        $children = isset($data['children']) ? (int) $data['children'] : 0;
+        $total_guests = $adults + $children;
+        $bed_count = is_array($data['bed_ids']) ? count($data['bed_ids']) : 0;
+
+        if ($total_guests > $bed_count) {
+            throw new \Exception("Number of guests ({$total_guests}) exceeds the number of selected beds ({$bed_count})");
         }
     }
     

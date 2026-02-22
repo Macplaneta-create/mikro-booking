@@ -7,6 +7,11 @@
  */
 
 add_action('admin_post_mikroplaneta_force_update', function() {
+    // Only available in debug/development mode
+    if (!defined('WP_DEBUG') || !WP_DEBUG) {
+        wp_die('This tool is only available in development mode (WP_DEBUG must be enabled).');
+    }
+
     if (!current_user_can('manage_options')) {
         wp_die('Unauthorized');
     }
@@ -100,6 +105,18 @@ add_action('admin_post_mikroplaneta_force_update', function() {
                 echo "<h4>Error Log Content:</h4><pre>" . file_get_contents($log_file) . "</pre>";
             }
         }
+
+        // Explicitly fix pricing_type column in extra_services (dbDelta sometimes misses ENUM changes)
+        $extras_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('extra_services');
+        echo "Fixing pricing_type ENUM... ";
+        $wpdb->query("ALTER TABLE {$extras_table} MODIFY COLUMN pricing_type ENUM('per_stay', 'per_unit', 'per_person') NOT NULL DEFAULT 'per_stay'");
+        echo "<span style='color:green'>DONE</span><br>";
+
+        // Fix rooms table columns
+        $rooms_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('rooms');
+        echo "Updating rooms table columns... ";
+        $wpdb->query("ALTER TABLE {$rooms_table} MODIFY COLUMN status ENUM('active', 'inactive', 'maintenance') DEFAULT 'active'");
+        echo "<span style='color:green'>DONE</span><br>";
 
         echo '<p><a href="' . admin_url('admin.php?page=mikroplaneta-booking') . '">Go back to Booking</a></p>';
         

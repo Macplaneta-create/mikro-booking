@@ -1,48 +1,15 @@
-[2026-02-08 11:10:51] Create Reservation Error: Check-in date cannot be in the past | Data: {
-    "adults": 2,
-    "children": 0,
-    "bed_id": 1,
-    "room_id": 1,
-    "check_in": "2026-02-04",
-    "check_out": "2026-02-09",
-    "status": "confirmed",
-    "notes": "",
-    "total_price": 0,
-    "guest_id": 1
-}
-[2026-02-08 11:11:01] Create Reservation Error: Check-in date cannot be in the past | Data: {
-    "adults": 1,
-    "children": 0,
-    "bed_id": 1,
-    "room_id": 1,
-    "check_in": "2026-02-04",
-    "check_out": "2026-02-09",
-    "status": "confirmed",
-    "notes": "",
-    "total_price": 0,
-    "guest_id": 1
-}
-[2026-02-08 16:27:11] Create Reservation Error: Bed #4 is not available for selected dates | Data: {
-    "adults": 2,
-    "children": 1,
-    "guest_id": 2,
-    "bed_ids": [
-        4
-    ],
-    "check_in": "2026-03-01",
-    "check_out": "2026-03-05",
-    "status": "confirmed"
-}
-[2026-02-08 20:13:42] Create Reservation Error: Check-in date cannot be in the past | Data: {
-    "adults": 2,
-    "children": 0,
-    "guest_id": 1,
-    "bed_ids": [
-        5
-    ],
-    "check_in": "2026-02-02",
-    "check_out": "2026-02-07",
-    "status": "confirmed",
-    "notes": "",
-    "total_price": 0
-}
+[2026-02-22 19:57:32] [REPO_UPDATE] Update room 1 initiated. Data: {"id":1,"name":"01","description":"Updated at 19:52:34","image_id":0,"image_url":null,"amenities":["wifi","tv"],"floor":1,"room_type":"","status":"active","created_at":"2026-02-07 23:44:50","updated_at":"2026-02-22 20:52:34","beds":[{"id":4,"room_id":1,"bed_number":1,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":1,"room_id":1,"bed_number":2,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":5,"room_id":1,"bed_number":3,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":6,"room_id":1,"bed_number":4,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":3,"room_id":1,"bed_number":5,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":2,"room_id":1,"bed_number":6,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":10,"room_id":1,"bed_number":7,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":7,"room_id":1,"bed_number":8,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":8,"room_id":1,"bed_number":9,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":9,"room_id":1,"bed_number":10,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":11,"room_id":1,"bed_number":11,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"}]}
+[2026-02-22 19:57:32] [REPO_UPDATE] Update successful for room 1
+[2026-02-22 19:57:40] [REPO_UPDATE] Update room 1 initiated. Data: {"id":1,"name":"01","description":"Updated at 19:52:34","image_id":14,"image_url":"http:\/\/gorytajemnic.test\/wp-content\/uploads\/2026\/02\/andrzejowka-pokoje-7.jpg","amenities":["wifi","tv"],"floor":1,"room_type":"standard","status":"active","created_at":"2026-02-07 23:44:50","updated_at":"2026-02-22 20:57:32","beds":[{"id":4,"room_id":1,"bed_number":1,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":1,"room_id":1,"bed_number":2,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":5,"room_id":1,"bed_number":3,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":6,"room_id":1,"bed_number":4,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":3,"room_id":1,"bed_number":5,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":2,"room_id":1,"bed_number":6,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":10,"room_id":1,"bed_number":7,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":7,"room_id":1,"bed_number":8,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":8,"room_id":1,"bed_number":9,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":9,"room_id":1,"bed_number":10,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":11,"room_id":1,"bed_number":11,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"}]}
+[2026-02-22 19:57:40] [REPO_UPDATE] Update successful for room 1
+[2026-02-22 20:24:42] [REPO_UPDATE] Update room 1 initiated. Data: {"id":1,"name":"01","description":"Updated at 19:52:34","image_id":14,"image_url":"http:\/\/gorytajemnic.test\/wp-content\/uploads\/2026\/02\/andrzejowka-pokoje-7.jpg","amenities":["wifi","tv"],"floor":1,"room_type":"dormitory","status":"active","created_at":"2026-02-07 23:44:50","updated_at":"2026-02-22 20:57:40","beds":[{"id":4,"room_id":1,"bed_number":1,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":1,"room_id":1,"bed_number":2,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":5,"room_id":1,"bed_number":3,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":6,"room_id":1,"bed_number":4,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":3,"room_id":1,"bed_number":5,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":2,"room_id":1,"bed_number":6,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":10,"room_id":1,"bed_number":7,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":7,"room_id":1,"bed_number":8,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":8,"room_id":1,"bed_number":9,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":9,"room_id":1,"bed_number":10,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":11,"room_id":1,"bed_number":11,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"}]}
+[2026-02-22 20:24:42] [REPO_UPDATE] Update successful for room 1
+[2026-02-22 20:30:54] [REPO_UPDATE] Update room 1 initiated. Data: {"id":1,"name":"01","description":"Updated at 19:52:34","image_id":14,"image_url":"http:\/\/gorytajemnic.test\/wp-content\/uploads\/2026\/02\/andrzejowka-pokoje-7.jpg","amenities":["wifi","tv"],"floor":1,"room_type":"dormitory","status":"active","created_at":"2026-02-07 23:44:50","updated_at":"2026-02-22 21:24:42","beds":[{"id":4,"room_id":1,"bed_number":1,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":1,"room_id":1,"bed_number":2,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":5,"room_id":1,"bed_number":3,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":6,"room_id":1,"bed_number":4,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":3,"room_id":1,"bed_number":5,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":2,"room_id":1,"bed_number":6,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":10,"room_id":1,"bed_number":7,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":7,"room_id":1,"bed_number":8,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":8,"room_id":1,"bed_number":9,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":9,"room_id":1,"bed_number":10,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":11,"room_id":1,"bed_number":11,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"}]}
+[2026-02-22 20:30:54] [REPO_UPDATE] Update successful for room 1
+[2026-02-22 21:01:42] [REPO_UPDATE] Update room 1 initiated. Data: {"id":1,"name":"01","description":"Updated at 19:52:34","image_id":14,"image_url":"http:\/\/gorytajemnic.test\/wp-content\/uploads\/2026\/02\/andrzejowka-pokoje-7.jpg","amenities":["wifi","tv"],"floor":1,"room_type":"dormitory","status":"active","created_at":"2026-02-07 23:44:50","updated_at":"2026-02-22 21:24:42","beds":[{"id":4,"room_id":1,"bed_number":1,"bed_type":"double","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":1,"room_id":1,"bed_number":2,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":5,"room_id":1,"bed_number":3,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":6,"room_id":1,"bed_number":4,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":3,"room_id":1,"bed_number":5,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":2,"room_id":1,"bed_number":6,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":10,"room_id":1,"bed_number":7,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":7,"room_id":1,"bed_number":8,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":8,"room_id":1,"bed_number":9,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":9,"room_id":1,"bed_number":10,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":11,"room_id":1,"bed_number":11,"bed_type":"bunk","is_active":true,"created_at":"2026-02-07 23:44:52"}]}
+[2026-02-22 21:01:42] [REPO_UPDATE] Update successful for room 1
+[2026-02-22 21:02:44] [REPO] Create room initiated. Data: {"name":"101 Apartament","room_type":"suite","floor":1,"description":"","amenities":[],"status":"active"}
+[2026-02-22 21:02:44] [REPO] Normalized room type: suite
+[2026-02-22 21:02:44] [REPO] Room inserted successfully. ID: 7
+[2026-02-22 21:40:37] [REPO_UPDATE] Update room 1 initiated. Data: {"id":1,"name":"01","description":"Updated at 19:52:34","image_id":14,"image_url":"http:\/\/gorytajemnic.test\/wp-content\/uploads\/2026\/02\/andrzejowka-pokoje-7.jpg","amenities":["wifi","tv"],"floor":1,"room_type":"dormitory","pricing_mode":"per_bed","status":"active","created_at":"2026-02-07 23:44:50","updated_at":"2026-02-22 22:08:55","beds":[{"id":4,"room_id":1,"bed_number":1,"bed_type":"bunk","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":1,"room_id":1,"bed_number":2,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":5,"room_id":1,"bed_number":3,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":6,"room_id":1,"bed_number":4,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":3,"room_id":1,"bed_number":5,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":2,"room_id":1,"bed_number":6,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:51"},{"id":10,"room_id":1,"bed_number":7,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":7,"room_id":1,"bed_number":8,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":8,"room_id":1,"bed_number":9,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":9,"room_id":1,"bed_number":10,"bed_type":"","is_active":true,"created_at":"2026-02-07 23:44:52"},{"id":11,"room_id":1,"bed_number":11,"bed_type":"bunk","is_active":true,"created_at":"2026-02-07 23:44:52"}]}
+[2026-02-22 21:40:37] [REPO_UPDATE] Update successful for room 1

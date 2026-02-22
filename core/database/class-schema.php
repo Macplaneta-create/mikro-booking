@@ -43,11 +43,17 @@ class Schema {
         return "CREATE TABLE {$table} (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
+            description TEXT,
+            image_id BIGINT UNSIGNED,
+            amenities JSON,
             floor TINYINT DEFAULT 0,
             room_type ENUM('standard', 'deluxe', 'suite', 'dormitory') DEFAULT 'standard',
+            pricing_mode ENUM('per_room', 'per_bed') DEFAULT 'per_room',
+            status ENUM('active', 'inactive', 'maintenance') DEFAULT 'active',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_room_type (room_type)
+            INDEX idx_room_type (room_type),
+            INDEX idx_status (status)
         ) {$charset};";
     }
     

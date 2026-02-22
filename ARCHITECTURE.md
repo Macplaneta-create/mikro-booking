@@ -285,5 +285,5 @@ $wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id);
 
 ---
 
-*Last updated: 2026-02-08*
-*Version: 1.1.0 (Group Booking Update)*
+*Last updated: 2026-02-22*
+*Version: 1.1.2 (Architecture Cleanup)*

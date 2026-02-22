@@ -67,7 +67,8 @@ class DashboardController extends RestController {
             'occupancy_rate' => 0,
             'arrivals_today' => 0,
             'departures_today' => 0,
-            'active_bookings' => 0
+            'active_bookings' => 0,
+            'checked_in_guests' => 0
         ];
 
         // 1. Total Rooms & Beds
@@ -115,7 +116,13 @@ class DashboardController extends RestController {
         
         $stats['active_bookings'] = $occupied_beds; // Or we can call this 'occupied_beds'
 
-        // 6. Occupancy Rate
+        // 6. Currently Checked-in Guests (Sum of adults + children)
+        $stats['checked_in_guests'] = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT SUM(adults + children) FROM {$reservations_table} WHERE status = %s",
+            \MikroPlaneta\Booking\Core\Models\Reservation::STATUS_CHECKED_IN
+        ));
+
+        // 7. Occupancy Rate
         if ($stats['total_beds'] > 0) {
             $stats['occupancy_rate'] = round(($occupied_beds / $stats['total_beds']) * 100);
         }

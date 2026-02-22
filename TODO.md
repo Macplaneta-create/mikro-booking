@@ -1,6 +1,6 @@
 # 📝 TODO - MikroPlaneta Booking Development Roadmap
 
-**Last Updated:** 2026-02-15  
+**Last Updated:** 2026-02-19  
 **Status:** In Production (Ongoing Development)
 **Latest Achievement:** ✅ Calendar turnover clickability & segment rendering (v1.0.6)
 
@@ -133,6 +133,9 @@ core/services/class-reservation-service.php  (Updated)
   - [x] Status Changes (Confirm, Check-in, Check-out, Cancel)
 - [x] Admin UI: Tab "Historia" w szczegółach rezerwacji (Modal) ✅
   - [x] `BookingHistory` component added to `CalendarView`
+- [x] Admin UI: Przyciski "Zameldowanie" i "Wymeldowanie" w modalu szczegółów rezerwacji ✅ (2026-02-18)
+- [x] Dashboard: Szybkie akcje Zamelduj/Wymelduj i lista wyjazdów ✅ (2026-02-19)
+- [x] Deep-linking: Otwieranie szczegółów rezerwacji w kalendarzu przez ID w URL ✅ (2026-02-19)
 
 **Files created/modified:**
 ```
@@ -345,6 +348,7 @@ docs/adr/001-rest-api-design.md                 (NEW)
 - [ ] Accessibility (WCAG 2.1 AA)
 - [ ] Multi-language (i18n)
 - [ ] Custom branding (logo upload)
+- [ ] Kalendarz: Przyciemnienie (lekko ciemniejszy kolor) dni, które już minęły
 
 ---
 
@@ -420,5 +424,5 @@ docs/adr/001-rest-api-design.md                 (NEW)
 
 ---
 
-**Last Updated:** 2026-02-05  
-**Next Review:** 2026-02-12
+**Last Updated:** 2026-02-19  
+**Next Review:** 2026-02-26

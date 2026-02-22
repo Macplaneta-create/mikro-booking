@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Save, Loader2, UserPlus, Users, Baby, Calendar as CalendarIcon, MapPin, CreditCard, Coins } from 'lucide-react';
-import { AvailabilityAPI, GuestsAPI, ReservationsAPI, PricingAPI, Guest, Room } from '../services/api';
+import { X, Search, Save, Loader2, UserPlus, Users, Baby, Calendar as CalendarIcon, MapPin, CreditCard, Coins, BedDouble, Check, MousePointerClick } from 'lucide-react';
+import { AvailabilityAPI, GuestsAPI, ReservationsAPI, PricingAPI, ExtrasAPI, Guest, Room, ExtraService } from '../services/api';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -29,7 +29,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     const [searching, setSearching] = useState(false);
 
     const [formData, setFormData] = useState({
-        bed_id: 0,
+        bed_ids: [] as number[],
         room_id: 0,
         check_in: format(new Date(), 'yyyy-MM-dd'),
         check_out: format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'),
@@ -37,8 +37,12 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         adults: 1,
         children: 0,
         notes: '',
-        total_price: 0
+        total_price: 0,
+        nights_price: 0 // Store nights only price separately
     });
+
+    const [availableServices, setAvailableServices] = useState<ExtraService[]>([]);
+    const [selectedServices, setSelectedServices] = useState<Record<number, number>>({});
 
     // Guest Creation State
     const [isCreatingGuest, setIsCreatingGuest] = useState(false);
@@ -49,25 +53,39 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         phone: ''
     });
 
+    const [localBedIds, setLocalBedIds] = useState<number[]>([]);
+
     // Update form when initial data changes or modal opens
     useEffect(() => {
         if (isOpen) {
             setFormData(prev => ({
                 ...prev,
-                bed_id: initialData?.bedId || 0,
+                bed_ids: initialData?.bedIds || (initialData?.bedId ? [initialData.bedId] : []),
                 room_id: initialData?.roomId || 0,
                 check_in: initialData?.checkIn || format(new Date(), 'yyyy-MM-dd'),
                 check_out: initialData?.checkOut || format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'),
                 adults: initialData?.bedIds?.length || 1,
                 children: 0
             }));
+            setLocalBedIds(initialData?.bedIds || (initialData?.bedId ? [initialData.bedId] : []));
             setStep(1);
             setSelectedGuest(null);
             setSearchQuery('');
             setIsCreatingGuest(false);
             setNewGuestData({ first_name: '', last_name: '', email: '', phone: '' });
+            setSelectedServices({});
+
+            // Fetch services
+            ExtrasAPI.getServices({ is_active: 1 }).then(setAvailableServices).catch(console.error);
         }
     }, [isOpen, initialData]);
+
+    // Reset bed selection if guest count changes (to force auto-assign or re-selection)
+    useEffect(() => {
+        if (!isOpen) return;
+        setLocalBedIds([]); // Clear manual selection
+        setFormData(prev => ({ ...prev, bed_ids: [] })); // Also clear primary selection
+    }, [formData.adults, formData.children]);
 
     // --- DYNAMIC PRICING CALCULATION ---
     const [pricingLoading, setPricingLoading] = useState(false);
@@ -77,9 +95,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         if (!isOpen) return;
 
         const calculatePrice = async () => {
-            const bedIds = initialData?.bedIds?.length
-                ? initialData.bedIds
-                : (formData.bed_id ? [formData.bed_id] : []);
+            const bedIds = localBedIds;
 
             if (bedIds.length === 0 || !formData.check_in || !formData.check_out) {
                 setFormData(f => ({ ...f, total_price: 0 }));
@@ -96,21 +112,14 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
             setPricingLoading(true);
             try {
-                let total = 0;
-                let nights = 0;
+                const priceData = await PricingAPI.calculateGroup({
+                    bed_ids: bedIds,
+                    check_in: formData.check_in,
+                    check_out: formData.check_out
+                });
 
-                for (const bid of bedIds) {
-                    const priceData = await PricingAPI.calculate({
-                        bed_id: bid,
-                        check_in: formData.check_in,
-                        check_out: formData.check_out
-                    });
-                    total += priceData.total;
-                    nights = priceData.nights;
-                }
-
-                setFormData(f => ({ ...f, total_price: total }));
-                setNightsCount(nights);
+                setFormData(f => ({ ...f, nights_price: priceData.total }));
+                setNightsCount(priceData.nights);
             } catch (error) {
                 console.error('Pricing calculation error:', error);
             } finally {
@@ -118,9 +127,44 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
             }
         };
 
-        const timeoutId = setTimeout(calculatePrice, 300); // Debounce to avoid too many requests
+        const timeoutId = setTimeout(calculatePrice, 300);
         return () => clearTimeout(timeoutId);
-    }, [isOpen, formData.check_in, formData.check_out, formData.bed_id, initialData?.bedIds]);
+    }, [isOpen, formData.check_in, formData.check_out, localBedIds]);
+
+    // --- AUTO-SUGGEST SERVICES BASED ON BEDS ---
+    useEffect(() => {
+        if (!isOpen || availableServices.length === 0) return;
+
+        const bedCount = localBedIds.length;
+        if (bedCount === 0) return;
+
+        const newSelection = { ...selectedServices };
+        let changed = false;
+
+        availableServices.forEach(service => {
+            if (service.auto_suggest_by_beds && service.id && !newSelection[service.id]) {
+                newSelection[service.id] = bedCount;
+                changed = true;
+            }
+        });
+
+        if (changed) {
+            setSelectedServices(newSelection);
+        }
+    }, [localBedIds.length, availableServices, isOpen]);
+
+    // --- TOTAL PRICE CALCULATION (Nights + Extras) ---
+    useEffect(() => {
+        let extrasTotal = 0;
+        Object.entries(selectedServices).forEach(([serviceId, qty]) => {
+            const service = availableServices.find(s => s.id === parseInt(serviceId));
+            if (service) {
+                extrasTotal += service.price * qty;
+            }
+        });
+
+        setFormData(f => ({ ...f, total_price: (f.nights_price || 0) + extrasTotal }));
+    }, [formData.nights_price, selectedServices, availableServices]);
 
     // Simple guest search
     useEffect(() => {
@@ -149,9 +193,14 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         setLoading(true);
         try {
             const totalGuests = Math.max(1, formData.adults + formData.children);
-            let bedIds = initialData?.bedIds && initialData.bedIds.length > 0
-                ? initialData.bedIds
-                : (formData.bed_id ? [formData.bed_id] : []);
+            let bedIds = [...localBedIds];
+
+            // Validation: Ensure we have enough beds for the guests
+            if (bedIds.length > 0 && bedIds.length < totalGuests) {
+                alert(`Wybrałeś zbyt mało łóżek (${bedIds.length}) dla podanej liczby osób (${totalGuests}). Proszę wybrać odpowiednią liczbę łóżek (używając Ctrl+klik na kalendarzu) lub zmniejszyć liczbę gości.`);
+                setLoading(false);
+                return;
+            }
 
             // Auto-assign beds if none were selected
             if (bedIds.length === 0) {
@@ -179,6 +228,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
                 if (bedIds.length < totalGuests) {
                     alert('Brak wystarczającej liczby dostępnych łóżek dla wybranej liczby osób.');
+                    setLoading(false);
                     return;
                 }
             }
@@ -195,7 +245,20 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                 total_price: formData.total_price
             };
 
-            await ReservationsAPI.create(reservationData);
+            const reservation = await ReservationsAPI.create(reservationData);
+
+            // Save Extras
+            const extrasToSave = Object.entries(selectedServices)
+                .filter(([_, qty]) => qty > 0)
+                .map(([serviceId, qty]) => ({
+                    service_id: parseInt(serviceId),
+                    quantity: qty
+                }));
+
+            if (extrasToSave.length > 0 && reservation.id) {
+                await ExtrasAPI.setReservationExtras(reservation.id, extrasToSave);
+            }
+
             onSuccess();
             onClose();
         } catch (error: any) {
@@ -231,11 +294,11 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     if (!isOpen) return null;
 
     const selectedRoom = rooms.find(r => r.id === formData.room_id);
-    const selectedBed = selectedRoom?.beds?.find(b => b.id === formData.bed_id);
-    const selectedBedCount = initialData?.bedIds?.length || 1;
+    const selectedBed = selectedRoom?.beds?.find(b => b.id === (localBedIds[0] || 0));
+    const selectedBedCount = localBedIds.length;
     const isDormitory = selectedRoom?.room_type === 'dormitory';
     const showBedWarning = isDormitory && (formData.adults + formData.children > selectedBedCount);
-    const isAutoBedSelection = !formData.bed_id && !(initialData?.bedIds && initialData.bedIds.length > 0);
+    const isAutoBedSelection = selectedBedCount === 0;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
@@ -267,11 +330,11 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                     <span>{selectedRoom?.name}, miejsce {selectedBed?.bed_number}</span>
                                 </div>
                             </div>
-                            {initialData?.bedIds && initialData.bedIds.length > 1 && (
+                            {localBedIds.length > 1 && (
                                 <div className="pt-2 border-t border-blue-100">
                                     <p className="text-xs font-bold text-blue-700 uppercase mb-1">Rezerwacja grupowa</p>
                                     <p className="text-sm text-blue-600">
-                                        {initialData.bedIds.length} łóżek: {initialData.bedIds.map(id => {
+                                        {localBedIds.length} łóżek: {localBedIds.map(id => {
                                             const bed = rooms.flatMap(r => r.beds || []).find(b => b.id === id);
                                             const room = rooms.find(r => r.beds?.some(b => b.id === id));
                                             return `${room?.name} #${bed?.bed_number}`;
@@ -396,6 +459,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                         <input
                                             type="date"
                                             value={formData.check_in}
+                                            min={format(new Date(), 'yyyy-MM-dd')}
                                             onChange={(e) => setFormData({ ...formData, check_in: e.target.value })}
                                             className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all"
                                         />
@@ -405,6 +469,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                         <input
                                             type="date"
                                             value={formData.check_out}
+                                            min={formData.check_in || format(new Date(), 'yyyy-MM-dd')}
                                             onChange={(e) => setFormData({ ...formData, check_out: e.target.value })}
                                             className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition-all"
                                         />
@@ -461,18 +526,93 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                     </div>
                                 </div>
 
-                                {isAutoBedSelection && (
-                                    <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
-                                        Nie wybrano łóżek. System przydzieli automatycznie liczbę łóżek równą liczbie osób.
+                                {isAutoBedSelection ? (
+                                    <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700 flex items-center gap-2">
+                                        <Users size={14} />
+                                        <span>System automatycznie zarezerwuje <strong>{formData.adults + formData.children}</strong> łóżek w dostępnych pokojach.</span>
+                                    </div>
+                                ) : (
+                                    <div className={`p-3 rounded-xl border flex items-center justify-between text-xs ${showBedWarning ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+                                        <div className="flex items-center gap-2 font-bold">
+                                            <BedDouble size={14} />
+                                            <span>Wybrano łóżek: {selectedBedCount} / {formData.adults + formData.children}</span>
+                                        </div>
+                                        {showBedWarning && <span className="font-black uppercase text-[10px]">Za mało miejsc!</span>}
+                                        {!showBedWarning && <Check size={14} className="text-emerald-600" />}
                                     </div>
                                 )}
 
-                                {showBedWarning && (
+                                {showBedWarning && !isAutoBedSelection && (
                                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2 text-amber-700">
-                                        <Users size={16} className="mt-0.5 shrink-0" />
-                                        <div className="text-xs">
-                                            <p className="font-bold">Uwaga: Więcej osób niż łóżek</p>
-                                            <p>Wybrałeś {selectedBedCount} łóżka dla {formData.adults + formData.children} osób. Dla pokoi wieloosobowych każda osoba powinna mieć osobne łóżko w kalendarzu.</p>
+                                        <div className="text-[11px] leading-relaxed">
+                                            <p className="font-bold flex items-center gap-1 mb-1">
+                                                <MousePointerClick size={14} /> Jak dodać więcej łóżek?
+                                            </p>
+                                            <p>Przytrzymaj klawisz <strong>Ctrl</strong> (lub Cmd) i kliknij na kolejne łóżka w kalendarzu, aby dodać je do tej rezerwacji. Każda osoba dorosła i dziecko wymaga osobnego miejsca.</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* EXTRA SERVICES SECTION */}
+                                {availableServices.length > 0 && (
+                                    <div className="space-y-3">
+                                        <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1 flex items-center gap-1">
+                                            <Coins size={12} /> Usługi Dodatkowe
+                                        </label>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {availableServices.map(service => {
+                                                const isSelected = !!selectedServices[service.id!];
+                                                const quantity = selectedServices[service.id!] || 0;
+
+                                                return (
+                                                    <div
+                                                        key={service.id}
+                                                        className={`p-3 rounded-xl border transition-all flex items-center justify-between ${isSelected ? 'bg-brand-50 border-brand-200 shadow-sm' : 'bg-white border-gray-100'}`}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div
+                                                                onClick={() => {
+                                                                    const newSelection = { ...selectedServices };
+                                                                    if (isSelected) {
+                                                                        delete newSelection[service.id!];
+                                                                    } else {
+                                                                        newSelection[service.id!] = service.pricing_type === 'per_unit' ? (localBedIds.length || 1) : 1;
+                                                                    }
+                                                                    setSelectedServices(newSelection);
+                                                                }}
+                                                                className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${isSelected ? 'bg-brand-600 border-brand-600 text-white' : 'bg-gray-50 border-gray-200 text-transparent'}`}
+                                                            >
+                                                                <Check size={14} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-bold text-gray-900">{service.name}</p>
+                                                                <p className="text-[10px] text-gray-500">{service.price.toFixed(2)} zł {service.pricing_type === 'per_unit' ? '/ szt.' : '/ raz'}</p>
+                                                            </div>
+                                                        </div>
+
+                                                        {isSelected && service.pricing_type === 'per_unit' && (
+                                                            <div className="flex bg-white border border-brand-200 rounded-lg overflow-hidden h-8">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSelectedServices(s => ({ ...s, [service.id!]: Math.max(1, s[service.id!] - 1) }))}
+                                                                    className="px-2 hover:bg-gray-50 text-gray-600 font-bold"
+                                                                >-</button>
+                                                                <input
+                                                                    type="number"
+                                                                    value={quantity}
+                                                                    readOnly
+                                                                    className="w-10 text-center bg-transparent text-xs font-bold outline-none"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSelectedServices(s => ({ ...s, [service.id!]: s[service.id!] + 1 }))}
+                                                                    className="px-2 hover:bg-gray-50 text-gray-600 font-bold"
+                                                                >+</button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}

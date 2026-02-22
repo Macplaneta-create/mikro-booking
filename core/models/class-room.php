@@ -18,8 +18,13 @@ class Room {
     
     public int $id;
     public string $name;
+    public ?string $description;
+    public ?int $image_id;
+    public array $amenities;
     public int $floor;
     public string $room_type;
+    public string $pricing_mode;
+    public string $status;
     public string $created_at;
     public string $updated_at;
     
@@ -38,8 +43,19 @@ class Room {
     public function fill(array $data): void {
         $this->id = (int) ($data['id'] ?? 0);
         $this->name = (string) ($data['name'] ?? '');
+        $this->description = isset($data['description']) ? (string) $data['description'] : null;
+        $this->image_id = isset($data['image_id']) ? (int) $data['image_id'] : null;
+        
+        if (isset($data['amenities'])) {
+            $this->amenities = is_string($data['amenities']) ? json_decode($data['amenities'], true) : (array)$data['amenities'];
+        } else {
+            $this->amenities = [];
+        }
+
         $this->floor = (int) ($data['floor'] ?? 0);
         $this->room_type = (string) ($data['room_type'] ?? 'standard');
+        $this->pricing_mode = (string) ($data['pricing_mode'] ?? 'per_room');
+        $this->status = (string) ($data['status'] ?? 'active');
         $this->created_at = (string) ($data['created_at'] ?? '');
         $this->updated_at = (string) ($data['updated_at'] ?? '');
     }
@@ -58,8 +74,14 @@ class Room {
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'description' => $this->description,
+            'image_id' => $this->image_id,
+            'image_url' => $this->image_id ? wp_get_attachment_url($this->image_id) : null,
+            'amenities' => $this->amenities,
             'floor' => $this->floor,
             'room_type' => $this->room_type,
+            'pricing_mode' => $this->pricing_mode,
+            'status' => $this->status,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

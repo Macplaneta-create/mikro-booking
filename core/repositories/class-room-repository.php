@@ -62,6 +62,12 @@ class RoomRepository implements RepositoryInterface {
             $where .= ' AND floor = %d';
             $params[] = $args['floor'];
         }
+
+        // Filter by status
+        if (!empty($args['status'])) {
+            $where .= ' AND status = %s';
+            $params[] = $args['status'];
+        }
         
         // Order by (whitelist to avoid SQL injection)
         $allowed_order_by = ['name', 'floor', 'room_type', 'created_at', 'updated_at', 'id'];
@@ -121,22 +127,26 @@ class RoomRepository implements RepositoryInterface {
     public function create(array $data): Room {
         global $wpdb;
         
-        // Debug-only logging to server error log (avoid file writes in plugin dir)
         $log = function($msg) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('[MikroBooking] ' . $msg);
-            }
+                $log_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'debug-log.txt';
+                $time = date('Y-m-d H:i:s');
+                file_put_contents($log_file, "[$time] [REPO] $msg\n", FILE_APPEND);
         };
         
-        $log('Create room initiated.');
+        $log('Create room initiated. Data: ' . json_encode($data));
         
         $room_type = $this->normalize_room_type($data['room_type'] ?? 'standard');
         $log("Normalized room type: {$room_type}");
         
         $insert_data = [
-            'name' => $data['name'],
-            'floor' => $data['floor'] ?? 0,
+            'name' => (string)$data['name'],
+            'description' => isset($data['description']) ? (string)$data['description'] : null,
+            'image_id' => isset($data['image_id']) ? (int)$data['image_id'] : null,
+            'amenities' => isset($data['amenities']) ? json_encode($data['amenities']) : json_encode([]),
+            'floor' => (int)($data['floor'] ?? 0),
             'room_type' => $room_type,
+            'pricing_mode' => (string)($data['pricing_mode'] ?? 'per_room'),
+            'status' => (string)($data['status'] ?? 'active'),
         ];
         
         // Try insert
@@ -158,7 +168,6 @@ class RoomRepository implements RepositoryInterface {
             if ($result === false) {
                 $final_error = $wpdb->last_error ?: $original_error;
                 $log("FATAL: Insert failed after repair. Error: {$final_error}");
-                error_log("MikroBooking Error: Failed to insert room after repair. DB Error: " . $final_error);
                 throw new \Exception("Database error: " . $final_error);
             }
         }
@@ -181,29 +190,81 @@ class RoomRepository implements RepositoryInterface {
     public function update(int $id, array $data): Room {
         global $wpdb;
         
+        $log = function($msg) {
+                $log_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'debug-log.txt';
+                $time = date('Y-m-d H:i:s');
+                file_put_contents($log_file, "[$time] [REPO_UPDATE] $msg\n", FILE_APPEND);
+        };
+
+        $log("Update room $id initiated. Data: " . json_encode($data));
+
         $update_data = [];
         
         if (isset($data['name'])) {
-            $update_data['name'] = $data['name'];
+            $update_data['name'] = (string)$data['name'];
         }
         
+        if (isset($data['description'])) {
+            $update_data['description'] = (string)$data['description'];
+        }
+
+        if (isset($data['image_id'])) {
+            $update_data['image_id'] = (int)$data['image_id'];
+        }
+
+        if (isset($data['amenities'])) {
+            $update_data['amenities'] = json_encode($data['amenities']);
+        }
+
         if (isset($data['floor'])) {
-            $update_data['floor'] = $data['floor'];
+            $update_data['floor'] = (int)$data['floor'];
         }
         
         if (isset($data['room_type'])) {
             $update_data['room_type'] = $this->normalize_room_type($data['room_type']);
+        }
+
+        if (isset($data['status'])) {
+            $update_data['status'] = (string)$data['status'];
+        }
+
+        if (isset($data['pricing_mode'])) {
+            $update_data['pricing_mode'] = (string)$data['pricing_mode'];
         }
         
         if (empty($update_data)) {
             throw new \Exception('No data to update');
         }
         
-        $wpdb->update(
+        $result = $wpdb->update(
             $this->table,
             $update_data,
             ['id' => $id]
         );
+
+        // If failed, try to repair table and retry
+        if ($result === false) {
+            $log("Update failed. Error: " . $wpdb->last_error . ". Attempting repair...");
+            
+            // Attempt auto-repair
+            require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+            $sql = \MikroPlaneta\Booking\Core\Database\Schema::rooms_table();
+            dbDelta($sql);
+            
+            // Retry update
+            $result = $wpdb->update(
+                $this->table,
+                $update_data,
+                ['id' => $id]
+            );
+            
+            if ($result === false) {
+                $log("FATAL: Update failed after repair. Error: " . $wpdb->last_error);
+                throw new \Exception("Database error: " . $wpdb->last_error);
+            }
+        }
+        
+        $log("Update successful for room $id");
         
         $room = $this->find($id);
         

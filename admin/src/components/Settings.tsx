@@ -12,6 +12,9 @@ interface PluginSettings {
     pending_timeout_hours: number;
     auto_expire_pending: boolean;
     require_payment_confirmation: boolean;
+    multiplier_single: number;
+    multiplier_double: number;
+    multiplier_bunk: number;
 }
 
 const Settings: React.FC = () => {
@@ -27,6 +30,9 @@ const Settings: React.FC = () => {
         pending_timeout_hours: 48,
         auto_expire_pending: true,
         require_payment_confirmation: true,
+        multiplier_single: 1.0,
+        multiplier_double: 2.0,
+        multiplier_bunk: 2.0,
     });
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -41,7 +47,12 @@ const Settings: React.FC = () => {
         try {
             setLoading(true);
             const data = await SettingsAPI.getAll();
-            setSettings(data);
+            setSettings({
+                ...data,
+                multiplier_single: data.multiplier_single || 1.0,
+                multiplier_double: data.multiplier_double || 2.0,
+                multiplier_bunk: data.multiplier_bunk || 2.0,
+            });
         } catch (error) {
             console.error('Failed to load settings:', error);
         } finally {
@@ -76,7 +87,6 @@ const Settings: React.FC = () => {
 
     return (
         <div className="max-w-2xl">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Ustawienia & Licencja</h2>
 
             {/* Hotel Information Section */}
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
@@ -278,6 +288,102 @@ const Settings: React.FC = () => {
                         </div>
 
                         {/* Save button */}
+                        <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700 transition disabled:opacity-50"
+                                >
+                                    <Save className="inline-block mr-2" size={16} />
+                                    {saving ? 'Zapisywanie...' : 'Zapisz ustawienia'}
+                                </button>
+                                {saved && (
+                                    <span className="text-green-600 text-sm flex items-center gap-1">
+                                        <AlertCircle size={16} />
+                                        Zapisano pomyślnie
+                                    </span>
+                                )}
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    if (window.confirm('Czy na pewno chcesz teraz uruchomić sprawdzanie wygasania rezerwacji?')) {
+                                        try {
+                                            const res = await SettingsAPI.triggerCron();
+                                            alert(res.data.message);
+                                        } catch (error) {
+                                            alert('Błąd podczas uruchamiania testu');
+                                            console.error(error);
+                                        }
+                                    }
+                                }}
+                                className="text-xs bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-gray-500 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm flex items-center gap-2"
+                            >
+                                <Clock size={14} />
+                                Testuj wygasanie (Cron)
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Globe className="text-brand-600" size={20} />
+                    Mnożniki cen łóżek
+                </h3>
+                <p className="text-gray-600 mb-6 text-sm">
+                    Określ wagę cenową dla każdego typu łóżka. Cena bazowa pokoju zostanie pomnożona przez ten współczynnik.
+                </p>
+
+                {loading ? (
+                    <p className="text-gray-500">Ładowanie...</p>
+                ) : (
+                    <form onSubmit={handleSaveSettings} className="space-y-4">
+                        <div className="grid grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Łóżko Pojedyncze
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0.1"
+                                    value={settings.multiplier_single}
+                                    onChange={(e) => setSettings({ ...settings, multiplier_single: parseFloat(e.target.value) || 1.0 })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Łóżko Podwójne
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0.1"
+                                    value={settings.multiplier_double}
+                                    onChange={(e) => setSettings({ ...settings, multiplier_double: parseFloat(e.target.value) || 2.0 })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Łóżko Piętrowe
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0.1"
+                                    value={settings.multiplier_bunk}
+                                    onChange={(e) => setSettings({ ...settings, multiplier_bunk: parseFloat(e.target.value) || 2.0 })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                            </div>
+                        </div>
+
                         <div className="flex items-center gap-2 mt-6 pt-4 border-t border-gray-200">
                             <button
                                 type="submit"
@@ -285,14 +391,8 @@ const Settings: React.FC = () => {
                                 className="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700 transition disabled:opacity-50"
                             >
                                 <Save className="inline-block mr-2" size={16} />
-                                {saving ? 'Zapisywanie...' : 'Zapisz ustawienia'}
+                                {saving ? 'Zapisywanie...' : 'Zapisz mnożniki'}
                             </button>
-                            {saved && (
-                                <span className="text-green-600 text-sm flex items-center gap-1">
-                                    <AlertCircle size={16} />
-                                    Zapisano pomyślnie
-                                </span>
-                            )}
                         </div>
                     </form>
                 )}
