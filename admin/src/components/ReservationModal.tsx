@@ -302,7 +302,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50/50">
                     <div>
@@ -314,8 +314,8 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit}>
-                    <div className="p-6">
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+                    <div className="p-6 flex-1 overflow-y-auto">
                         {/* SELECTION SUMMARY - ALWAYS VISIBLE */}
                         <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-2xl space-y-2 shadow-sm">
                             <div className="flex flex-wrap gap-y-3 items-center text-sm">
@@ -662,7 +662,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                     </div>
 
                     {/* Footer */}
-                    <div className="p-6 border-t border-gray-100 flex gap-3">
+                    <div className="p-6 border-t border-gray-100 flex gap-3 bg-gray-50/50">
                         <button
                             type="button"
                             onClick={onClose}
@@ -680,8 +680,8 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 
