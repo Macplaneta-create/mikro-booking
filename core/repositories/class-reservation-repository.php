@@ -95,35 +95,34 @@ class ReservationRepository implements RepositoryInterface {
     
     /**
      * Get all reservations
-     * Returns a flattened list where each row represents a bed occupancy.
-     * Group reservations will appear as multiple rows (one per bed).
+     * Groups beds by reservation ID so each reservation appears once with all bed_ids
      */
     public function all(array $args = []): array {
         global $wpdb;
-        
+
         $reservation_beds_table = Schema::get_table_name('reservation_beds');
-        
+
         // Base query - join with reservation_beds to get bed_id
-        $sql = "SELECT r.*, rb.bed_id, g.first_name, g.last_name 
-                FROM {$this->table} r 
+        $sql = "SELECT r.*, rb.bed_id, g.first_name, g.last_name
+                FROM {$this->table} r
                 JOIN {$reservation_beds_table} rb ON r.id = rb.reservation_id
-                LEFT JOIN {$this->guests_table} g ON r.guest_id = g.id 
+                LEFT JOIN {$this->guests_table} g ON r.guest_id = g.id
                 WHERE 1=1";
-        
+
         $params = [];
-        
+
         // Filter by bed
         if (!empty($args['bed_id'])) {
             $sql .= ' AND rb.bed_id = %d';
             $params[] = $args['bed_id'];
         }
-        
+
         // Filter by guest
         if (!empty($args['guest_id'])) {
             $sql .= ' AND r.guest_id = %d';
             $params[] = $args['guest_id'];
         }
-        
+
         // Filter by status
         if (!empty($args['status'])) {
             if (is_array($args['status'])) {
@@ -135,47 +134,58 @@ class ReservationRepository implements RepositoryInterface {
                 $params[] = $args['status'];
             }
         }
-        
+
         // Filter by date range
         if (!empty($args['check_in_from'])) {
             $sql .= ' AND r.check_in >= %s';
             $params[] = $args['check_in_from'];
         }
-        
+
         if (!empty($args['check_in_to'])) {
             $sql .= ' AND r.check_in <= %s';
             $params[] = $args['check_in_to'];
         }
-        
+
         if (!empty($args['check_out_from'])) {
             $sql .= ' AND r.check_out >= %s';
             $params[] = $args['check_out_from'];
         }
-        
+
         if (!empty($args['check_out_to'])) {
             $sql .= ' AND r.check_out <= %s';
             $params[] = $args['check_out_to'];
         }
-        
+
         // Order by check-in date
-        // Note: Simple ordering, we ignore complex args['order_by'] for now as this is mainly for calendar
         $sql .= ' ORDER BY r.check_in ASC';
-        
+
         if (!empty($params)) {
             $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
         } else {
             $rows = $wpdb->get_results($sql, ARRAY_A);
         }
-        
-        // Return Model objects
+
+        // Group beds by reservation ID
+        $reservations_by_id = [];
+        foreach ($rows as $row) {
+            $res_id = (int) $row['id'];
+            
+            if (!isset($reservations_by_id[$res_id])) {
+                // First time seeing this reservation
+                $reservations_by_id[$res_id] = [
+                    ...$row,
+                    'bed_ids' => []
+                ];
+            }
+            
+            // Add bed_id to the reservation
+            $reservations_by_id[$res_id]['bed_ids'][] = (int) $row['bed_id'];
+        }
+
+        // Convert to Model objects
         return array_map(function($row) {
-            $reservation = Reservation::fromArray($row);
-            // NEW: Ensure bed_ids is populated for the frontend filters to work
-            // Even if it's a flattened join, we put the current bed_id into the array
-            $reservation->bed_ids = [(int) $row['bed_id']];
-            $reservation->bed_id = (int) $row['bed_id']; // Keep temporary for back-compat if needed
-            return $reservation;
-        }, $rows);
+            return Reservation::fromArray($row);
+        }, array_values($reservations_by_id));
     }
     
     /**

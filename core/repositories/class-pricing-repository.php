@@ -53,8 +53,23 @@ class PricingRepository implements RepositoryInterface {
             $where .= ' AND room_id = %d';
             $params[] = $args['room_id'];
         }
+
+        if (!empty($args['room_type'])) {
+            $where .= ' AND room_type = %s';
+            $params[] = $args['room_type'];
+        }
+
+        if (!empty($args['scope_type'])) {
+            $where .= ' AND scope_type = %s';
+            $params[] = $args['scope_type'];
+        }
+
+        if (!empty($args['pricing_mode'])) {
+            $where .= ' AND (pricing_mode = %s OR pricing_mode IS NULL OR pricing_mode = \'\')';
+            $params[] = $args['pricing_mode'];
+        }
         
-        $sql = "SELECT * FROM {$this->table} WHERE {$where} ORDER BY start_date ASC";
+        $sql = "SELECT * FROM {$this->table} WHERE {$where} ORDER BY priority DESC, start_date ASC";
         
         if (!empty($params)) {
             $sql = $wpdb->prepare($sql, ...$params);
@@ -72,9 +87,26 @@ class PricingRepository implements RepositoryInterface {
      */
     public function create(array $data): Pricing {
         global $wpdb;
-        
+        $scope_type = isset($data['scope_type']) ? (string) $data['scope_type'] : 'room_id';
+        if (!in_array($scope_type, ['room_id', 'room_type'], true)) {
+            throw new \Exception('Invalid scope_type. Allowed: room_id, room_type');
+        }
+
+        if ($scope_type === 'room_id' && empty($data['room_id'])) {
+            throw new \Exception('room_id is required for scope_type=room_id');
+        }
+
+        if ($scope_type === 'room_type' && empty($data['room_type'])) {
+            throw new \Exception('room_type is required for scope_type=room_type');
+        }
+
         $insert_data = [
-            'room_id' => $data['room_id'],
+            'name' => isset($data['name']) && $data['name'] !== '' ? (string) $data['name'] : null,
+            'room_id' => $scope_type === 'room_id' ? (int) $data['room_id'] : null,
+            'scope_type' => $scope_type,
+            'room_type' => $scope_type === 'room_type' ? (string) $data['room_type'] : null,
+            'pricing_mode' => isset($data['pricing_mode']) ? (string) $data['pricing_mode'] : null,
+            'priority' => isset($data['priority']) ? (int) $data['priority'] : 100,
             'start_date' => $data['start_date'],
             'end_date' => $data['end_date'],
             'base_price' => $data['base_price'],
@@ -99,12 +131,30 @@ class PricingRepository implements RepositoryInterface {
         global $wpdb;
         
         $update_data = [];
-        $fields = ['room_id', 'start_date', 'end_date', 'base_price', 'weekend_price'];
+        $fields = ['name', 'room_id', 'scope_type', 'room_type', 'pricing_mode', 'priority', 'start_date', 'end_date', 'base_price', 'weekend_price'];
         
         foreach ($fields as $field) {
             if (isset($data[$field])) {
                 $update_data[$field] = $data[$field];
             }
+        }
+
+        $next_scope = $update_data['scope_type'] ?? null;
+        if ($next_scope !== null && !in_array((string) $next_scope, ['room_id', 'room_type'], true)) {
+            throw new \Exception('Invalid scope_type. Allowed: room_id, room_type');
+        }
+
+        // Keep consistency when switching scope
+        if (($next_scope ?? '') === 'room_id') {
+            if (empty($update_data['room_id']) && !empty($update_data['room_type'])) {
+                $update_data['room_type'] = null;
+            }
+        }
+        if (($next_scope ?? '') === 'room_type') {
+            if (empty($update_data['room_type'])) {
+                throw new \Exception('room_type is required for scope_type=room_type');
+            }
+            $update_data['room_id'] = null;
         }
         
         if (empty($update_data)) {
@@ -144,19 +194,34 @@ class PricingRepository implements RepositoryInterface {
     /**
      * Find pricing for a room on a specific date
      */
-    public function findForDate(int $room_id, string $date): ?Pricing {
+    public function findForDate(int $room_id, string $room_type, string $pricing_mode, string $date): ?Pricing {
         global $wpdb;
-        
+
         $row = $wpdb->get_row(
             $wpdb->prepare(
                 "SELECT * FROM {$this->table} 
-                WHERE room_id = %d 
+                WHERE (
+                    (scope_type = 'room_id' AND room_id = %d)
+                    OR
+                    (scope_type = 'room_type' AND room_type = %s)
+                )
                 AND %s >= start_date 
-                AND %s <= end_date 
+                AND %s <= end_date
+                AND (
+                    pricing_mode IS NULL
+                    OR pricing_mode = ''
+                    OR pricing_mode = %s
+                )
+                ORDER BY
+                    priority DESC,
+                    CASE WHEN scope_type = 'room_id' THEN 2 ELSE 1 END DESC,
+                    id DESC
                 LIMIT 1",
                 $room_id,
+                $room_type,
                 $date,
-                $date
+                $date,
+                $pricing_mode
             ),
             ARRAY_A
         );

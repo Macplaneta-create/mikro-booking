@@ -28,6 +28,27 @@ const api = axios.create({
     },
 });
 
+const sanitizePricingPayload = (data: Record<string, any>) => {
+    const payload: Record<string, any> = { ...data };
+
+    // WP REST validation rejects null for typed fields.
+    Object.keys(payload).forEach((key) => {
+        if (payload[key] === null || payload[key] === undefined || payload[key] === '') {
+            delete payload[key];
+        }
+    });
+
+    if (payload.scope_type === 'room_type') {
+        delete payload.room_id;
+    }
+
+    if (payload.scope_type === 'room_id') {
+        delete payload.room_type;
+    }
+
+    return payload;
+};
+
 // Response interceptor for better error handling
 api.interceptors.response.use(
     (response) => {
@@ -225,11 +246,26 @@ export const DashboardAPI = {
 };
 
 export const PricingAPI = {
-    getAll: async (params?: { room_id?: number }) => {
+    getAll: async (params?: { room_id?: number; room_type?: string; scope_type?: string; pricing_mode?: string }) => {
         const res = await api.get('/pricing', { params });
-        return res.data.data as Array<{
+        return (res.data.data as any[]).map(rule => ({
+            ...rule,
+            name: rule.name || null,
+            scope_type: rule.scope_type || 'room_id',
+            room_id: rule.room_id ? Number(rule.room_id) : null,
+            room_type: rule.room_type || null,
+            pricing_mode: rule.pricing_mode || null,
+            priority: Number(rule.priority ?? 100),
+            base_price: Number(rule.base_price),
+            weekend_price: Number(rule.weekend_price)
+        })) as Array<{
             id: number;
-            room_id: number;
+            name: string | null;
+            scope_type: 'room_id' | 'room_type';
+            room_id: number | null;
+            room_type: string | null;
+            pricing_mode: 'per_room' | 'per_bed' | null;
+            priority: number;
             start_date: string;
             end_date: string;
             base_price: number;
@@ -237,34 +273,81 @@ export const PricingAPI = {
         }>;
     },
     create: async (data: {
-        room_id: number;
+        name?: string | null;
+        scope_type?: 'room_id' | 'room_type';
+        room_id?: number | null;
+        room_type?: string | null;
+        pricing_mode?: 'per_room' | 'per_bed' | null;
+        priority?: number;
         start_date: string;
         end_date: string;
         base_price: number;
         weekend_price: number;
     }) => {
-        const res = await api.post('/pricing', data);
-        return res.data.data;
+        const payload = sanitizePricingPayload(data as Record<string, any>);
+        const res = await api.post('/pricing', payload);
+        const item = res.data.data;
+        return {
+            ...item,
+            name: item.name || null,
+            scope_type: item.scope_type || 'room_id',
+            room_id: item.room_id ? Number(item.room_id) : null,
+            room_type: item.room_type || null,
+            pricing_mode: item.pricing_mode || null,
+            priority: Number(item.priority ?? 100),
+            base_price: Number(item.base_price),
+            weekend_price: Number(item.weekend_price)
+        };
+    },
+    update: async (id: number, data: {
+        name?: string | null;
+        scope_type?: 'room_id' | 'room_type';
+        room_id?: number | null;
+        room_type?: string | null;
+        pricing_mode?: 'per_room' | 'per_bed' | null;
+        priority?: number;
+        start_date?: string;
+        end_date?: string;
+        base_price?: number;
+        weekend_price?: number;
+    }) => {
+        const payload = sanitizePricingPayload(data as Record<string, any>);
+        const res = await api.put(`/pricing/${id}`, payload);
+        const item = res.data.data;
+        return {
+            ...item,
+            name: item.name || null,
+            scope_type: item.scope_type || 'room_id',
+            room_id: item.room_id ? Number(item.room_id) : null,
+            room_type: item.room_type || null,
+            pricing_mode: item.pricing_mode || null,
+            priority: Number(item.priority ?? 100),
+            base_price: Number(item.base_price),
+            weekend_price: Number(item.weekend_price)
+        };
     },
     delete: async (id: number) => {
         const res = await api.delete(`/pricing/${id}`);
         return res.data;
     },
-    calculate: async (params: { bed_id: number; check_in: string; check_out: string }) => {
-        const res = await api.get('/pricing/calculate', { params });
-        return res.data.data as {
-            total: number;
-            nights: number;
-            details: Array<{
-                date: string;
-                price: number;
-                is_weekend: boolean;
-            }>;
-        };
-    },
-    calculateGroup: async (params: { bed_ids: number[]; check_in: string; check_out: string }) => {
+    calculateGroup: async (params: {
+        bed_ids: number[];
+        check_in: string;
+        check_out: string;
+        adults?: number;
+        children?: number;
+        room_id?: number;
+    }) => {
         const res = await api.post('/pricing/calculate-group', params);
-        return res.data.data as {
+        const data = res.data.data;
+        return {
+            ...data,
+            total: Number(data.total),
+            details: (data.details || []).map((d: any) => ({
+                ...d,
+                price: Number(d.price)
+            }))
+        } as {
             total: number;
             nights: number;
             details: Array<{
@@ -293,6 +376,7 @@ export const SettingsAPI = {
             multiplier_single: number;
             multiplier_double: number;
             multiplier_bunk: number;
+            multiplier_children: number;
         };
     },
     update: async (data: {
@@ -305,6 +389,7 @@ export const SettingsAPI = {
         pending_timeout_hours?: number;
         auto_expire_pending?: boolean;
         require_payment_confirmation?: boolean;
+        multiplier_children?: number;
     }) => {
         const res = await api.post('/settings', data);
         return res.data.data;

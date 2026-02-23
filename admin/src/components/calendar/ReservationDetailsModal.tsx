@@ -1,23 +1,25 @@
 /**
  * ReservationDetailsModal
- * 
+ *
  * Displays reservation details and action buttons (confirm, check-in, check-out, cancel).
  * Extracted from CalendarView.tsx for clarity and reusability.
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, User, LogIn, LogOut, History, AlertCircle, Coins, Receipt, Check, CreditCard, CheckCircle2 } from 'lucide-react';
+import { X, User, LogIn, LogOut, History, AlertCircle, Coins, Receipt, Check, CreditCard, CheckCircle2, Edit3, BedDouble } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { ReservationsAPI, ExtrasAPI, Reservation, ReservationExtra } from '../../services/api';
+import { ReservationsAPI, ExtrasAPI, PricingAPI, Reservation, ReservationExtra, Room } from '../../services/api';
 import { getStatusLabel } from './calendarUtils';
 import BookingHistory from '../BookingHistory';
+import EditReservationModal from './EditReservationModal';
 
 interface ReservationDetailsModalProps {
     reservation: Reservation;
     isOpen: boolean;
     onClose: () => void;
     onRefresh: () => void;
+    rooms: Room[];
 }
 
 const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
@@ -25,9 +27,13 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
     isOpen,
     onClose,
     onRefresh,
+    rooms,
 }) => {
     const [extras, setExtras] = useState<ReservationExtra[]>([]);
     const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [calculatedPrice, setCalculatedPrice] = useState<number | null>(null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0); // Force recalc on change
 
     useEffect(() => {
         if (isOpen && reservation.id) {
@@ -35,6 +41,18 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
                 try {
                     const extrasData = await ExtrasAPI.getReservationExtras(reservation.id!);
                     setExtras(extrasData);
+                    
+                    // Calculate current price based on beds, dates, and guest count
+                    if (reservation.bed_ids && reservation.bed_ids.length > 0) {
+                        const pricingResult = await PricingAPI.calculateGroup({
+                            bed_ids: reservation.bed_ids,
+                            check_in: reservation.check_in,
+                            check_out: reservation.check_out,
+                            adults: reservation.adults || 1,
+                            children: reservation.children || 0,
+                        });
+                        setCalculatedPrice(pricingResult.total);
+                    }
                 } catch (error) {
                     console.error("Failed to fetch reservation details:", error);
                 }
@@ -42,9 +60,10 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
             fetchDetails();
         } else {
             setExtras([]);
+            setCalculatedPrice(null);
             setActiveTab('details');
         }
-    }, [isOpen, reservation.id]);
+    }, [isOpen, reservation.id, reservation.bed_ids, reservation.check_in, reservation.check_out, reservation.adults, reservation.children, refreshTrigger]);
 
     if (!isOpen) return null;
 
@@ -136,13 +155,22 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
                 <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50/50">
                     <div className="flex items-center gap-3">
                         <h3 className="text-xl font-bold text-gray-900">Rezerwacja #{reservation.id}</h3>
-                        <button
-                            onClick={() => setActiveTab(activeTab === 'history' ? 'details' : 'history')}
-                            className={`p-2 rounded-lg transition-colors ${activeTab === 'history' ? 'bg-brand-100 text-brand-700' : 'bg-white text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
-                            title="Historia zmian"
-                        >
-                            <History size={18} />
-                        </button>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setIsEditModalOpen(true)}
+                                className="p-2 rounded-lg transition-colors bg-brand-50 text-brand-600 hover:bg-brand-100"
+                                title="Edytuj rezerwację"
+                            >
+                                <Edit3 size={18} />
+                            </button>
+                            <button
+                                onClick={() => setActiveTab(activeTab === 'history' ? 'details' : 'history')}
+                                className={`p-2 rounded-lg transition-colors ${activeTab === 'history' ? 'bg-brand-100 text-brand-700' : 'bg-white text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+                                title="Historia zmian"
+                            >
+                                <History size={18} />
+                            </button>
+                        </div>
                     </div>
                     <button
                         onClick={() => { onClose(); setActiveTab('details'); }}
@@ -210,6 +238,34 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
                                 </span>
                             </div>
 
+                            {/* Stay Details (Nights + Beds) */}
+                            <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 mb-4">
+                                <h4 className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                    <BedDouble size={14} className="text-emerald-600" /> Szczegóły pobytu
+                                </h4>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-600">Liczbą noclegów</span>
+                                        <span className="text-sm font-bold text-gray-900">
+                                            {Math.ceil((new Date(reservation.check_out).getTime() - new Date(reservation.check_in).getTime()) / (1000 * 60 * 60 * 24))} nocy
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-600">Liczbą łóżek</span>
+                                        <span className="text-sm font-bold text-gray-900">{reservation.bed_ids?.length || 0} łóżek</span>
+                                    </div>
+                                    <div className="flex justify-between items-center pt-2 border-t border-emerald-200">
+                                        <span className="text-sm font-bold text-emerald-700">Cena za noclegi</span>
+                                        <span className="text-lg font-black text-emerald-700">
+                                            {calculatedPrice !== null ? 
+                                                new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(calculatedPrice) :
+                                                new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(reservation.total_price || 0)
+                                            }
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* EXTRA SERVICES */}
                             {extras.length > 0 && (
                                 <div className="space-y-3 pt-2">
@@ -262,11 +318,16 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-bold uppercase tracking-wider opacity-80 mb-0.5">Łącznie do zapłaty</p>
-                                            <p className="text-[10px] font-bold opacity-60">Pobyt + Usługi</p>
+                                            <p className="text-[10px] font-bold opacity-60">
+                                                {extras.length > 0 ? 'Pobyt + Usługi' : 'Pobyt'}
+                                            </p>
                                         </div>
                                     </div>
                                     <span className="text-2xl font-black">
-                                        {new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(reservation.total_price || 0)}
+                                        {new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(
+                                            (calculatedPrice !== null ? calculatedPrice : (reservation.total_price || 0)) +
+                                            extras.reduce((acc, curr) => acc + curr.total_price, 0)
+                                        )}
                                     </span>
                                 </div>
                             </div>
@@ -329,6 +390,19 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* Edit Reservation Modal */}
+            <EditReservationModal
+                reservation={reservation}
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                onSuccess={() => {
+                    setIsEditModalOpen(false);
+                    setRefreshTrigger(prev => prev + 1); // Force price recalculation
+                    onRefresh();
+                }}
+                rooms={rooms}
+            />
         </div>
     );
 };

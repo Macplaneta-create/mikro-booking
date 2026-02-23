@@ -13,6 +13,8 @@ namespace MikroPlaneta\Booking\Core\Services;
 use MikroPlaneta\Booking\Core\Repositories\BedRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationRepository;
 use MikroPlaneta\Booking\Core\Models\Bed;
+use MikroPlaneta\Booking\Core\Models\Reservation;
+use MikroPlaneta\Booking\Core\Database\Schema;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -72,7 +74,12 @@ class AvailabilityService {
     ): array {
         $available_beds = $this->findAvailableBeds($check_in, $check_out);
         
-        if (count($available_beds) < $group_size) {
+        $total_capacity = 0;
+        foreach ($available_beds as $bed) {
+            $total_capacity += $this->getBedCapacity($bed);
+        }
+
+        if ($total_capacity < $group_size) {
             return [];
         }
         
@@ -87,11 +94,30 @@ class AvailabilityService {
         
         // Try to fit group in single room first
         foreach ($beds_by_room as $room_id => $beds) {
-            if (count($beds) >= $group_size) {
+            $room_capacity = 0;
+            foreach ($beds as $bed) {
+                $room_capacity += $this->getBedCapacity($bed);
+            }
+
+            if ($room_capacity >= $group_size) {
+                usort($beds, function(Bed $a, Bed $b) {
+                    return $this->getBedCapacity($b) <=> $this->getBedCapacity($a);
+                });
+
+                $picked_beds = [];
+                $capacity_left = $group_size;
+                foreach ($beds as $bed) {
+                    $picked_beds[] = $bed;
+                    $capacity_left -= $this->getBedCapacity($bed);
+                    if ($capacity_left <= 0) {
+                        break;
+                    }
+                }
+
                 $combinations[] = [
                     'type' => 'single_room',
                     'room_id' => $room_id,
-                    'beds' => array_slice($beds, 0, $group_size),
+                    'beds' => $picked_beds,
                     'score' => 100, // Highest score for single room
                 ];
             }
@@ -99,9 +125,22 @@ class AvailabilityService {
         
         // If no single room fits, try multiple rooms
         if (empty($combinations)) {
-            // Simple algorithm: take beds from multiple rooms
-            $selected_beds = array_slice($available_beds, 0, $group_size);
-            if (count($selected_beds) === $group_size) {
+            // Simple algorithm: take beds with highest capacity from multiple rooms
+            usort($available_beds, function(Bed $a, Bed $b) {
+                return $this->getBedCapacity($b) <=> $this->getBedCapacity($a);
+            });
+
+            $selected_beds = [];
+            $capacity_left = $group_size;
+            foreach ($available_beds as $bed) {
+                $selected_beds[] = $bed;
+                $capacity_left -= $this->getBedCapacity($bed);
+                if ($capacity_left <= 0) {
+                    break;
+                }
+            }
+
+            if ($capacity_left <= 0) {
                 $combinations[] = [
                     'type' => 'multiple_rooms',
                     'beds' => $selected_beds,
@@ -218,6 +257,15 @@ class AvailabilityService {
         string $check_out,
         ?int $exclude_reservation_id = null
     ): bool {
+        $bed = $this->bed_repository->find($bed_id);
+        if (!$bed || !$bed->is_active) {
+            return false;
+        }
+
+        if ($this->isPlaceBasedRoom((int) $bed->room_id)) {
+            return $this->isBedAvailableByCapacity($bed, $check_in, $check_out, $exclude_reservation_id);
+        }
+
         return $this->reservation_repository->isBedAvailable(
             $bed_id,
             $check_in,
@@ -245,5 +293,128 @@ class AvailabilityService {
         }
         
         return null;
+    }
+
+    /**
+     * In dormitory rooms, availability is place-based (capacity), not binary bed lock.
+     */
+    private function isBedAvailableByCapacity(
+        Bed $bed,
+        string $check_in,
+        string $check_out,
+        ?int $exclude_reservation_id = null
+    ): bool {
+        $capacity = $this->getBedCapacity($bed);
+        if ($capacity <= 0) {
+            return false;
+        }
+
+        $overlapping = $this->reservation_repository->findByBed((int) $bed->id);
+        $occupied_places = 0;
+
+        foreach ($overlapping as $reservation) {
+            if (!$this->isActiveBlockingStatus((string) $reservation->status)) {
+                continue;
+            }
+            if ($exclude_reservation_id && (int) $reservation->id === $exclude_reservation_id) {
+                continue;
+            }
+            if (!$this->datesOverlap($reservation->check_in, $reservation->check_out, $check_in, $check_out)) {
+                continue;
+            }
+
+            $occupied_places += $this->getOccupiedPlacesForReservationOnBed($reservation, (int) $bed->id);
+            if ($occupied_places >= $capacity) {
+                return false;
+            }
+        }
+
+        return $occupied_places < $capacity;
+    }
+
+    /**
+     * Estimate how many places of target bed are used by this reservation.
+     * Guests are greedily assigned to selected beds by capacity (largest first).
+     */
+    private function getOccupiedPlacesForReservationOnBed(Reservation $reservation, int $target_bed_id): int {
+        $guest_count = max(1, (int) $reservation->adults + (int) $reservation->children);
+        $bed_ids = is_array($reservation->bed_ids) ? array_values(array_unique(array_map('intval', $reservation->bed_ids))) : [];
+        if (empty($bed_ids)) {
+            return 0;
+        }
+
+        $beds = [];
+        foreach ($bed_ids as $bed_id) {
+            $bed = $this->bed_repository->find($bed_id);
+            if ($bed && $bed->is_active) {
+                $beds[] = $bed;
+            }
+        }
+        if (empty($beds)) {
+            return 0;
+        }
+
+        usort($beds, function(Bed $a, Bed $b) {
+            return $this->getBedCapacity($b) <=> $this->getBedCapacity($a);
+        });
+
+        $remaining = $guest_count;
+        foreach ($beds as $bed) {
+            $bed_capacity = $this->getBedCapacity($bed);
+            if ($bed_capacity <= 0) {
+                continue;
+            }
+
+            $assigned = min($remaining, $bed_capacity);
+            if ((int) $bed->id === $target_bed_id) {
+                return $assigned;
+            }
+
+            $remaining -= $assigned;
+            if ($remaining <= 0) {
+                break;
+            }
+        }
+
+        return 0;
+    }
+
+    private function getBedCapacity(Bed $bed): int {
+        switch ((string) $bed->bed_type) {
+            case 'double':
+            case 'bunk':
+                return 2;
+            case 'single':
+            default:
+                return 1;
+        }
+    }
+
+    private function isPlaceBasedRoom(int $room_id): bool {
+        global $wpdb;
+
+        if (!isset($wpdb) || !is_object($wpdb)) {
+            return false;
+        }
+
+        $rooms_table = Schema::get_table_name('rooms');
+        $room_type = $wpdb->get_var($wpdb->prepare(
+            "SELECT room_type FROM {$rooms_table} WHERE id = %d",
+            $room_id
+        ));
+
+        return $room_type === 'dormitory';
+    }
+
+    private function datesOverlap(string $a_start, string $a_end, string $b_start, string $b_end): bool {
+        return $a_start < $b_end && $a_end > $b_start;
+    }
+
+    private function isActiveBlockingStatus(string $status): bool {
+        return in_array($status, [
+            Reservation::STATUS_PENDING,
+            Reservation::STATUS_CONFIRMED,
+            Reservation::STATUS_CHECKED_IN,
+        ], true);
     }
 }

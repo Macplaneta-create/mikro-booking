@@ -15,6 +15,7 @@ interface PluginSettings {
     multiplier_single: number;
     multiplier_double: number;
     multiplier_bunk: number;
+    multiplier_children: number;
 }
 
 const Settings: React.FC = () => {
@@ -33,6 +34,7 @@ const Settings: React.FC = () => {
         multiplier_single: 1.0,
         multiplier_double: 2.0,
         multiplier_bunk: 2.0,
+        multiplier_children: 0.5,
     });
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -52,6 +54,7 @@ const Settings: React.FC = () => {
                 multiplier_single: data.multiplier_single || 1.0,
                 multiplier_double: data.multiplier_double || 2.0,
                 multiplier_bunk: data.multiplier_bunk || 2.0,
+                multiplier_children: data.multiplier_children || 0.5,
             });
         } catch (error) {
             console.error('Failed to load settings:', error);
@@ -379,6 +382,20 @@ const Settings: React.FC = () => {
                                     min="0.1"
                                     value={settings.multiplier_bunk}
                                     onChange={(e) => setSettings({ ...settings, multiplier_bunk: parseFloat(e.target.value) || 2.0 })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Dziecko (Mnożnik)
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.05"
+                                    min="0"
+                                    max="1.0"
+                                    value={settings.multiplier_children}
+                                    onChange={(e) => setSettings({ ...settings, multiplier_children: parseFloat(e.target.value) || 0.5 })}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                                 />
                             </div>

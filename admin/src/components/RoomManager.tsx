@@ -101,7 +101,22 @@ const RoomManager: React.FC = () => {
         try {
             if (editingRoom && editingRoom.id) {
                 // Update room basic info
-                await RoomsAPI.update(editingRoom.id, formData);
+                const updatePayload = {
+                    name: formData.name || '',
+                    description: formData.description || '',
+                    image_id: formData.image_id || 0,
+                    floor: formData.floor || 0,
+                    room_type: formData.room_type || 'standard',
+                    pricing_mode: formData.pricing_mode || 'per_room',
+                    status: formData.status || 'active',
+                    amenities: formData.amenities || []
+                };
+                
+                console.log('[RoomManager] Updating room:', editingRoom.id, updatePayload);
+                
+                const result = await RoomsAPI.update(editingRoom.id, updatePayload);
+                console.log('[RoomManager] Update result:', result);
+                
                 await fetchRooms();
                 setEditingRoom(null);
             } else {
@@ -133,9 +148,11 @@ const RoomManager: React.FC = () => {
             }
             setShowForm(false);
             resetForm();
-        } catch (e) {
-            alert('Błąd podczas zapisywania pokoju.');
-            console.error(e);
+        } catch (e: any) {
+            const errorMsg = e.response?.data?.message || e.message || 'Nieznany błąd';
+            alert('Błąd podczas zapisywania pokoju: ' + errorMsg);
+            console.error('[RoomManager] Save error:', e);
+            console.error('[RoomManager] Error details:', e.response?.data);
         } finally {
             setSubmitting(false);
         }
@@ -440,7 +457,7 @@ const RoomManager: React.FC = () => {
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex justify-between items-center mb-1">
                                                             <span className="text-sm font-bold text-gray-800 truncate">
-                                                                {bed.bed_number ? `Łóżko #${bed.bed_number}` : `Nowe łóżko ${index + 1}`}
+                                                                {bed.bed_number ? `Łóżko #${parseInt(bed.bed_number)}` : `Nowe łóżko ${index + 1}`}
                                                             </span>
                                                         </div>
                                                         <select
@@ -452,6 +469,13 @@ const RoomManager: React.FC = () => {
                                                             <option value="double">Podwójne</option>
                                                             <option value="bunk">Piętrowe</option>
                                                         </select>
+                                                        {bed.bed_type && (
+                                                            <p className="text-[10px] text-gray-500 mt-0.5 capitalize">
+                                                                {bed.bed_type === 'single' ? 'Pojedyncze' : 
+                                                                 bed.bed_type === 'double' ? 'Podwójne' : 
+                                                                 bed.bed_type === 'bunk' ? 'Piętrowe' : bed.bed_type}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <button

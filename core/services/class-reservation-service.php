@@ -154,17 +154,32 @@ class ReservationService {
             throw new \Exception('Reservation not found');
         }
         
+        $normalized_bed_ids = null;
+
         // If dates or beds are being changed, check availability
         if (isset($data['check_in']) || isset($data['check_out']) || isset($data['bed_ids'])) {
             $check_in = $data['check_in'] ?? $reservation->check_in;
             $check_out = $data['check_out'] ?? $reservation->check_out;
             $bed_ids = $data['bed_ids'] ?? $reservation->bed_ids;
+
+            if (isset($data['bed_ids'])) {
+                $bed_ids = $this->normalizeBedIds($data['bed_ids']);
+                if (empty($bed_ids)) {
+                    throw new \Exception('At least one bed must be selected');
+                }
+                $normalized_bed_ids = $bed_ids;
+            }
             
             $this->validateDates($check_in, $check_out);
             
             foreach ($bed_ids as $bed_id) {
+                $bed = $this->bed_repository->find((int) $bed_id);
+                if (!$bed || !$bed->is_active) {
+                    throw new \Exception("Bed #{$bed_id} not found or inactive");
+                }
+
                 if (!$this->availability_service->isBedAvailable(
-                    $bed_id,
+                    (int) $bed_id,
                     $check_in,
                     $check_out,
                     $id // Exclude current reservation
@@ -173,12 +188,29 @@ class ReservationService {
                 }
             }
         }
+
+        // Validate guests vs effective capacity when any of these fields change.
+        if (isset($data['adults']) || isset($data['children']) || isset($data['bed_ids'])) {
+            $adults = isset($data['adults']) ? max(1, (int) $data['adults']) : (int) $reservation->adults;
+            $children = isset($data['children']) ? max(0, (int) $data['children']) : (int) $reservation->children;
+            $effective_bed_ids = $normalized_bed_ids ?? $reservation->bed_ids;
+            $this->assertGuestCountFitsCapacity($adults, $children, $effective_bed_ids);
+        }
         
         // Store old values for logging
         $old_data = $reservation->toArray();
         
         // Update reservation
         $updated_reservation = $this->reservation_repository->update($id, $data);
+
+        // Persist bed relation updates when bed_ids were provided
+        if ($normalized_bed_ids !== null) {
+            $this->reservation_bed_repository->setBedsForReservation($id, $normalized_bed_ids);
+            $updated_reservation = $this->reservation_repository->find($id);
+            if (!$updated_reservation) {
+                throw new \Exception('Reservation not found after bed update');
+            }
+        }
         
         // Log changes
         $this->logChanges($id, $old_data, $updated_reservation->toArray());
@@ -271,28 +303,57 @@ class ReservationService {
         // Apply adjustments if provided (e.g., when fewer guests arrived)
         if (!empty($adjustment)) {
             $update_data = [];
-            if (isset($adjustment['adults'])) $update_data['adults'] = (int)$adjustment['adults'];
-            if (isset($adjustment['children'])) $update_data['children'] = (int)$adjustment['children'];
+            if (isset($adjustment['adults'])) {
+                $update_data['adults'] = max(1, (int) $adjustment['adults']);
+            }
+            if (isset($adjustment['children'])) {
+                $update_data['children'] = max(0, (int) $adjustment['children']);
+            }
+
+            $effective_bed_ids = $reservation->bed_ids;
+            if (isset($adjustment['bed_ids'])) {
+                $effective_bed_ids = $this->normalizeBedIds($adjustment['bed_ids']);
+                if (empty($effective_bed_ids)) {
+                    throw new \Exception('At least one bed must be selected');
+                }
+            }
+
+            $effective_adults = $update_data['adults'] ?? $reservation->adults;
+            $effective_children = $update_data['children'] ?? $reservation->children;
+            $this->assertGuestCountFitsCapacity($effective_adults, $effective_children, $effective_bed_ids);
             
             if (!empty($update_data)) {
                 $this->reservation_repository->update($id, $update_data);
             }
             
-            if (isset($adjustment['bed_ids']) && is_array($adjustment['bed_ids'])) {
-                $this->reservation_bed_repository->setBedsForReservation($id, $adjustment['bed_ids']);
+            if (isset($adjustment['bed_ids'])) {
+                foreach ($effective_bed_ids as $bed_id) {
+                    $bed = $this->bed_repository->find($bed_id);
+                    if (!$bed || !$bed->is_active) {
+                        throw new \Exception("Bed #{$bed_id} not found or inactive");
+                    }
+
+                    if (!$this->availability_service->isBedAvailable(
+                        $bed_id,
+                        $reservation->check_in,
+                        $reservation->check_out,
+                        $id
+                    )) {
+                        throw new \Exception("Bed #{$bed_id} is not available for selected dates");
+                    }
+                }
+
+                $this->reservation_bed_repository->setBedsForReservation($id, $effective_bed_ids);
             }
 
-            // Log the adjustment
-            $this->logger_service->log(
-                'reservation',
+            do_action(
+                'mikroplaneta_booking_reservation_adjusted_during_checkin',
                 $id,
-                'adjusted_during_checkin',
-                sprintf(
-                    'Korekta podczas zameldowania: %d dorosłych, %d dzieci. Łóżka: %s',
-                    $update_data['adults'] ?? $reservation->adults,
-                    $update_data['children'] ?? $reservation->children,
-                    isset($adjustment['bed_ids']) ? implode(', ', $adjustment['bed_ids']) : 'bez zmian'
-                )
+                [
+                    'adults' => $effective_adults,
+                    'children' => $effective_children,
+                    'bed_ids' => $effective_bed_ids,
+                ]
             );
         }
         
@@ -354,15 +415,11 @@ class ReservationService {
             }
         }
 
-        // Validate guest count vs beds count
+        // Validate guest count vs beds capacity
         $adults = isset($data['adults']) ? (int) $data['adults'] : 1;
         $children = isset($data['children']) ? (int) $data['children'] : 0;
-        $total_guests = $adults + $children;
-        $bed_count = is_array($data['bed_ids']) ? count($data['bed_ids']) : 0;
-
-        if ($total_guests > $bed_count) {
-            throw new \Exception("Number of guests ({$total_guests}) exceeds the number of selected beds ({$bed_count})");
-        }
+        $bed_ids = is_array($data['bed_ids']) ? $data['bed_ids'] : [];
+        $this->assertGuestCountFitsCapacity($adults, $children, $bed_ids);
     }
     
     /**
@@ -388,6 +445,62 @@ class ReservationService {
     private function calculatePrice(int $bed_id, string $check_in, string $check_out): float {
         $result = $this->pricing_service->calculateTotalPrice($bed_id, $check_in, $check_out);
         return (float) $result['total'];
+    }
+
+    /**
+     * Normalize bed IDs into a unique list of positive integers
+     */
+    private function normalizeBedIds($bed_ids): array {
+        if (!is_array($bed_ids)) {
+            return [];
+        }
+
+        $normalized = array_map('intval', $bed_ids);
+        $normalized = array_filter($normalized, static function($id) {
+            return $id > 0;
+        });
+
+        return array_values(array_unique($normalized));
+    }
+
+    /**
+     * Ensure selected beds can host total guests (capacity-aware validation)
+     */
+    private function assertGuestCountFitsCapacity(int $adults, int $children, array $bed_ids): void {
+        $total_guests = max(1, $adults + $children);
+        $capacity = $this->calculateBedsCapacity($bed_ids);
+
+        if ($total_guests > $capacity) {
+            throw new \Exception("Number of guests ({$total_guests}) exceeds selected beds capacity ({$capacity})");
+        }
+    }
+
+    /**
+     * Calculate total beds capacity from bed types.
+     * single=1, double=2, bunk=2
+     */
+    private function calculateBedsCapacity(array $bed_ids): int {
+        $capacity = 0;
+
+        foreach ($bed_ids as $bed_id) {
+            $bed = $this->bed_repository->find((int) $bed_id);
+            if (!$bed) {
+                continue;
+            }
+
+            switch ((string) $bed->bed_type) {
+                case 'double':
+                case 'bunk':
+                    $capacity += 2;
+                    break;
+                case 'single':
+                default:
+                    $capacity += 1;
+                    break;
+            }
+        }
+
+        return $capacity;
     }
     
     /**

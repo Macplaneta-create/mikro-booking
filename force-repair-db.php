@@ -1,5 +1,34 @@
 <?php
-require_once 'c:/laragon/www/gorytajemnic/wp-load.php';
+/**
+ * Emergency DB repair tool for local maintenance.
+ *
+ * Security:
+ * - CLI mode: allowed
+ * - Browser mode: requires admin capability and a valid nonce
+ */
+
+if (!defined('ABSPATH')) {
+    $wp_load = __DIR__ . '/../../../wp-load.php';
+    if (!file_exists($wp_load)) {
+        http_response_code(500);
+        exit('Unable to load WordPress bootstrap.');
+    }
+    require_once $wp_load;
+}
+
+if (PHP_SAPI !== 'cli') {
+    if (!is_user_logged_in() || !current_user_can('manage_options')) {
+        status_header(403);
+        exit('Forbidden.');
+    }
+
+    $nonce = isset($_REQUEST['_wpnonce']) ? sanitize_text_field(wp_unslash($_REQUEST['_wpnonce'])) : '';
+    if (!wp_verify_nonce($nonce, 'mikroplaneta_force_repair_db')) {
+        status_header(403);
+        exit('Invalid security token.');
+    }
+}
+
 global $wpdb;
 
 $table = $wpdb->prefix . 'hotel_rooms';

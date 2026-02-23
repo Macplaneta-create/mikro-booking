@@ -120,16 +120,69 @@ class PublicReservationsController extends RestController {
      * Simulated captcha verification during development
      */
     private function verify_captcha(string $token): bool {
+        if ($token === '') {
+            return false;
+        }
+
         $simulate = (bool) apply_filters(
             'mikroplaneta_booking_recaptcha_simulate',
             defined('WP_DEBUG') && WP_DEBUG
         );
 
         if ($simulate) {
-            return $token !== '';
+            return true;
         }
 
-        // Real verification should be implemented before production use.
-        return false;
+        $secret_key = trim((string) get_option('mikroplaneta_booking_recaptcha_secret_key', ''));
+        if ($secret_key === '') {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroBooking] CAPTCHA verification failed: missing recaptcha secret key.');
+            }
+            return false;
+        }
+
+        $body = [
+            'secret' => $secret_key,
+            'response' => $token,
+        ];
+
+        if (!empty($_SERVER['REMOTE_ADDR'])) {
+            $body['remoteip'] = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
+        }
+
+        $response = wp_remote_post('https://www.google.com/recaptcha/api/siteverify', [
+            'timeout' => 10,
+            'body' => $body,
+        ]);
+
+        if (is_wp_error($response)) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroBooking] CAPTCHA verification HTTP error: ' . $response->get_error_message());
+            }
+            return false;
+        }
+
+        $status_code = (int) wp_remote_retrieve_response_code($response);
+        if ($status_code < 200 || $status_code >= 300) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroBooking] CAPTCHA verification HTTP status: ' . $status_code);
+            }
+            return false;
+        }
+
+        $payload = json_decode(wp_remote_retrieve_body($response), true);
+        if (!is_array($payload) || empty($payload['success'])) {
+            return false;
+        }
+
+        // Optional score check for reCAPTCHA v3
+        if (isset($payload['score'])) {
+            $min_score = (float) apply_filters('mikroplaneta_booking_recaptcha_min_score', 0.5);
+            if ((float) $payload['score'] < $min_score) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

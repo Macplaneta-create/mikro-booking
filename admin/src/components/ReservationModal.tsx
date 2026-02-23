@@ -55,6 +55,20 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
     const [localBedIds, setLocalBedIds] = useState<number[]>([]);
 
+    const getBedCapacity = (bed: any): number => {
+        const type = String(bed?.bed_type || 'single');
+        if (type === 'double' || type === 'bunk') return 2;
+        return 1;
+    };
+
+    const getBedsCapacity = (bedIds: number[]): number => {
+        const allBeds = rooms.flatMap(r => r.beds || []);
+        return bedIds.reduce((sum, bedId) => {
+            const bed = allBeds.find(b => b.id === bedId);
+            return sum + getBedCapacity(bed);
+        }, 0);
+    };
+
     // Update form when initial data changes or modal opens
     useEffect(() => {
         if (isOpen) {
@@ -81,11 +95,33 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     }, [isOpen, initialData]);
 
     // Reset bed selection if guest count changes (to force auto-assign or re-selection)
+    // Using a ref to track if this is the first load after modal open
+    const isFirstLoad = React.useRef(true);
+    const prevGuestCount = React.useRef<number>(formData.adults + formData.children);
+    
     useEffect(() => {
-        if (!isOpen) return;
-        setLocalBedIds([]); // Clear manual selection
-        setFormData(prev => ({ ...prev, bed_ids: [] })); // Also clear primary selection
-    }, [formData.adults, formData.children]);
+        if (!isOpen) {
+            isFirstLoad.current = true;
+            prevGuestCount.current = formData.adults + formData.children;
+            return;
+        }
+
+        if (isFirstLoad.current) {
+            isFirstLoad.current = false;
+            prevGuestCount.current = formData.adults + formData.children;
+            return;
+        }
+
+        const currentGuestCount = formData.adults + formData.children;
+        
+        // Only clear beds if guest count DECREASED (need to re-select)
+        if (currentGuestCount < prevGuestCount.current) {
+            setLocalBedIds([]); // Clear manual selection
+            setFormData(prev => ({ ...prev, bed_ids: [] })); // Also clear primary selection
+        }
+        
+        prevGuestCount.current = currentGuestCount;
+    }, [formData.adults, formData.children]); // Removed isOpen to avoid double triggers
 
     // --- DYNAMIC PRICING CALCULATION ---
     const [pricingLoading, setPricingLoading] = useState(false);
@@ -97,7 +133,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         const calculatePrice = async () => {
             const bedIds = localBedIds;
 
-            if (bedIds.length === 0 || !formData.check_in || !formData.check_out) {
+            if (!formData.check_in || !formData.check_out) {
                 setFormData(f => ({ ...f, total_price: 0 }));
                 setNightsCount(0);
                 return;
@@ -115,7 +151,10 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                 const priceData = await PricingAPI.calculateGroup({
                     bed_ids: bedIds,
                     check_in: formData.check_in,
-                    check_out: formData.check_out
+                    check_out: formData.check_out,
+                    adults: formData.adults,
+                    children: formData.children,
+                    room_id: formData.room_id
                 });
 
                 setFormData(f => ({ ...f, nights_price: priceData.total }));
@@ -129,7 +168,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
         const timeoutId = setTimeout(calculatePrice, 300);
         return () => clearTimeout(timeoutId);
-    }, [isOpen, formData.check_in, formData.check_out, localBedIds]);
+    }, [isOpen, formData.check_in, formData.check_out, localBedIds, formData.adults, formData.children, formData.room_id]);
 
     // --- AUTO-SUGGEST SERVICES BASED ON BEDS ---
     useEffect(() => {
@@ -194,43 +233,131 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
         try {
             const totalGuests = Math.max(1, formData.adults + formData.children);
             let bedIds = [...localBedIds];
+            let currentCapacity = getBedsCapacity(bedIds);
 
-            // Validation: Ensure we have enough beds for the guests
-            if (bedIds.length > 0 && bedIds.length < totalGuests) {
-                alert(`Wybrałeś zbyt mało łóżek (${bedIds.length}) dla podanej liczby osób (${totalGuests}). Proszę wybrać odpowiednią liczbę łóżek (używając Ctrl+klik na kalendarzu) lub zmniejszyć liczbę gości.`);
-                setLoading(false);
-                return;
-            }
+            console.log('[ReservationModal] Submit:', {
+                totalGuests,
+                bedIds,
+                currentCapacity,
+                localBedIds,
+                adults: formData.adults,
+                children: formData.children,
+            });
 
-            // Auto-assign beds if none were selected
-            if (bedIds.length === 0) {
-                const options = await AvailabilityAPI.groupSearch({
-                    group_size: totalGuests,
-                    check_in: formData.check_in,
-                    check_out: formData.check_out,
-                });
-
-                if (options.length > 0) {
-                    bedIds = options[0].beds
-                        .map(bed => bed.id as number)
-                        .filter((id) => Number.isInteger(id));
-                } else {
+            // If user selected beds manually but capacity is not enough, auto-assign more beds
+            if (bedIds.length > 0 && currentCapacity < totalGuests) {
+                console.log('[ReservationModal] User selected beds capacity', currentCapacity, 'but need', totalGuests, '- auto-assigning more beds');
+                
+                // Find additional beds
+                try {
                     const availableBeds = await AvailabilityAPI.findBeds({
                         check_in: formData.check_in,
                         check_out: formData.check_out,
                     });
 
-                    bedIds = availableBeds
-                        .slice(0, totalGuests)
-                        .map(bed => bed.id as number)
-                        .filter((id) => Number.isInteger(id));
+                    console.log('[ReservationModal] Available beds:', availableBeds);
+
+                    // Filter out already selected beds
+                    const additionalBeds = availableBeds
+                        .filter(bed => !bedIds.includes(bed.id as number))
+                        .sort((a: any, b: any) => getBedCapacity(b) - getBedCapacity(a));
+
+                    console.log('[ReservationModal] Additional beds:', additionalBeds);
+
+                    const picked: number[] = [];
+                    let gainedCapacity = 0;
+                    const missingCapacity = totalGuests - currentCapacity;
+                    for (const bed of additionalBeds) {
+                        const id = bed.id as number;
+                        if (!Number.isInteger(id)) continue;
+                        picked.push(id);
+                        gainedCapacity += getBedCapacity(bed);
+                        if (gainedCapacity >= missingCapacity) break;
+                    }
+
+                    // Add additional beds
+                    bedIds = [
+                        ...bedIds,
+                        ...picked
+                    ];
+                    currentCapacity = getBedsCapacity(bedIds);
+
+                    console.log('[ReservationModal] Combined bedIds:', bedIds);
+                } catch (err) {
+                    console.error('[ReservationModal] Failed to find additional beds:', err);
+                }
+            }
+
+            // Auto-assign beds if none were selected
+            if (bedIds.length === 0) {
+                console.log('[ReservationModal] Auto-assigning beds for', totalGuests, 'guests');
+                
+                // Try group search first
+                try {
+                    const options = await AvailabilityAPI.groupSearch({
+                        group_size: totalGuests,
+                        check_in: formData.check_in,
+                        check_out: formData.check_out,
+                    });
+
+                    console.log('[ReservationModal] Group search result:', options);
+
+                    if (options.length > 0 && options[0].beds && options[0].beds.length > 0) {
+                        // Get beds from the first option (best match)
+                        const rawBedIds = options[0].beds
+                            .map((bed: any) => {
+                                console.log('[ReservationModal] Processing bed:', bed);
+                                return bed && bed.id ? parseInt(String(bed.id)) : null;
+                            })
+                            .filter((id: number | null): id is number => id !== null && !isNaN(id));
+                        
+                        bedIds = rawBedIds;
+                        currentCapacity = getBedsCapacity(bedIds);
+                        console.log('[ReservationModal] Extracted bedIds from group search:', bedIds);
+                    }
+                } catch (err) {
+                    console.error('[ReservationModal] Group search failed:', err);
                 }
 
-                if (bedIds.length < totalGuests) {
-                    alert('Brak wystarczającej liczby dostępnych łóżek dla wybranej liczby osób.');
+                // Fallback: find available beds
+                if (bedIds.length === 0 || currentCapacity < totalGuests) {
+                    try {
+                        const availableBeds = await AvailabilityAPI.findBeds({
+                            check_in: formData.check_in,
+                            check_out: formData.check_out,
+                        });
+
+                        console.log('[ReservationModal] Find beds result:', availableBeds);
+
+                        const filtered = availableBeds
+                            .filter(bed => !bedIds.includes(bed.id as number))
+                            .sort((a: any, b: any) => getBedCapacity(b) - getBedCapacity(a));
+
+                        for (const bed of filtered) {
+                            const id = bed.id as number;
+                            if (!Number.isInteger(id)) continue;
+                            bedIds.push(id);
+                            currentCapacity += getBedCapacity(bed);
+                            if (currentCapacity >= totalGuests) break;
+                        }
+                    } catch (err) {
+                        console.error('[ReservationModal] Find beds failed:', err);
+                    }
+                }
+
+                if (currentCapacity < totalGuests) {
+                    alert(`Brak wystarczającej liczby dostępnych miejsc dla ${totalGuests} osób.\n\nZnalezione miejsca: ${currentCapacity}\nWymagane miejsca: ${totalGuests}\n\nSprawdź czy masz dodane łóżka w pokojach (Booking → Rooms & Beds).`);
                     setLoading(false);
                     return;
                 }
+                
+                console.log('[ReservationModal] Final bedIds:', bedIds);
+            }
+
+            // Final validation - only warn if still not enough beds (shouldn't happen)
+            if (currentCapacity < totalGuests) {
+                console.warn('[ReservationModal] Still not enough capacity:', currentCapacity, '<', totalGuests);
+                // Don't block - just warn and proceed
             }
 
             const reservationData = {
@@ -296,8 +423,9 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     const selectedRoom = rooms.find(r => r.id === formData.room_id);
     const selectedBed = selectedRoom?.beds?.find(b => b.id === (localBedIds[0] || 0));
     const selectedBedCount = localBedIds.length;
+    const selectedCapacity = getBedsCapacity(localBedIds);
     const isDormitory = selectedRoom?.room_type === 'dormitory';
-    const showBedWarning = isDormitory && (formData.adults + formData.children > selectedBedCount);
+    const showBedWarning = isDormitory && (formData.adults + formData.children > selectedCapacity);
     const isAutoBedSelection = selectedBedCount === 0;
 
     return (
@@ -535,7 +663,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                     <div className={`p-3 rounded-xl border flex items-center justify-between text-xs ${showBedWarning ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
                                         <div className="flex items-center gap-2 font-bold">
                                             <BedDouble size={14} />
-                                            <span>Wybrano łóżek: {selectedBedCount} / {formData.adults + formData.children}</span>
+                                            <span>Wybrano: {selectedBedCount} łóżek ({selectedCapacity} miejsc) / {formData.adults + formData.children} osób</span>
                                         </div>
                                         {showBedWarning && <span className="font-black uppercase text-[10px]">Za mało miejsc!</span>}
                                         {!showBedWarning && <Check size={14} className="text-emerald-600" />}

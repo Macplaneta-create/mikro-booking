@@ -63,6 +63,7 @@ class Plugin {
         require_once $dir . 'core/models/class-pricing.php';
         require_once $dir . 'core/models/class-extra-service.php';
         require_once $dir . 'core/models/class-reservation-extra.php';
+        require_once $dir . 'core/models/class-bed-place.php';
         
         // 3. Repositories
         require_once $dir . 'core/repositories/class-room-repository.php';
@@ -74,6 +75,7 @@ class Plugin {
         require_once $dir . 'core/repositories/class-changes-log-repository.php';
         require_once $dir . 'core/repositories/class-extra-service-repository.php';
         require_once $dir . 'core/repositories/class-reservation-extra-repository.php';
+        require_once $dir . 'core/repositories/class-bed-place-repository.php';
         
         // 4. Services
         require_once $dir . 'core/services/class-availability-service.php';

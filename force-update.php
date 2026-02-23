@@ -7,6 +7,8 @@
  */
 
 add_action('admin_post_mikroplaneta_force_update', function() {
+    global $wpdb;
+
     // Only available in debug/development mode
     if (!defined('WP_DEBUG') || !WP_DEBUG) {
         wp_die('This tool is only available in development mode (WP_DEBUG must be enabled).');
@@ -14,6 +16,10 @@ add_action('admin_post_mikroplaneta_force_update', function() {
 
     if (!current_user_can('manage_options')) {
         wp_die('Unauthorized');
+    }
+
+    if (!isset($_REQUEST['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_REQUEST['_wpnonce'])), 'mikroplaneta_force_update')) {
+        wp_die('Invalid security token.');
     }
     
     require_once MIKROPLANETA_BOOKING_PLUGIN_DIR . 'core/database/class-database.php';

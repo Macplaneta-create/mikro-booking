@@ -20,13 +20,24 @@ export default defineConfig({
         assetFileNames: '[name][extname]',
       },
     },
+    // Generate manifest for WordPress integration
+    manifest: true,
   },
   server: {
     port: 3000,
+    host: true, // Allow external access (needed for Laragon)
+    origin: 'http://localhost:3000',
+    cors: true,
+    hmr: {
+      protocol: 'ws',
+      host: 'localhost',
+      port: 3000,
+    },
     proxy: {
       '/wp-json': {
-        target: 'http://localhost',
+        target: 'http://gorytajemnic.test', // Your Laragon domain
         changeOrigin: true,
+        secure: false,
       },
     },
   },

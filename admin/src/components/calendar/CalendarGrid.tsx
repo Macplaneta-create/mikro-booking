@@ -64,6 +64,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     onBookingClick,
 }) => {
     const dayCount = days.length;
+    const isWeekendDay = (day: Date) => day.getDay() === 0 || day.getDay() === 6;
 
     return (
         <div className="flex-1 overflow-auto relative">
@@ -73,10 +74,19 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                     <div className="w-48 p-3 font-semibold text-gray-500 bg-gray-50 border-r border-gray-200 sticky left-0 z-20 flex items-center">
                         Pokoje i Łóżka
                     </div>
-                    {days.map(day => (
-                        <div key={day.toString()} className={`flex-1 min-w-[80px] p-2 text-center border-r border-gray-100 ${isSameDay(day, new Date()) ? 'bg-brand-50' : ''}`}>
+                    {days.map((day, index) => (
+                        <div
+                            key={day.toString()}
+                            className={`flex-1 min-w-[80px] p-2 text-center border-r border-gray-100 ${
+                                isWeekendDay(day)
+                                    ? 'bg-amber-50/70'
+                                    : index % 2 === 1
+                                        ? 'bg-slate-50/70'
+                                        : 'bg-white'
+                            } ${isSameDay(day, new Date()) ? 'ring-1 ring-inset ring-brand-200 bg-brand-50/80' : ''}`}
+                        >
                             <div className="text-[10px] text-gray-400 font-bold uppercase">{format(day, 'EEE', { locale: pl })}</div>
-                            <div className={`text-sm font-bold ${isSameDay(day, new Date()) ? 'text-brand-600' : 'text-gray-700'}`}>
+                            <div className={`text-sm font-bold ${isSameDay(day, new Date()) ? 'text-brand-600' : isWeekendDay(day) ? 'text-amber-700' : 'text-gray-700'}`}>
                                 {format(day, 'd')}
                             </div>
                         </div>
@@ -113,6 +123,21 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                                     </div>
                                 </div>
                                 <div className="flex-1 relative">
+                                    {/* Day background guides to improve day separation in collapsed room view */}
+                                    <div className="absolute inset-0 flex pointer-events-none">
+                                        {days.map((day, index) => (
+                                            <div
+                                                key={`room-bg-${room.id}-${day.toString()}`}
+                                                className={`flex-1 min-w-[80px] border-r border-gray-200/70 ${
+                                                    isWeekendDay(day)
+                                                        ? 'bg-amber-50/45'
+                                                        : index % 2 === 1
+                                                            ? 'bg-slate-50/55'
+                                                            : 'bg-transparent'
+                                                }`}
+                                            />
+                                        ))}
+                                    </div>
                                     {!isExpanded && roomLanes.slice(0, maxLanes).map((lane, laneIndex) => (
                                         lane.items.map((reservation) => {
                                             const style = getRoomBookingStyle(reservation.check_in, reservation.check_out, startDate, dayCount);
@@ -196,6 +221,7 @@ const BedRow: React.FC<BedRowProps> = ({
     onConfirmSelection,
     onBookingClick,
 }) => {
+    const isWeekendDay = (day: Date) => day.getDay() === 0 || day.getDay() === 6;
     const bedBookings = bookings
         .filter(b => bed.id && b.bed_ids?.includes(bed.id) && b.status !== 'cancelled')
         .flatMap(booking => getBookingSlices(booking, startDate, dayCount));
@@ -218,11 +244,17 @@ const BedRow: React.FC<BedRowProps> = ({
 
             {/* Day cells + booking bars */}
             <div className="flex-1 flex relative">
-                {days.map(day => (
+                {days.map((day, index) => (
                     <div
                         key={day.toString()}
                         onClick={(e) => onCellClick(bed.id!, room.id!, day, e)}
-                        className={`flex-1 min-w-[80px] border-r border-gray-200 relative cursor-pointer hover:bg-brand-50/20 transition-colors ${isSameDay(day, new Date()) ? 'bg-brand-50/10' : ''}`}
+                        className={`flex-1 min-w-[80px] border-r border-gray-200 relative cursor-pointer hover:bg-brand-50/20 transition-colors ${
+                            isWeekendDay(day)
+                                ? 'bg-amber-50/40'
+                                : index % 2 === 1
+                                    ? 'bg-slate-50/35'
+                                    : ''
+                        } ${isSameDay(day, new Date()) ? 'bg-brand-50/20 ring-1 ring-inset ring-brand-100' : ''}`}
                     >
                         {/* Noon marker */}
                         <div className="absolute left-1/2 top-1 bottom-1 w-px border-l border-dashed border-gray-300 pointer-events-none opacity-40" />

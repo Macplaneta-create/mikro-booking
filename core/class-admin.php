@@ -255,23 +255,33 @@ class Admin {
         // Check if React app is built
         $js_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'assets/admin/index.js';
         $css_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'assets/admin/index.css';
-        
+
+        // Use file modification time for cache busting in development
+        $version = MIKROPLANETA_BOOKING_VERSION;
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            $js_version = file_exists($js_file) ? filemtime($js_file) : $version;
+            $css_version = file_exists($css_file) ? filemtime($css_file) : $version;
+        } else {
+            $js_version = $version;
+            $css_version = $version;
+        }
+
         if (file_exists($js_file)) {
             wp_enqueue_script(
                 'mikroplaneta-booking-admin',
                 MIKROPLANETA_BOOKING_PLUGIN_URL . 'assets/admin/index.js',
                 [],
-                MIKROPLANETA_BOOKING_VERSION,
+                $js_version,
                 true
             );
         }
-        
+
         if (file_exists($css_file)) {
             wp_enqueue_style(
                 'mikroplaneta-booking-admin',
                 MIKROPLANETA_BOOKING_PLUGIN_URL . 'assets/admin/index.css',
                 [],
-                MIKROPLANETA_BOOKING_VERSION
+                $css_version
             );
         }
         

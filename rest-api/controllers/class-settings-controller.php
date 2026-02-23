@@ -49,6 +49,7 @@ class SettingsController extends RestController {
                     'multiplier_single' => ['type' => 'number'],
                     'multiplier_double' => ['type' => 'number'],
                     'multiplier_bunk' => ['type' => 'number'],
+                    'multiplier_children' => ['type' => 'number'],
                 ],
             ],
         ]);
@@ -94,6 +95,7 @@ class SettingsController extends RestController {
             'multiplier_single' => (float) get_option('mikroplaneta_booking_multiplier_single', 1.0),
             'multiplier_double' => (float) get_option('mikroplaneta_booking_multiplier_double', 2.0),
             'multiplier_bunk' => (float) get_option('mikroplaneta_booking_multiplier_bunk', 2.0),
+            'multiplier_children' => (float) get_option('mikroplaneta_booking_multiplier_children', 0.5),
         ];
         
         return $this->success($settings);
@@ -153,6 +155,9 @@ class SettingsController extends RestController {
         }
         if (isset($params['multiplier_bunk'])) {
             update_option('mikroplaneta_booking_multiplier_bunk', (float) $params['multiplier_bunk']);
+        }
+        if (isset($params['multiplier_children'])) {
+            update_option('mikroplaneta_booking_multiplier_children', (float) $params['multiplier_children']);
         }
         
         return $this->get_settings($request);

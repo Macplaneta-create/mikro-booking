@@ -15,7 +15,12 @@ if (!defined('ABSPATH')) {
 class Pricing {
     
     public ?int $id;
-    public int $room_id;
+    public ?string $name;
+    public ?int $room_id;
+    public string $scope_type;
+    public ?string $room_type;
+    public ?string $pricing_mode;
+    public int $priority;
     public string $start_date;
     public string $end_date;
     public float $base_price;
@@ -28,7 +33,12 @@ class Pricing {
      */
     public function __construct(array $data = []) {
         $this->id = isset($data['id']) ? (int) $data['id'] : null;
-        $this->room_id = (int) ($data['room_id'] ?? 0);
+        $this->name = isset($data['name']) && $data['name'] !== '' ? (string) $data['name'] : null;
+        $this->room_id = isset($data['room_id']) ? (int) $data['room_id'] : null;
+        $this->scope_type = (string) ($data['scope_type'] ?? 'room_id');
+        $this->room_type = isset($data['room_type']) && $data['room_type'] !== '' ? (string) $data['room_type'] : null;
+        $this->pricing_mode = isset($data['pricing_mode']) && $data['pricing_mode'] !== '' ? (string) $data['pricing_mode'] : null;
+        $this->priority = (int) ($data['priority'] ?? 100);
         $this->start_date = $data['start_date'] ?? '';
         $this->end_date = $data['end_date'] ?? '';
         $this->base_price = (float) ($data['base_price'] ?? 0.0);
@@ -50,7 +60,12 @@ class Pricing {
     public function toArray(): array {
         return [
             'id' => $this->id,
+            'name' => $this->name,
             'room_id' => $this->room_id,
+            'scope_type' => $this->scope_type,
+            'room_type' => $this->room_type,
+            'pricing_mode' => $this->pricing_mode,
+            'priority' => $this->priority,
             'start_date' => $this->start_date,
             'end_date' => $this->end_date,
             'base_price' => $this->base_price,

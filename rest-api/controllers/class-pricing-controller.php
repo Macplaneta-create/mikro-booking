@@ -48,6 +48,9 @@ class PricingController extends RestController {
                 'permission_callback' => [$this, 'check_permission'],
                 'args' => [
                     'room_id' => ['type' => 'integer'],
+                    'room_type' => ['type' => 'string'],
+                    'scope_type' => ['type' => 'string'],
+                    'pricing_mode' => ['type' => 'string'],
                 ],
             ],
             [
@@ -55,7 +58,12 @@ class PricingController extends RestController {
                 'callback' => [$this, 'create_item'],
                 'permission_callback' => [$this, 'check_permission'],
                 'args' => [
-                    'room_id' => ['required' => true, 'type' => 'integer'],
+                    'name' => ['type' => 'string'],
+                    'scope_type' => ['type' => 'string'],
+                    'room_id' => ['type' => 'integer'],
+                    'room_type' => ['type' => 'string'],
+                    'pricing_mode' => ['type' => 'string'],
+                    'priority' => ['type' => 'integer'],
                     'start_date' => ['required' => true, 'type' => 'string'],
                     'end_date' => ['required' => true, 'type' => 'string'],
                     'base_price' => ['required' => true, 'type' => 'number'],
@@ -86,11 +94,31 @@ class PricingController extends RestController {
                     'bed_ids' => ['required' => true, 'type' => 'array'],
                     'check_in' => ['required' => true, 'type' => 'string'],
                     'check_out' => ['required' => true, 'type' => 'string'],
+                    'adults' => ['type' => 'integer'],
+                    'children' => ['type' => 'integer'],
+                    'room_id' => ['type' => 'integer'],
                 ],
             ],
         ]);
 
         register_rest_route($this->namespace, '/' . $this->rest_base . '/(?P<id>\d+)', [
+            [
+                'methods' => 'PUT',
+                'callback' => [$this, 'update_item'],
+                'permission_callback' => [$this, 'check_permission'],
+                'args' => [
+                    'name' => ['type' => 'string'],
+                    'scope_type' => ['type' => 'string'],
+                    'room_id' => ['type' => 'integer'],
+                    'room_type' => ['type' => 'string'],
+                    'pricing_mode' => ['type' => 'string'],
+                    'priority' => ['type' => 'integer'],
+                    'start_date' => ['type' => 'string'],
+                    'end_date' => ['type' => 'string'],
+                    'base_price' => ['type' => 'number'],
+                    'weekend_price' => ['type' => 'number'],
+                ],
+            ],
             [
                 'methods' => 'DELETE',
                 'callback' => [$this, 'delete_item'],
@@ -107,6 +135,15 @@ class PricingController extends RestController {
         if ($request->has_param('room_id')) {
             $args['room_id'] = $request->get_param('room_id');
         }
+        if ($request->has_param('room_type')) {
+            $args['room_type'] = $request->get_param('room_type');
+        }
+        if ($request->has_param('scope_type')) {
+            $args['scope_type'] = $request->get_param('scope_type');
+        }
+        if ($request->has_param('pricing_mode')) {
+            $args['pricing_mode'] = $request->get_param('pricing_mode');
+        }
         $items = $this->pricing_repository->all($args);
         return $this->success(array_map(fn($item) => $item->toArray(), $items));
     }
@@ -116,7 +153,9 @@ class PricingController extends RestController {
      */
     public function create_item($request): WP_REST_Response {
         try {
-            $item = $this->pricing_repository->create($request->get_params());
+            $params = $request->get_params();
+            $params['scope_type'] = $params['scope_type'] ?? 'room_id';
+            $item = $this->pricing_repository->create($params);
             return $this->success($item->toArray(), 201);
         } catch (\Exception $e) {
             return $this->error($e->getMessage());
@@ -147,8 +186,11 @@ class PricingController extends RestController {
             $bed_ids = $request->get_param('bed_ids');
             $check_in = $request->get_param('check_in');
             $check_out = $request->get_param('check_out');
+            $adults = (int) $request->get_param('adults');
+            $children = (int) $request->get_param('children');
+            $room_id = (int) $request->get_param('room_id');
 
-            $result = $this->pricing_service->calculateGroupPrice($bed_ids, $check_in, $check_out);
+            $result = $this->pricing_service->calculateGroupPrice($bed_ids, $check_in, $check_out, $adults, $children, $room_id);
             return $this->success($result);
         } catch (\Exception $e) {
             return $this->error($e->getMessage());
@@ -160,11 +202,26 @@ class PricingController extends RestController {
      */
     public function delete_item($request): WP_REST_Response {
         $id = (int) $request['id'];
-        
+
         if ($this->pricing_repository->delete($id)) {
             return $this->success(null, 204);
         }
-        
+
         return $this->error('Failed to delete pricing record');
+    }
+
+    /**
+     * Update pricing record
+     */
+    public function update_item($request): WP_REST_Response {
+        $id = (int) $request['id'];
+        $params = $request->get_params();
+
+        try {
+            $updated = $this->pricing_repository->update($id, $params);
+            return $this->success($updated->toArray());
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage());
+        }
     }
 }

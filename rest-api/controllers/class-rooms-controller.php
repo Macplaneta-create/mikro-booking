@@ -194,24 +194,22 @@ class RoomsController extends RestController {
             $room = $this->room_repository->create($request->get_params());
             return $this->success($room->toArray(), 201);
         } catch (\Exception $e) {
-            $log_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'debug-log.txt';
-            file_put_contents($log_file, "[" . date('Y-m-d H:i:s') . "] [CONTROLLER] Room Create Exception: " . $e->getMessage() . "\n", FILE_APPEND);
+            error_log('[MikroBooking] Room create failed: ' . $e->getMessage());
             return $this->error($e->getMessage());
         }
     }
-    
+
     /**
      * Update room
      */
     public function update_item($request): WP_REST_Response {
         $id = (int) $request['id'];
-        
+
         try {
             $room = $this->room_repository->update($id, $request->get_params());
             return $this->success($room->toArray());
         } catch (\Exception $e) {
-            $log_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'debug-log.txt';
-            file_put_contents($log_file, "[" . date('Y-m-d H:i:s') . "] [CONTROLLER] Room Update Exception: " . $e->getMessage() . "\n", FILE_APPEND);
+            error_log('[MikroBooking] Room update failed: ' . $e->getMessage());
             return $this->error($e->getMessage());
         }
     }

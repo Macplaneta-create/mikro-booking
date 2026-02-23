@@ -103,9 +103,6 @@ class RoomRepository implements RepositoryInterface {
     }
     
     /**
-     * Create new room
-     */
-    /**
      * Helper to normalize room type
      */
     private function normalize_room_type(string $type): string {
@@ -114,10 +111,11 @@ class RoomRepository implements RepositoryInterface {
             'dorm' => 'dormitory',
             'standard' => 'standard',
             'deluxe' => 'deluxe',
+            'studio' => 'studio',
             'suite' => 'suite',
             'dormitory' => 'dormitory',
         ];
-        
+
         return $map[$type] ?? 'standard';
     }
 
@@ -126,18 +124,9 @@ class RoomRepository implements RepositoryInterface {
      */
     public function create(array $data): Room {
         global $wpdb;
-        
-        $log = function($msg) {
-                $log_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'debug-log.txt';
-                $time = date('Y-m-d H:i:s');
-                file_put_contents($log_file, "[$time] [REPO] $msg\n", FILE_APPEND);
-        };
-        
-        $log('Create room initiated. Data: ' . json_encode($data));
-        
+
         $room_type = $this->normalize_room_type($data['room_type'] ?? 'standard');
-        $log("Normalized room type: {$room_type}");
-        
+
         $insert_data = [
             'name' => (string)$data['name'],
             'description' => isset($data['description']) ? (string)$data['description'] : null,
@@ -148,39 +137,37 @@ class RoomRepository implements RepositoryInterface {
             'pricing_mode' => (string)($data['pricing_mode'] ?? 'per_room'),
             'status' => (string)($data['status'] ?? 'active'),
         ];
-        
+
         // Try insert
         $result = $wpdb->insert($this->table, $insert_data);
-        
+
         // If failed, try to repair table and retry
         if ($result === false) {
             $original_error = $wpdb->last_error;
-            $log("Insert failed. Error: {$original_error}. Attempting repair...");
-            
+            error_log('[MikroBooking] Room insert failed: ' . $original_error . '. Attempting repair...');
+
             // Attempt auto-repair
             require_once ABSPATH . 'wp-admin/includes/upgrade.php';
             $sql = \MikroPlaneta\Booking\Core\Database\Schema::rooms_table();
             dbDelta($sql);
-            
+
             // Retry insert
             $result = $wpdb->insert($this->table, $insert_data);
-            
+
             if ($result === false) {
                 $final_error = $wpdb->last_error ?: $original_error;
-                $log("FATAL: Insert failed after repair. Error: {$final_error}");
+                error_log('[MikroBooking] FATAL: Room insert failed after repair: ' . $final_error);
                 throw new \Exception("Database error: " . $final_error);
             }
         }
-        
-        $log('Room inserted successfully. ID: ' . $wpdb->insert_id);
-        
+
         $room = $this->find($wpdb->insert_id);
-        
+
         if (!$room) {
-            $log('FATAL: Failed to retrieve created room ID: ' . $wpdb->insert_id);
+            error_log('[MikroBooking] FATAL: Failed to retrieve created room ID: ' . $wpdb->insert_id);
             throw new \Exception('Failed to retrieve created room');
         }
-        
+
         return $room;
     }
     
@@ -189,21 +176,13 @@ class RoomRepository implements RepositoryInterface {
      */
     public function update(int $id, array $data): Room {
         global $wpdb;
-        
-        $log = function($msg) {
-                $log_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'debug-log.txt';
-                $time = date('Y-m-d H:i:s');
-                file_put_contents($log_file, "[$time] [REPO_UPDATE] $msg\n", FILE_APPEND);
-        };
-
-        $log("Update room $id initiated. Data: " . json_encode($data));
 
         $update_data = [];
-        
+
         if (isset($data['name'])) {
             $update_data['name'] = (string)$data['name'];
         }
-        
+
         if (isset($data['description'])) {
             $update_data['description'] = (string)$data['description'];
         }
@@ -219,7 +198,7 @@ class RoomRepository implements RepositoryInterface {
         if (isset($data['floor'])) {
             $update_data['floor'] = (int)$data['floor'];
         }
-        
+
         if (isset($data['room_type'])) {
             $update_data['room_type'] = $this->normalize_room_type($data['room_type']);
         }
@@ -231,11 +210,11 @@ class RoomRepository implements RepositoryInterface {
         if (isset($data['pricing_mode'])) {
             $update_data['pricing_mode'] = (string)$data['pricing_mode'];
         }
-        
+
         if (empty($update_data)) {
             throw new \Exception('No data to update');
         }
-        
+
         $result = $wpdb->update(
             $this->table,
             $update_data,
@@ -244,34 +223,32 @@ class RoomRepository implements RepositoryInterface {
 
         // If failed, try to repair table and retry
         if ($result === false) {
-            $log("Update failed. Error: " . $wpdb->last_error . ". Attempting repair...");
-            
+            error_log('[MikroBooking] Room update failed: ' . $wpdb->last_error . '. Attempting repair...');
+
             // Attempt auto-repair
             require_once ABSPATH . 'wp-admin/includes/upgrade.php';
             $sql = \MikroPlaneta\Booking\Core\Database\Schema::rooms_table();
             dbDelta($sql);
-            
+
             // Retry update
             $result = $wpdb->update(
                 $this->table,
                 $update_data,
                 ['id' => $id]
             );
-            
+
             if ($result === false) {
-                $log("FATAL: Update failed after repair. Error: " . $wpdb->last_error);
+                error_log('[MikroBooking] FATAL: Room update failed after repair: ' . $wpdb->last_error);
                 throw new \Exception("Database error: " . $wpdb->last_error);
             }
         }
-        
-        $log("Update successful for room $id");
-        
+
         $room = $this->find($id);
-        
+
         if (!$room) {
             throw new \Exception('Room not found after update');
         }
-        
+
         return $room;
     }
     

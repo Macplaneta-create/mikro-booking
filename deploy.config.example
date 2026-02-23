@@ -1,0 +1,42 @@
+# MikroPlaneta Booking - Deployment Configuration
+# Copy this file to deploy.config and fill in your server details
+
+[production]
+# Production server SSH details
+host = your-production-server.com
+user = your-username
+port = 22
+path = /path/to/wordpress/wp-content/plugins/mikro-booking
+
+# Optional: SSH key file
+# ssh_key = ~/.ssh/id_rsa
+
+# Optional: Pre/post deploy commands
+# pre_deploy = wp maintenance-mode activate
+# post_deploy = wp cache flush
+
+[staging]
+# Staging server SSH details
+host = staging.your-server.com
+user = your-username
+port = 22
+path = /path/to/staging/wp-content/plugins/mikro-booking
+
+[settings]
+# General settings
+exclude_patterns = 
+    .git/
+    .github/
+    node_modules/
+    vendor/
+    admin/node_modules/
+    admin/src/
+    *.log
+    debug-*.php
+    test-*.php
+    .env
+    *.zip
+
+# Build settings
+build_before_deploy = true
+verify_build = true

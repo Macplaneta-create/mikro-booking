@@ -1,0 +1,61 @@
+name: Build Release Package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-release:
+    name: Build Plugin ZIP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: admin/package-lock.json
+
+      - name: Install dependencies
+        run: composer install --no-dev --prefer-dist --no-progress
+
+      - name: Build admin assets
+        working-directory: admin
+        run: |
+          npm ci
+          npm run build
+
+      - name: Prepare dist directory
+        run: |
+          mkdir -p dist/mikro-booking
+          rsync -a ./ dist/mikro-booking/ --exclude-from=.distignore
+
+      - name: Create ZIP
+        run: |
+          cd dist
+          zip -r mikro-booking.zip mikro-booking
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mikro-booking-release
+          path: dist/mikro-booking.zip
+          if-no-files-found: error
+
+      - name: Attach ZIP to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/mikro-booking.zip

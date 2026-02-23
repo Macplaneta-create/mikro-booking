@@ -33,18 +33,53 @@ jobs:
           restore-keys: ${{ runner.os }}-php${{ matrix.php-version }}-composer-
       
       - name: Install Composer dependencies
-        run: composer install --prefer-dist --no-progress --no-suggest
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit --configuration phpunit.xml.dist
       
-      - name: Run PHPCS
+      - name: Determine changed PHP files
+        id: changed_php
+        shell: bash
         run: |
-          vendor/bin/phpcs --standard=WordPress core/ rest-api/ public/ \
-            --ignore=vendor,node_modules,dist,assets \
-            --extensions=php \
-            || true
-        continue-on-error: true
-      
-      - name: Check PHP syntax
-        run: find . -name '*.php' ! -path './vendor/*' ! -path './node_modules/*' -exec php -l {} \;
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+            BASE_REF="origin/${{ github.base_ref }}"
+          else
+            BASE_REF="${{ github.event.before }}"
+            if [[ -z "$BASE_REF" || "$BASE_REF" == "0000000000000000000000000000000000000000" ]]; then
+              BASE_REF="$(git rev-parse HEAD~1)"
+            fi
+          fi
+
+          git diff --name-only "$BASE_REF"...HEAD -- '*.php' \
+            ':!vendor/**' \
+            ':!node_modules/**' \
+            ':!admin/node_modules/**' > changed_php_files.txt
+
+          if [[ -s changed_php_files.txt ]]; then
+            echo "has_changed=true" >> "$GITHUB_OUTPUT"
+            echo "Changed PHP files:"
+            cat changed_php_files.txt
+          else
+            echo "has_changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changed PHP files."
+          fi
+
+      - name: Check PHP syntax (changed files)
+        if: steps.changed_php.outputs.has_changed == 'true'
+        shell: bash
+        run: |
+          while IFS= read -r file; do
+            php -l "$file"
+          done < changed_php_files.txt
+
+      - name: Run PHPCS (changed files)
+        if: steps.changed_php.outputs.has_changed == 'true'
+        shell: bash
+        run: |
+          mapfile -t files < changed_php_files.txt
+          vendor/bin/phpcs --standard=WordPress "${files[@]}"
 
   node-build:
     name: Node Build

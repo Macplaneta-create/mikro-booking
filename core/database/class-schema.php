@@ -47,7 +47,7 @@ class Schema {
             image_id BIGINT UNSIGNED,
             amenities JSON,
             floor TINYINT DEFAULT 0,
-            room_type ENUM('standard', 'deluxe', 'suite', 'dormitory') DEFAULT 'standard',
+            room_type ENUM('standard', 'deluxe', 'studio', 'suite', 'dormitory') DEFAULT 'standard',
             pricing_mode ENUM('per_room', 'per_bed') DEFAULT 'per_room',
             status ENUM('active', 'inactive', 'maintenance') DEFAULT 'active',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -227,10 +227,15 @@ class Schema {
         $table = self::get_table_name('pricing');
         $rooms_table = self::get_table_name('rooms');
         $charset = self::get_charset_collate();
-        
+
         return "CREATE TABLE {$table} (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            room_id BIGINT UNSIGNED NOT NULL,
+            name VARCHAR(120) NULL,
+            room_id BIGINT UNSIGNED NULL,
+            scope_type VARCHAR(20) NOT NULL DEFAULT 'room_id',
+            room_type VARCHAR(20) NULL,
+            pricing_mode VARCHAR(20) NULL,
+            priority INT NOT NULL DEFAULT 100,
             start_date DATE NOT NULL,
             end_date DATE NOT NULL,
             base_price DECIMAL(10,2) NOT NULL,
@@ -239,7 +244,35 @@ class Schema {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (room_id) REFERENCES {$rooms_table}(id) ON DELETE CASCADE,
             INDEX idx_room (room_id),
-            INDEX idx_dates (start_date, end_date)
+            INDEX idx_dates (start_date, end_date),
+            INDEX idx_name (name),
+            INDEX idx_scope_priority (scope_type, priority),
+            INDEX idx_room_type_dates (room_type, start_date, end_date),
+            INDEX idx_pricing_mode (pricing_mode)
+        ) {$charset};";
+    }
+
+    /**
+     * Bed places table schema
+     * Supports multiple places per bed (e.g., bunk beds have 2 places)
+     */
+    public static function bed_places_table(): string {
+        $table = self::get_table_name('bed_places');
+        $beds_table = self::get_table_name('beds');
+        $charset = self::get_charset_collate();
+
+        return "CREATE TABLE {$table} (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            bed_id BIGINT UNSIGNED NOT NULL,
+            place_number TINYINT UNSIGNED NOT NULL,
+            place_label VARCHAR(50) DEFAULT '',
+            max_persons TINYINT UNSIGNED DEFAULT 1,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (bed_id) REFERENCES {$beds_table}(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_place (bed_id, place_number),
+            INDEX idx_bed (bed_id),
+            INDEX idx_active (is_active)
         ) {$charset};";
     }
 }

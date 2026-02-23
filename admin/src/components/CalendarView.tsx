@@ -78,18 +78,38 @@ const CalendarView: React.FC = () => {
 
     useEffect(() => {
         fetchData();
+    }, [currentDate]);
 
-        // Handle deep-linking to specific reservation
+    // Keep selected reservation in sync with freshly fetched bookings.
+    useEffect(() => {
+        if (!selectedReservation?.id) {
+            return;
+        }
+
+        const fresh = bookings.find(b => b.id === selectedReservation.id);
+        if (fresh && fresh !== selectedReservation) {
+            setSelectedReservation(fresh);
+        }
+    }, [bookings, selectedReservation]);
+
+    // Handle deep-linking to specific reservation once bookings are loaded.
+    useEffect(() => {
+        if (bookings.length === 0) {
+            return;
+        }
+
         const params = new URLSearchParams(window.location.search);
         const resId = params.get('id');
-        if (resId && bookings.length > 0) {
-            const booking = bookings.find(b => b.id === parseInt(resId));
-            if (booking) {
-                setSelectedReservation(booking);
-                setIsDetailsModalOpen(true);
-            }
+        if (!resId) {
+            return;
         }
-    }, [currentDate, bookings.length > 0]);
+
+        const booking = bookings.find(b => b.id === parseInt(resId, 10));
+        if (booking) {
+            setSelectedReservation(booking);
+            setIsDetailsModalOpen(true);
+        }
+    }, [bookings]);
 
     // --- Navigation ---
 
@@ -249,6 +269,7 @@ const CalendarView: React.FC = () => {
                     isOpen={isDetailsModalOpen}
                     onClose={() => setIsDetailsModalOpen(false)}
                     onRefresh={fetchData}
+                    rooms={rooms}
                 />
             )}
         </div>
