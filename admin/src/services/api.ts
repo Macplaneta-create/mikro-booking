@@ -257,7 +257,9 @@ export const PricingAPI = {
             pricing_mode: rule.pricing_mode || null,
             priority: Number(rule.priority ?? 100),
             base_price: Number(rule.base_price),
-            weekend_price: Number(rule.weekend_price)
+            weekend_price: Number(rule.weekend_price),
+            weekend_from_day: Number(rule.weekend_from_day ?? 5),
+            weekend_to_day: Number(rule.weekend_to_day ?? 7)
         })) as Array<{
             id: number;
             name: string | null;
@@ -270,6 +272,8 @@ export const PricingAPI = {
             end_date: string;
             base_price: number;
             weekend_price: number;
+            weekend_from_day: number;
+            weekend_to_day: number;
         }>;
     },
     create: async (data: {
@@ -283,6 +287,8 @@ export const PricingAPI = {
         end_date: string;
         base_price: number;
         weekend_price: number;
+        weekend_from_day?: number;
+        weekend_to_day?: number;
     }) => {
         const payload = sanitizePricingPayload(data as Record<string, any>);
         const res = await api.post('/pricing', payload);
@@ -296,7 +302,9 @@ export const PricingAPI = {
             pricing_mode: item.pricing_mode || null,
             priority: Number(item.priority ?? 100),
             base_price: Number(item.base_price),
-            weekend_price: Number(item.weekend_price)
+            weekend_price: Number(item.weekend_price),
+            weekend_from_day: Number(item.weekend_from_day ?? 5),
+            weekend_to_day: Number(item.weekend_to_day ?? 7)
         };
     },
     update: async (id: number, data: {
@@ -310,6 +318,8 @@ export const PricingAPI = {
         end_date?: string;
         base_price?: number;
         weekend_price?: number;
+        weekend_from_day?: number;
+        weekend_to_day?: number;
     }) => {
         const payload = sanitizePricingPayload(data as Record<string, any>);
         const res = await api.put(`/pricing/${id}`, payload);
@@ -323,7 +333,9 @@ export const PricingAPI = {
             pricing_mode: item.pricing_mode || null,
             priority: Number(item.priority ?? 100),
             base_price: Number(item.base_price),
-            weekend_price: Number(item.weekend_price)
+            weekend_price: Number(item.weekend_price),
+            weekend_from_day: Number(item.weekend_from_day ?? 5),
+            weekend_to_day: Number(item.weekend_to_day ?? 7)
         };
     },
     delete: async (id: number) => {

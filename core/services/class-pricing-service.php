@@ -82,10 +82,7 @@ class PricingService {
             $base_price = $pricing ? $pricing->base_price : $base_fallback;
             $weekend_price = $pricing ? $pricing->weekend_price : $base_price;
 
-            // Definition of weekend: Friday and Saturday nights (standard in hotel industry)
-            // N: 1 (Mon) to 7 (Sun)
-            $day_of_week = (int) $date->format('N');
-            $is_weekend = in_array($day_of_week, [5, 6]); 
+            $is_weekend = $this->isWeekendNight($date, $pricing);
             
             $price = $is_weekend ? $weekend_price : $base_price;
             
@@ -264,8 +261,7 @@ class PricingService {
             $base_price = $pricing ? $pricing->base_price : $base_fallback;
             $weekend_price = $pricing ? $pricing->weekend_price : $base_price;
 
-            $day_of_week = (int) $date->format('N');
-            $is_weekend = in_array($day_of_week, [5, 6]);
+            $is_weekend = $this->isWeekendNight($date, $pricing);
 
             $price = $is_weekend ? $weekend_price : $base_price;
             $total += $price;
@@ -283,5 +279,31 @@ class PricingService {
             'nights' => count($details),
             'details' => $details
         ];
+    }
+
+    /**
+     * Weekend is calculated by the checkout day of each night.
+     * Example: night Thu->Fri uses Friday as reference day.
+     */
+    private function isWeekendNight(\DateTimeInterface $night_start, $pricing): bool {
+        $from_day = ($pricing && isset($pricing->weekend_from_day)) ? (int) $pricing->weekend_from_day : 5;
+        $to_day = ($pricing && isset($pricing->weekend_to_day)) ? (int) $pricing->weekend_to_day : 7;
+
+        if ($from_day < 1 || $from_day > 7) {
+            $from_day = 5;
+        }
+        if ($to_day < 1 || $to_day > 7) {
+            $to_day = 7;
+        }
+
+        $checkout_day = (clone $night_start)->modify('+1 day');
+        $day_of_week = (int) $checkout_day->format('N');
+
+        if ($from_day <= $to_day) {
+            return $day_of_week >= $from_day && $day_of_week <= $to_day;
+        }
+
+        // Wrapped range, e.g. from Friday (5) to Tuesday (2)
+        return $day_of_week >= $from_day || $day_of_week <= $to_day;
     }
 }

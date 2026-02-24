@@ -25,6 +25,8 @@ class Pricing {
     public string $end_date;
     public float $base_price;
     public float $weekend_price;
+    public int $weekend_from_day;
+    public int $weekend_to_day;
     public string $created_at;
     public string $updated_at;
     
@@ -43,6 +45,8 @@ class Pricing {
         $this->end_date = $data['end_date'] ?? '';
         $this->base_price = (float) ($data['base_price'] ?? 0.0);
         $this->weekend_price = (float) ($data['weekend_price'] ?? 0.0);
+        $this->weekend_from_day = (int) ($data['weekend_from_day'] ?? 5);
+        $this->weekend_to_day = (int) ($data['weekend_to_day'] ?? 7);
         $this->created_at = $data['created_at'] ?? '';
         $this->updated_at = $data['updated_at'] ?? '';
     }
@@ -70,6 +74,8 @@ class Pricing {
             'end_date' => $this->end_date,
             'base_price' => $this->base_price,
             'weekend_price' => $this->weekend_price,
+            'weekend_from_day' => $this->weekend_from_day,
+            'weekend_to_day' => $this->weekend_to_day,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

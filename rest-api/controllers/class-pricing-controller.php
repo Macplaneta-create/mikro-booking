@@ -68,6 +68,8 @@ class PricingController extends RestController {
                     'end_date' => ['required' => true, 'type' => 'string'],
                     'base_price' => ['required' => true, 'type' => 'number'],
                     'weekend_price' => ['required' => true, 'type' => 'number'],
+                    'weekend_from_day' => ['type' => 'integer'],
+                    'weekend_to_day' => ['type' => 'integer'],
                 ],
             ],
         ]);
@@ -117,6 +119,8 @@ class PricingController extends RestController {
                     'end_date' => ['type' => 'string'],
                     'base_price' => ['type' => 'number'],
                     'weekend_price' => ['type' => 'number'],
+                    'weekend_from_day' => ['type' => 'integer'],
+                    'weekend_to_day' => ['type' => 'integer'],
                 ],
             ],
             [

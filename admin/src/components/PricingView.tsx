@@ -22,7 +22,21 @@ interface PricingRule {
     end_date: string;
     base_price: number;
     weekend_price: number;
+    weekend_from_day: number;
+    weekend_to_day: number;
 }
+
+const DAYS_OF_WEEK = [
+    { value: 1, label: 'Poniedziałek' },
+    { value: 2, label: 'Wtorek' },
+    { value: 3, label: 'Środa' },
+    { value: 4, label: 'Czwartek' },
+    { value: 5, label: 'Piątek' },
+    { value: 6, label: 'Sobota' },
+    { value: 7, label: 'Niedziela' },
+];
+
+const getDayLabel = (day: number) => DAYS_OF_WEEK.find((d) => d.value === day)?.label || `Dzień ${day}`;
 
 const PricingView: React.FC = () => {
     const [rooms, setRooms] = useState<Room[]>([]);
@@ -43,6 +57,8 @@ const PricingView: React.FC = () => {
         end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         base_price: 100,
         weekend_price: 120,
+        weekend_from_day: 5,
+        weekend_to_day: 7,
     });
 
     useEffect(() => {
@@ -92,6 +108,8 @@ const PricingView: React.FC = () => {
                 end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                 base_price: 100,
                 weekend_price: 120,
+                weekend_from_day: 5,
+                weekend_to_day: 7,
             });
             setShowAddForm(false);
         } catch (error) {
@@ -128,6 +146,8 @@ const PricingView: React.FC = () => {
             end_date: rule.end_date,
             base_price: rule.base_price,
             weekend_price: rule.weekend_price,
+            weekend_from_day: rule.weekend_from_day ?? 5,
+            weekend_to_day: rule.weekend_to_day ?? 7,
         });
         setShowAddForm(true);
     };
@@ -167,6 +187,8 @@ const PricingView: React.FC = () => {
                 end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                 base_price: 100,
                 weekend_price: 120,
+                weekend_from_day: 5,
+                weekend_to_day: 7,
             });
             setShowAddForm(false);
             alert('Zaktualizowano regułę cenową');
@@ -193,6 +215,8 @@ const PricingView: React.FC = () => {
             end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
             base_price: 100,
             weekend_price: 120,
+            weekend_from_day: 5,
+            weekend_to_day: 7,
         });
     };
 
@@ -367,7 +391,7 @@ const PricingView: React.FC = () => {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Cena weekend (pt-ndz)
+                                Cena weekend
                             </label>
                             <div className="relative">
                                 <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -380,6 +404,36 @@ const PricingView: React.FC = () => {
                                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                                 />
                             </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Weekend od (dzień zakończenia noclegu)
+                            </label>
+                            <select
+                                value={newRule.weekend_from_day}
+                                onChange={(e) => setNewRule({ ...newRule, weekend_from_day: parseInt(e.target.value, 10) || 5 })}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                            >
+                                {DAYS_OF_WEEK.map((day) => (
+                                    <option key={day.value} value={day.value}>{day.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Weekend do (dzień zakończenia noclegu)
+                            </label>
+                            <select
+                                value={newRule.weekend_to_day}
+                                onChange={(e) => setNewRule({ ...newRule, weekend_to_day: parseInt(e.target.value, 10) || 7 })}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                            >
+                                {DAYS_OF_WEEK.map((day) => (
+                                    <option key={day.value} value={day.value}>{day.label}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
@@ -460,7 +514,7 @@ const PricingView: React.FC = () => {
                                                 <div className="flex items-center gap-2 text-sm">
                                                     <DollarSign size={16} className="text-gray-400" />
                                                     <span className="text-gray-600">
-                                                        Weekend: <span className="font-bold text-gray-900">{rule.weekend_price.toFixed(2)} PLN</span>
+                                                        Weekend ({getDayLabel(rule.weekend_from_day ?? 5)} - {getDayLabel(rule.weekend_to_day ?? 7)}): <span className="font-bold text-gray-900">{rule.weekend_price.toFixed(2)} PLN</span>
                                                     </span>
                                                 </div>
                                             </div>

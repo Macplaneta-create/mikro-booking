@@ -240,6 +240,8 @@ class Schema {
             end_date DATE NOT NULL,
             base_price DECIMAL(10,2) NOT NULL,
             weekend_price DECIMAL(10,2) NOT NULL,
+            weekend_from_day TINYINT UNSIGNED NOT NULL DEFAULT 5,
+            weekend_to_day TINYINT UNSIGNED NOT NULL DEFAULT 7,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (room_id) REFERENCES {$rooms_table}(id) ON DELETE CASCADE,

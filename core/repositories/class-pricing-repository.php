@@ -100,6 +100,15 @@ class PricingRepository implements RepositoryInterface {
             throw new \Exception('room_type is required for scope_type=room_type');
         }
 
+        $weekend_from_day = isset($data['weekend_from_day']) ? (int) $data['weekend_from_day'] : 5;
+        $weekend_to_day = isset($data['weekend_to_day']) ? (int) $data['weekend_to_day'] : 7;
+        if ($weekend_from_day < 1 || $weekend_from_day > 7) {
+            throw new \Exception('weekend_from_day must be in range 1-7');
+        }
+        if ($weekend_to_day < 1 || $weekend_to_day > 7) {
+            throw new \Exception('weekend_to_day must be in range 1-7');
+        }
+
         $insert_data = [
             'name' => isset($data['name']) && $data['name'] !== '' ? (string) $data['name'] : null,
             'room_id' => $scope_type === 'room_id' ? (int) $data['room_id'] : null,
@@ -111,6 +120,8 @@ class PricingRepository implements RepositoryInterface {
             'end_date' => $data['end_date'],
             'base_price' => $data['base_price'],
             'weekend_price' => $data['weekend_price'],
+            'weekend_from_day' => $weekend_from_day,
+            'weekend_to_day' => $weekend_to_day,
         ];
         
         $wpdb->insert($this->table, $insert_data);
@@ -131,7 +142,7 @@ class PricingRepository implements RepositoryInterface {
         global $wpdb;
         
         $update_data = [];
-        $fields = ['name', 'room_id', 'scope_type', 'room_type', 'pricing_mode', 'priority', 'start_date', 'end_date', 'base_price', 'weekend_price'];
+        $fields = ['name', 'room_id', 'scope_type', 'room_type', 'pricing_mode', 'priority', 'start_date', 'end_date', 'base_price', 'weekend_price', 'weekend_from_day', 'weekend_to_day'];
         
         foreach ($fields as $field) {
             if (isset($data[$field])) {
@@ -155,6 +166,22 @@ class PricingRepository implements RepositoryInterface {
                 throw new \Exception('room_type is required for scope_type=room_type');
             }
             $update_data['room_id'] = null;
+        }
+
+        if (isset($update_data['weekend_from_day'])) {
+            $weekend_from_day = (int) $update_data['weekend_from_day'];
+            if ($weekend_from_day < 1 || $weekend_from_day > 7) {
+                throw new \Exception('weekend_from_day must be in range 1-7');
+            }
+            $update_data['weekend_from_day'] = $weekend_from_day;
+        }
+
+        if (isset($update_data['weekend_to_day'])) {
+            $weekend_to_day = (int) $update_data['weekend_to_day'];
+            if ($weekend_to_day < 1 || $weekend_to_day > 7) {
+                throw new \Exception('weekend_to_day must be in range 1-7');
+            }
+            $update_data['weekend_to_day'] = $weekend_to_day;
         }
         
         if (empty($update_data)) {
