@@ -83,7 +83,8 @@ function register_routes(): void {
         $availability_service,
         $pricing_service,
         $res_bed_repo,
-        $notification_service
+        $notification_service,
+        $room_repo
     );
     
     // 3. Initialize Controllers & Register Routes

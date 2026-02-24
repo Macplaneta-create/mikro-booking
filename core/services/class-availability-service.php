@@ -266,6 +266,10 @@ class AvailabilityService {
             return $this->isBedAvailableByCapacity($bed, $check_in, $check_out, $exclude_reservation_id);
         }
 
+        if ($this->isExclusiveRoom((int) $bed->room_id)) {
+            return $this->isRoomAvailableExclusive((int) $bed->room_id, $check_in, $check_out, $exclude_reservation_id);
+        }
+
         return $this->reservation_repository->isBedAvailable(
             $bed_id,
             $check_in,
@@ -381,9 +385,9 @@ class AvailabilityService {
 
     private function getBedCapacity(Bed $bed): int {
         switch ((string) $bed->bed_type) {
-            case 'double':
             case 'bunk':
                 return 2;
+            case 'double':
             case 'single':
             default:
                 return 1;
@@ -404,6 +408,35 @@ class AvailabilityService {
         ));
 
         return $room_type === 'dormitory';
+    }
+
+    private function isExclusiveRoom(int $room_id): bool {
+        return !$this->isPlaceBasedRoom($room_id);
+    }
+
+    private function isRoomAvailableExclusive(
+        int $room_id,
+        string $check_in,
+        string $check_out,
+        ?int $exclude_reservation_id = null
+    ): bool {
+        $room_beds = $this->bed_repository->findActiveByRoom($room_id);
+        if (empty($room_beds)) {
+            return false;
+        }
+
+        foreach ($room_beds as $room_bed) {
+            if (!$this->reservation_repository->isBedAvailable(
+                (int) $room_bed->id,
+                $check_in,
+                $check_out,
+                $exclude_reservation_id
+            )) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function datesOverlap(string $a_start, string $a_end, string $b_start, string $b_end): bool {

@@ -17,6 +17,7 @@ use MikroPlaneta\Booking\Core\Models\Reservation;
 use MikroPlaneta\Booking\Core\Services\PricingService;
 use MikroPlaneta\Booking\Core\Services\NotificationService;
 use MikroPlaneta\Booking\Core\Repositories\ReservationBedRepository;
+use MikroPlaneta\Booking\Core\Repositories\RoomRepository;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -31,6 +32,7 @@ class ReservationService {
     private PricingService $pricing_service;
     private ReservationBedRepository $reservation_bed_repository;
     private NotificationService $notification_service;
+    private RoomRepository $room_repository;
     
     /**
      * Constructor
@@ -42,7 +44,8 @@ class ReservationService {
         AvailabilityService $availability_service,
         PricingService $pricing_service,
         ReservationBedRepository $reservation_bed_repository,
-        NotificationService $notification_service
+        NotificationService $notification_service,
+        RoomRepository $room_repository
     ) {
         $this->reservation_repository = $reservation_repository;
         $this->guest_repository = $guest_repository;
@@ -51,6 +54,7 @@ class ReservationService {
         $this->pricing_service = $pricing_service;
         $this->reservation_bed_repository = $reservation_bed_repository;
         $this->notification_service = $notification_service;
+        $this->room_repository = $room_repository;
     }
     
     /**
@@ -66,7 +70,10 @@ class ReservationService {
             throw new \Exception('At least one bed must be selected (bed_ids required)');
         }
         
-        $bed_ids = $data['bed_ids'];
+        $bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($data['bed_ids']));
+        if (empty($bed_ids)) {
+            throw new \Exception('At least one bed must be selected');
+        }
         
         // Validate dates
         $this->validateDates($data['check_in'], $data['check_out']);
@@ -160,10 +167,10 @@ class ReservationService {
         if (isset($data['check_in']) || isset($data['check_out']) || isset($data['bed_ids'])) {
             $check_in = $data['check_in'] ?? $reservation->check_in;
             $check_out = $data['check_out'] ?? $reservation->check_out;
-            $bed_ids = $data['bed_ids'] ?? $reservation->bed_ids;
+            $bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($data['bed_ids'] ?? $reservation->bed_ids));
 
             if (isset($data['bed_ids'])) {
-                $bed_ids = $this->normalizeBedIds($data['bed_ids']);
+                $bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($data['bed_ids']));
                 if (empty($bed_ids)) {
                     throw new \Exception('At least one bed must be selected');
                 }
@@ -193,7 +200,7 @@ class ReservationService {
         if (isset($data['adults']) || isset($data['children']) || isset($data['bed_ids'])) {
             $adults = isset($data['adults']) ? max(1, (int) $data['adults']) : (int) $reservation->adults;
             $children = isset($data['children']) ? max(0, (int) $data['children']) : (int) $reservation->children;
-            $effective_bed_ids = $normalized_bed_ids ?? $reservation->bed_ids;
+            $effective_bed_ids = $normalized_bed_ids ?? $this->expandBedsForExclusiveRooms($this->normalizeBedIds($reservation->bed_ids));
             $this->assertGuestCountFitsCapacity($adults, $children, $effective_bed_ids);
         }
         
@@ -310,9 +317,9 @@ class ReservationService {
                 $update_data['children'] = max(0, (int) $adjustment['children']);
             }
 
-            $effective_bed_ids = $reservation->bed_ids;
+            $effective_bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($reservation->bed_ids));
             if (isset($adjustment['bed_ids'])) {
-                $effective_bed_ids = $this->normalizeBedIds($adjustment['bed_ids']);
+                $effective_bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($adjustment['bed_ids']));
                 if (empty($effective_bed_ids)) {
                     throw new \Exception('At least one bed must be selected');
                 }
@@ -418,7 +425,7 @@ class ReservationService {
         // Validate guest count vs beds capacity
         $adults = isset($data['adults']) ? (int) $data['adults'] : 1;
         $children = isset($data['children']) ? (int) $data['children'] : 0;
-        $bed_ids = is_array($data['bed_ids']) ? $data['bed_ids'] : [];
+        $bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($data['bed_ids'] ?? []));
         $this->assertGuestCountFitsCapacity($adults, $children, $bed_ids);
     }
     
@@ -476,8 +483,8 @@ class ReservationService {
     }
 
     /**
-     * Calculate total beds capacity from bed types.
-     * single=1, double=2, bunk=2
+     * Calculate total places capacity from bed types.
+     * single=1, double=1, bunk=2
      */
     private function calculateBedsCapacity(array $bed_ids): int {
         $capacity = 0;
@@ -489,10 +496,10 @@ class ReservationService {
             }
 
             switch ((string) $bed->bed_type) {
-                case 'double':
                 case 'bunk':
                     $capacity += 2;
                     break;
+                case 'double':
                 case 'single':
                 default:
                     $capacity += 1;
@@ -501,6 +508,54 @@ class ReservationService {
         }
 
         return $capacity;
+    }
+
+    /**
+     * Private rooms and cabins are exclusive (whole-unit booking).
+     * If at least one bed from such room is selected, include all active beds from that room.
+     */
+    private function expandBedsForExclusiveRooms(array $bed_ids): array {
+        if (empty($bed_ids)) {
+            return [];
+        }
+
+        $expanded = [];
+        $processed_room_ids = [];
+
+        foreach ($bed_ids as $bed_id) {
+            $bed = $this->bed_repository->find((int) $bed_id);
+            if (!$bed || !$bed->is_active) {
+                continue;
+            }
+
+            $room = $this->room_repository->find((int) $bed->room_id);
+            if (!$room) {
+                $expanded[] = (int) $bed->id;
+                continue;
+            }
+
+            if ($room->room_type !== 'dormitory') {
+                if (isset($processed_room_ids[(int) $room->id])) {
+                    continue;
+                }
+
+                $processed_room_ids[(int) $room->id] = true;
+                $room_beds = $this->bed_repository->findActiveByRoom((int) $room->id);
+                if (empty($room_beds)) {
+                    $expanded[] = (int) $bed->id;
+                    continue;
+                }
+                foreach ($room_beds as $room_bed) {
+                    $expanded[] = (int) $room_bed->id;
+                }
+            } else {
+                $expanded[] = (int) $bed->id;
+            }
+        }
+
+        return array_values(array_unique(array_filter($expanded, static function($id) {
+            return $id > 0;
+        })));
     }
     
     /**

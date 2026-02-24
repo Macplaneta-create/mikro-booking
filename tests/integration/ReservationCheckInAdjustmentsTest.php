@@ -8,6 +8,7 @@ use MikroPlaneta\Booking\Core\Models\Bed;
 use MikroPlaneta\Booking\Core\Models\Reservation;
 use MikroPlaneta\Booking\Core\Repositories\BedRepository;
 use MikroPlaneta\Booking\Core\Repositories\GuestRepository;
+use MikroPlaneta\Booking\Core\Repositories\RoomRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationBedRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationRepository;
 use MikroPlaneta\Booking\Core\Services\AvailabilityService;
@@ -29,6 +30,7 @@ class TestReservationCheckInAdjustments extends TestCase {
         $pricingService = $this->createMock(PricingService::class);
         $reservationBedRepository = $this->createMock(ReservationBedRepository::class);
         $notificationService = $this->createMock(NotificationService::class);
+        $roomRepository = $this->createMock(RoomRepository::class);
 
         $service = new ReservationService(
             $reservationRepository,
@@ -37,7 +39,8 @@ class TestReservationCheckInAdjustments extends TestCase {
             $availabilityService,
             $pricingService,
             $reservationBedRepository,
-            $notificationService
+            $notificationService,
+            $roomRepository
         );
 
         $reservation = Reservation::fromArray([
@@ -120,6 +123,7 @@ class TestReservationCheckInAdjustments extends TestCase {
         $pricingService = $this->createMock(PricingService::class);
         $reservationBedRepository = $this->createMock(ReservationBedRepository::class);
         $notificationService = $this->createMock(NotificationService::class);
+        $roomRepository = $this->createMock(RoomRepository::class);
 
         $service = new ReservationService(
             $reservationRepository,
@@ -128,7 +132,8 @@ class TestReservationCheckInAdjustments extends TestCase {
             $availabilityService,
             $pricingService,
             $reservationBedRepository,
-            $notificationService
+            $notificationService,
+            $roomRepository
         );
 
         $reservation = Reservation::fromArray([

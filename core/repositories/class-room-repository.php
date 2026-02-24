@@ -114,6 +114,8 @@ class RoomRepository implements RepositoryInterface {
             'studio' => 'studio',
             'suite' => 'suite',
             'dormitory' => 'dormitory',
+            'cabin' => 'cabin',
+            'cottage' => 'cabin',
         ];
 
         return $map[$type] ?? 'standard';

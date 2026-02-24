@@ -57,7 +57,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
     const getBedCapacity = (bed: any): number => {
         const type = String(bed?.bed_type || 'single');
-        if (type === 'double' || type === 'bunk') return 2;
+        if (type === 'bunk') return 2;
         return 1;
     };
 
@@ -78,7 +78,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                 room_id: initialData?.roomId || 0,
                 check_in: initialData?.checkIn || format(new Date(), 'yyyy-MM-dd'),
                 check_out: initialData?.checkOut || format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'),
-                adults: initialData?.bedIds?.length || 1,
+                adults: getBedsCapacity(initialData?.bedIds || (initialData?.bedId ? [initialData.bedId] : [])) || 1,
                 children: 0
             }));
             setLocalBedIds(initialData?.bedIds || (initialData?.bedId ? [initialData.bedId] : []));
@@ -657,7 +657,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                 {isAutoBedSelection ? (
                                     <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700 flex items-center gap-2">
                                         <Users size={14} />
-                                        <span>System automatycznie zarezerwuje <strong>{formData.adults + formData.children}</strong> łóżek w dostępnych pokojach.</span>
+                                        <span>System automatycznie zarezerwuje <strong>{formData.adults + formData.children}</strong> miejsc w dostępnych pokojach.</span>
                                     </div>
                                 ) : (
                                     <div className={`p-3 rounded-xl border flex items-center justify-between text-xs ${showBedWarning ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>

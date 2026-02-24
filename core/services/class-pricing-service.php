@@ -86,10 +86,18 @@ class PricingService {
             
             $price = $is_weekend ? $weekend_price : $base_price;
             
-            // Apply bed type multiplier
             $bed_type = $bed->bed_type ?: 'single';
-            $multiplier_key = 'mikroplaneta_booking_multiplier_' . $bed_type;
-            $multiplier = (float) get_option($multiplier_key, ($bed_type === 'single' ? 1.0 : 2.0));
+            if ((string) $room->room_type === 'dormitory') {
+                // In dormitory pricing we do not differentiate bed types by price.
+                $multiplier = 1.0;
+            } else {
+                $multiplier_key = 'mikroplaneta_booking_multiplier_' . $bed_type;
+                $default_multiplier = 1.0;
+                if ($bed_type === 'double') {
+                    $default_multiplier = 1.8;
+                }
+                $multiplier = (float) get_option($multiplier_key, $default_multiplier);
+            }
             
             $final_price = $price * $multiplier;
             $total += $final_price;

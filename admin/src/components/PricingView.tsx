@@ -299,6 +299,7 @@ const PricingView: React.FC = () => {
                                     <option value="deluxe">Deluxe</option>
                                     <option value="studio">Studio</option>
                                     <option value="suite">Suite</option>
+                                    <option value="cabin">Cabin (Domek)</option>
                                 </select>
                             ) : (
                                 <select

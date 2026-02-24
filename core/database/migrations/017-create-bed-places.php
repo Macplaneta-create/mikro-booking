@@ -67,7 +67,7 @@ class Migration_017_Create_Bed_Places {
      * Migrate existing beds to bed_places
      * - Single beds: 1 place with max_persons = 1
      * - Bunk beds: 2 places (Dół/Góra) with max_persons = 1 each
-     * - Double beds: 1 place with max_persons = 2
+     * - Double beds: 1 place with max_persons = 1
      */
     private static function migrate_existing_beds(): void {
         global $wpdb;
@@ -107,12 +107,12 @@ class Migration_017_Create_Bed_Places {
                     break;
 
                 case 'double':
-                    // Double bed: 1 place for 2 persons (couple)
+                    // Double bed: 1 place (operationally one spot)
                     $wpdb->insert($places_table, [
                         'bed_id' => $bed_id,
                         'place_number' => 1,
                         'place_label' => 'Łóżko małżeńskie',
-                        'max_persons' => 2,
+                        'max_persons' => 1,
                         'is_active' => true,
                     ]);
                     break;

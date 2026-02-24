@@ -32,7 +32,7 @@ const EditReservationModal: React.FC<EditReservationModalProps> = ({
 
     const getBedCapacity = (bed: any): number => {
         const type = String(bed?.bed_type || 'single');
-        if (type === 'double' || type === 'bunk') return 2;
+        if (type === 'bunk') return 2;
         return 1;
     };
 
@@ -378,10 +378,10 @@ const EditReservationModal: React.FC<EditReservationModalProps> = ({
                             <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-bold flex items-start gap-2">
                                 <AlertCircle size={18} className="shrink-0 mt-0.5" />
                                 <div>
-                                    <p className="font-black mb-1">⚠️ Za mało łóżek!</p>
+                                    <p className="font-black mb-1">⚠️ Za mało miejsc!</p>
                                     <p className="text-xs opacity-90">
                                         Masz {selectedBedsCapacity} miejsc dla {totalGuests} osób. 
-                                        Aby zapisać tę zmianę, musisz najpierw anulować tę rezerwację i utworzyć nową z większą liczbą łóżek.
+                                        Aby zapisać tę zmianę, musisz najpierw anulować tę rezerwację i utworzyć nową z większą liczbą miejsc.
                                     </p>
                                 </div>
                             </div>
@@ -514,7 +514,7 @@ const EditReservationModal: React.FC<EditReservationModalProps> = ({
                             <div className="flex justify-between items-center mb-2 pb-2 border-b border-brand-100">
                                 <div>
                                     <p className="text-sm font-bold text-gray-900">Noclegi</p>
-                                    <p className="text-xs text-gray-500">{priceData.nights} noclegów × {formData.bed_ids.length} łóżek</p>
+                                    <p className="text-xs text-gray-500">{priceData.nights} noclegów × {selectedBedsCapacity} miejsc</p>
                                 </div>
                                 <p className="text-lg font-black text-gray-900">
                                     {new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(priceData.total)}

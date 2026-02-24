@@ -47,7 +47,7 @@ class Schema {
             image_id BIGINT UNSIGNED,
             amenities JSON,
             floor TINYINT DEFAULT 0,
-            room_type ENUM('standard', 'deluxe', 'studio', 'suite', 'dormitory') DEFAULT 'standard',
+            room_type ENUM('standard', 'deluxe', 'studio', 'suite', 'dormitory', 'cabin') DEFAULT 'standard',
             pricing_mode ENUM('per_room', 'per_bed') DEFAULT 'per_room',
             status ENUM('active', 'inactive', 'maintenance') DEFAULT 'active',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

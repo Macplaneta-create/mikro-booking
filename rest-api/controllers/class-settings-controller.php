@@ -93,8 +93,8 @@ class SettingsController extends RestController {
                 true
             ),
             'multiplier_single' => (float) get_option('mikroplaneta_booking_multiplier_single', 1.0),
-            'multiplier_double' => (float) get_option('mikroplaneta_booking_multiplier_double', 2.0),
-            'multiplier_bunk' => (float) get_option('mikroplaneta_booking_multiplier_bunk', 2.0),
+            'multiplier_double' => (float) get_option('mikroplaneta_booking_multiplier_double', 1.8),
+            'multiplier_bunk' => (float) get_option('mikroplaneta_booking_multiplier_bunk', 1.0),
             'multiplier_children' => (float) get_option('mikroplaneta_booking_multiplier_children', 0.5),
         ];
         

@@ -21,6 +21,12 @@ const RoomManager: React.FC = () => {
     });
     const [beds, setBeds] = useState<any[]>([]);
 
+    const getBedCapacity = (bed: any): number => {
+        const type = String(bed?.bed_type || 'single');
+        if (type === 'bunk') return 2;
+        return 1;
+    };
+
     const AMENITIES_OPTIONS = [
         { id: 'wifi', icon: <Wifi size={16} />, label: 'Wi-Fi' },
         { id: 'tv', icon: <Tv size={16} />, label: 'TV' },
@@ -399,7 +405,9 @@ const RoomManager: React.FC = () => {
                                     >
                                         <option value="standard">Standardowy</option>
                                         <option value="deluxe">Deluxe</option>
+                                        <option value="studio">Studio</option>
                                         <option value="suite">Apartament (Suite)</option>
+                                        <option value="cabin">Domek (Cabin)</option>
                                         <option value="dormitory">Wieloosobowy (Dorm)</option>
                                     </select>
                                 </div>
@@ -636,9 +644,10 @@ const RoomManager: React.FC = () => {
                                 )}
 
                                 <div className="mt-auto pt-4 border-t border-gray-50 flex justify-between items-center text-xs">
-                                    <div className="flex items-center gap-1 text-gray-400">
+                                    <div className="flex items-center gap-3 text-gray-400">
                                         <BedDouble size={14} />
                                         <span>Łóżek: <strong>{room.beds?.length || 0}</strong></span>
+                                        <span>Miejsc: <strong>{(room.beds || []).reduce((sum, bed) => sum + getBedCapacity(bed), 0)}</strong></span>
                                     </div>
                                     <span className={`font-bold transition-colors ${room.status === 'maintenance' ? 'text-orange-500' : 'text-emerald-500'}`}>
                                         {room.status === 'active' ? 'Obsługa możliwa' : 'Przerwa techniczna'}

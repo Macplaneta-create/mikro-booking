@@ -288,12 +288,12 @@ class BedPlaceRepository implements RepositoryInterface {
                 break;
 
             case 'double':
-                // Double bed: 1 place for 2 persons (couple)
+                // Double bed: 1 place (operationally treated as one spot)
                 $places[] = $this->create([
                     'bed_id' => $bed_id,
                     'place_number' => 1,
                     'place_label' => 'Łóżko małżeńskie',
-                    'max_persons' => 2,
+                    'max_persons' => 1,
                     'is_active' => true,
                 ]);
                 break;

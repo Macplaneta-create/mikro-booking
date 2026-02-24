@@ -21,7 +21,7 @@ class BedPlace {
     public int $bed_id;
     public int $place_number;
     public string $place_label;
-    public int $max_persons; // 1 for single/bunk places, 2 for double beds
+    public int $max_persons; // usually 1; kept flexible for custom place capacities
     public bool $is_active;
     public string $created_at;
 
@@ -107,7 +107,7 @@ class BedPlace {
      * Check if place is for couples (double bed)
      */
     public function isForCouples(): bool {
-        return $this->max_persons >= 2 || $this->bed_type === 'double';
+        return $this->max_persons >= 2;
     }
 
     /**
