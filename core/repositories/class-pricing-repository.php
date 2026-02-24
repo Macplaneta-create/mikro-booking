@@ -18,6 +18,8 @@ if (!defined('ABSPATH')) {
 class PricingRepository implements RepositoryInterface {
     
     private string $table;
+    private ?bool $has_weekend_from_day = null;
+    private ?bool $has_weekend_to_day = null;
     
     /**
      * Constructor
@@ -120,9 +122,12 @@ class PricingRepository implements RepositoryInterface {
             'end_date' => $data['end_date'],
             'base_price' => $data['base_price'],
             'weekend_price' => $data['weekend_price'],
-            'weekend_from_day' => $weekend_from_day,
-            'weekend_to_day' => $weekend_to_day,
         ];
+
+        if ($this->supports_weekend_range()) {
+            $insert_data['weekend_from_day'] = $weekend_from_day;
+            $insert_data['weekend_to_day'] = $weekend_to_day;
+        }
         
         $wpdb->insert($this->table, $insert_data);
         
@@ -142,7 +147,11 @@ class PricingRepository implements RepositoryInterface {
         global $wpdb;
         
         $update_data = [];
-        $fields = ['name', 'room_id', 'scope_type', 'room_type', 'pricing_mode', 'priority', 'start_date', 'end_date', 'base_price', 'weekend_price', 'weekend_from_day', 'weekend_to_day'];
+        $fields = ['name', 'room_id', 'scope_type', 'room_type', 'pricing_mode', 'priority', 'start_date', 'end_date', 'base_price', 'weekend_price'];
+        if ($this->supports_weekend_range()) {
+            $fields[] = 'weekend_from_day';
+            $fields[] = 'weekend_to_day';
+        }
         
         foreach ($fields as $field) {
             if (isset($data[$field])) {
@@ -254,5 +263,38 @@ class PricingRepository implements RepositoryInterface {
         );
         
         return $row ? Pricing::fromArray($row) : null;
+    }
+
+    private function supports_weekend_range(): bool {
+        return $this->has_column('weekend_from_day') && $this->has_column('weekend_to_day');
+    }
+
+    private function has_column(string $column): bool {
+        global $wpdb;
+
+        if ($column === 'weekend_from_day' && $this->has_weekend_from_day !== null) {
+            return $this->has_weekend_from_day;
+        }
+        if ($column === 'weekend_to_day' && $this->has_weekend_to_day !== null) {
+            return $this->has_weekend_to_day;
+        }
+
+        $exists = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME = %s
+             AND COLUMN_NAME = %s",
+            $this->table,
+            $column
+        )) > 0;
+
+        if ($column === 'weekend_from_day') {
+            $this->has_weekend_from_day = $exists;
+        }
+        if ($column === 'weekend_to_day') {
+            $this->has_weekend_to_day = $exists;
+        }
+
+        return $exists;
     }
 }
