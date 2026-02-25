@@ -224,7 +224,7 @@ class ReservationRepository implements RepositoryInterface {
         global $wpdb;
         
         $update_data = [];
-        $fields = ['check_in', 'check_out', 'status', 'total_price', 'adults', 'children', 'notes'];
+        $fields = ['guest_id', 'check_in', 'check_out', 'status', 'total_price', 'adults', 'children', 'notes'];
         
         foreach ($fields as $field) {
             if (isset($data[$field])) {

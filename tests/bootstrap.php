@@ -5,6 +5,9 @@ declare(strict_types=1);
 if (!defined('ABSPATH')) {
     define('ABSPATH', __DIR__ . '/../');
 }
+if (!defined('MINUTE_IN_SECONDS')) {
+    define('MINUTE_IN_SECONDS', 60);
+}
 
 $GLOBALS['__mb_filters'] = [];
 $GLOBALS['__mb_actions'] = [];
@@ -114,6 +117,25 @@ if (!function_exists('update_option')) {
     }
 }
 
+if (!function_exists('get_transient')) {
+    function get_transient(string $key) {
+        return $GLOBALS['__mb_transients'][$key] ?? false;
+    }
+}
+
+if (!function_exists('set_transient')) {
+    function set_transient(string $key, $value, int $expiration = 0): bool {
+        $GLOBALS['__mb_transients'][$key] = $value;
+        return true;
+    }
+}
+
+if (!function_exists('wp_get_environment_type')) {
+    function wp_get_environment_type(): string {
+        return $GLOBALS['__mb_environment_type'] ?? 'development';
+    }
+}
+
 if (!function_exists('is_wp_error')) {
     function is_wp_error($value): bool {
         return $value instanceof WP_Error;
@@ -151,10 +173,12 @@ require_once __DIR__ . '/../core/repositories/interface-repository.php';
 require_once __DIR__ . '/../core/models/class-reservation.php';
 require_once __DIR__ . '/../core/models/class-guest.php';
 require_once __DIR__ . '/../core/models/class-bed.php';
+require_once __DIR__ . '/../core/models/class-room.php';
 require_once __DIR__ . '/../rest-api/class-rest-controller.php';
 require_once __DIR__ . '/../core/repositories/class-reservation-repository.php';
 require_once __DIR__ . '/../core/repositories/class-guest-repository.php';
 require_once __DIR__ . '/../core/repositories/class-bed-repository.php';
+require_once __DIR__ . '/../core/repositories/class-room-repository.php';
 require_once __DIR__ . '/../core/repositories/class-reservation-bed-repository.php';
 require_once __DIR__ . '/../core/services/class-availability-service.php';
 require_once __DIR__ . '/../core/services/class-pricing-service.php';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Save, AlertCircle, Building2, Mail, Globe } from 'lucide-react';
+import { Calendar, Clock, Save, AlertCircle, Building2, Mail, Globe, Shield } from 'lucide-react';
 import { SettingsAPI } from '../services/api';
 
 interface PluginSettings {
@@ -16,6 +16,15 @@ interface PluginSettings {
     multiplier_double: number;
     multiplier_bunk: number;
     multiplier_children: number;
+    captcha_provider: 'none' | 'recaptcha_v3' | 'hcaptcha';
+    recaptcha_site_key: string;
+    recaptcha_secret_key: string;
+    recaptcha_min_score: number;
+    hcaptcha_site_key: string;
+    hcaptcha_secret_key: string;
+    rate_limit_enabled: boolean;
+    rate_limit_window_seconds: number;
+    rate_limit_max_requests: number;
 }
 
 const Settings: React.FC = () => {
@@ -35,6 +44,15 @@ const Settings: React.FC = () => {
         multiplier_double: 2.0,
         multiplier_bunk: 2.0,
         multiplier_children: 0.5,
+        captcha_provider: 'recaptcha_v3',
+        recaptcha_site_key: '',
+        recaptcha_secret_key: '',
+        recaptcha_min_score: 0.5,
+        hcaptcha_site_key: '',
+        hcaptcha_secret_key: '',
+        rate_limit_enabled: true,
+        rate_limit_window_seconds: 60,
+        rate_limit_max_requests: 120,
     });
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -51,10 +69,19 @@ const Settings: React.FC = () => {
             const data = await SettingsAPI.getAll();
             setSettings({
                 ...data,
-                multiplier_single: data.multiplier_single || 1.0,
-                multiplier_double: data.multiplier_double || 2.0,
-                multiplier_bunk: data.multiplier_bunk || 2.0,
-                multiplier_children: data.multiplier_children || 0.5,
+                multiplier_single: data.multiplier_single ?? 1.0,
+                multiplier_double: data.multiplier_double ?? 2.0,
+                multiplier_bunk: data.multiplier_bunk ?? 2.0,
+                multiplier_children: data.multiplier_children ?? 0.5,
+                captcha_provider: data.captcha_provider ?? 'recaptcha_v3',
+                recaptcha_site_key: data.recaptcha_site_key ?? '',
+                recaptcha_secret_key: data.recaptcha_secret_key ?? '',
+                recaptcha_min_score: data.recaptcha_min_score ?? 0.5,
+                hcaptcha_site_key: data.hcaptcha_site_key ?? '',
+                hcaptcha_secret_key: data.hcaptcha_secret_key ?? '',
+                rate_limit_enabled: data.rate_limit_enabled ?? true,
+                rate_limit_window_seconds: data.rate_limit_window_seconds ?? 60,
+                rate_limit_max_requests: data.rate_limit_max_requests ?? 120,
             });
         } catch (error) {
             console.error('Failed to load settings:', error);
@@ -326,6 +353,166 @@ const Settings: React.FC = () => {
                             >
                                 <Clock size={14} />
                                 Testuj wygasanie (Cron)
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Shield className="text-brand-600" size={20} />
+                    Bezpieczeństwo API
+                </h3>
+                <p className="text-gray-600 mb-6 text-sm">
+                    Skonfiguruj CAPTCHA dla formularza publicznego i globalny limit żądań REST API.
+                </p>
+
+                {loading ? (
+                    <p className="text-gray-500">Ładowanie...</p>
+                ) : (
+                    <form onSubmit={handleSaveSettings} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Provider CAPTCHA
+                            </label>
+                            <select
+                                value={settings.captcha_provider}
+                                onChange={(e) =>
+                                    setSettings({
+                                        ...settings,
+                                        captcha_provider: e.target.value as PluginSettings['captcha_provider'],
+                                    })
+                                }
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                            >
+                                <option value="recaptcha_v3">Google reCAPTCHA v3</option>
+                                <option value="hcaptcha">hCaptcha</option>
+                                <option value="none">Brak CAPTCHA (tylko środowisko dev)</option>
+                            </select>
+                        </div>
+
+                        {settings.captcha_provider === 'recaptcha_v3' && (
+                            <div className="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">reCAPTCHA Site Key</label>
+                                    <input
+                                        type="text"
+                                        value={settings.recaptcha_site_key}
+                                        onChange={(e) => setSettings({ ...settings, recaptcha_site_key: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">reCAPTCHA Secret Key</label>
+                                    <input
+                                        type="password"
+                                        value={settings.recaptcha_secret_key}
+                                        onChange={(e) => setSettings({ ...settings, recaptcha_secret_key: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Minimalny score (0-1)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="1"
+                                        step="0.1"
+                                        value={settings.recaptcha_min_score}
+                                        onChange={(e) =>
+                                            setSettings({
+                                                ...settings,
+                                                recaptcha_min_score: Math.max(0, Math.min(1, parseFloat(e.target.value) || 0)),
+                                            })
+                                        }
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {settings.captcha_provider === 'hcaptcha' && (
+                            <div className="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">hCaptcha Site Key</label>
+                                    <input
+                                        type="text"
+                                        value={settings.hcaptcha_site_key}
+                                        onChange={(e) => setSettings({ ...settings, hcaptcha_site_key: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">hCaptcha Secret Key</label>
+                                    <input
+                                        type="password"
+                                        value={settings.hcaptcha_secret_key}
+                                        onChange={(e) => setSettings({ ...settings, hcaptcha_secret_key: e.target.value })}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="border-t border-gray-200 pt-4 space-y-4">
+                            <div className="flex items-center gap-3 py-1">
+                                <input
+                                    type="checkbox"
+                                    id="rate_limit_enabled"
+                                    checked={settings.rate_limit_enabled}
+                                    onChange={(e) => setSettings({ ...settings, rate_limit_enabled: e.target.checked })}
+                                    className="w-4 h-4 rounded text-brand-600 cursor-pointer"
+                                />
+                                <label htmlFor="rate_limit_enabled" className="text-sm font-medium text-gray-700 cursor-pointer">
+                                    Włącz globalny rate limiting dla `/mikroplaneta/v1/*`
+                                </label>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Okno (sekundy)</label>
+                                    <input
+                                        type="number"
+                                        min="10"
+                                        max="3600"
+                                        value={settings.rate_limit_window_seconds}
+                                        onChange={(e) =>
+                                            setSettings({
+                                                ...settings,
+                                                rate_limit_window_seconds: Math.max(10, parseInt(e.target.value) || 10),
+                                            })
+                                        }
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Maks. żądań w oknie</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="10000"
+                                        value={settings.rate_limit_max_requests}
+                                        onChange={(e) =>
+                                            setSettings({
+                                                ...settings,
+                                                rate_limit_max_requests: Math.max(1, parseInt(e.target.value) || 1),
+                                            })
+                                        }
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-6 pt-4 border-t border-gray-200">
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700 transition disabled:opacity-50"
+                            >
+                                <Save className="inline-block mr-2" size={16} />
+                                {saving ? 'Zapisywanie...' : 'Zapisz ustawienia bezpieczeństwa'}
                             </button>
                         </div>
                     </form>

@@ -104,6 +104,7 @@ class Plugin {
         
         // 7. Admin & Frontend
         require_once $dir . 'core/class-admin.php';
+        require_once $dir . 'core/class-rest-rate-limiter.php';
         require_once $dir . 'public/class-frontend.php';
         require_once $dir . 'core/class-cron-handler.php';
         require_once $dir . 'core/class-logging-handler.php';
@@ -125,6 +126,9 @@ class Plugin {
 
         // Initialize frontend
         new \MikroPlaneta\Booking\Core\Frontend();
+        
+        // Global REST API throttling
+        (new \MikroPlaneta\Booking\Core\RestRateLimiter())->register();
     }
     
     /**

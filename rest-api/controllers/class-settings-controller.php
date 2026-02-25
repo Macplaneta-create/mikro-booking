@@ -50,6 +50,15 @@ class SettingsController extends RestController {
                     'multiplier_double' => ['type' => 'number'],
                     'multiplier_bunk' => ['type' => 'number'],
                     'multiplier_children' => ['type' => 'number'],
+                    'captcha_provider' => ['type' => 'string'],
+                    'recaptcha_site_key' => ['type' => 'string'],
+                    'recaptcha_secret_key' => ['type' => 'string'],
+                    'recaptcha_min_score' => ['type' => 'number'],
+                    'hcaptcha_site_key' => ['type' => 'string'],
+                    'hcaptcha_secret_key' => ['type' => 'string'],
+                    'rate_limit_enabled' => ['type' => 'boolean'],
+                    'rate_limit_window_seconds' => ['type' => 'integer', 'minimum' => 10],
+                    'rate_limit_max_requests' => ['type' => 'integer', 'minimum' => 1],
                 ],
             ],
         ]);
@@ -96,6 +105,15 @@ class SettingsController extends RestController {
             'multiplier_double' => (float) get_option('mikroplaneta_booking_multiplier_double', 1.8),
             'multiplier_bunk' => (float) get_option('mikroplaneta_booking_multiplier_bunk', 1.0),
             'multiplier_children' => (float) get_option('mikroplaneta_booking_multiplier_children', 0.5),
+            'captcha_provider' => (string) get_option('mikroplaneta_booking_captcha_provider', 'recaptcha_v3'),
+            'recaptcha_site_key' => (string) get_option('mikroplaneta_booking_recaptcha_site_key', ''),
+            'recaptcha_secret_key' => (string) get_option('mikroplaneta_booking_recaptcha_secret_key', ''),
+            'recaptcha_min_score' => (float) get_option('mikroplaneta_booking_recaptcha_min_score', 0.5),
+            'hcaptcha_site_key' => (string) get_option('mikroplaneta_booking_hcaptcha_site_key', ''),
+            'hcaptcha_secret_key' => (string) get_option('mikroplaneta_booking_hcaptcha_secret_key', ''),
+            'rate_limit_enabled' => (bool) get_option('mikroplaneta_booking_rate_limit_enabled', true),
+            'rate_limit_window_seconds' => (int) get_option('mikroplaneta_booking_rate_limit_window_seconds', 60),
+            'rate_limit_max_requests' => (int) get_option('mikroplaneta_booking_rate_limit_max_requests', 120),
         ];
         
         return $this->success($settings);
@@ -158,6 +176,46 @@ class SettingsController extends RestController {
         }
         if (isset($params['multiplier_children'])) {
             update_option('mikroplaneta_booking_multiplier_children', (float) $params['multiplier_children']);
+        }
+        
+        // CAPTCHA
+        if (isset($params['captcha_provider'])) {
+            $provider = sanitize_text_field((string) $params['captcha_provider']);
+            $allowed = ['none', 'recaptcha_v3', 'hcaptcha'];
+            if (!in_array($provider, $allowed, true)) {
+                $provider = 'recaptcha_v3';
+            }
+            update_option('mikroplaneta_booking_captcha_provider', $provider);
+        }
+        if (isset($params['recaptcha_site_key'])) {
+            update_option('mikroplaneta_booking_recaptcha_site_key', sanitize_text_field((string) $params['recaptcha_site_key']));
+        }
+        if (isset($params['recaptcha_secret_key'])) {
+            update_option('mikroplaneta_booking_recaptcha_secret_key', sanitize_text_field((string) $params['recaptcha_secret_key']));
+        }
+        if (isset($params['recaptcha_min_score'])) {
+            $score = (float) $params['recaptcha_min_score'];
+            $score = max(0.0, min(1.0, $score));
+            update_option('mikroplaneta_booking_recaptcha_min_score', $score);
+        }
+        if (isset($params['hcaptcha_site_key'])) {
+            update_option('mikroplaneta_booking_hcaptcha_site_key', sanitize_text_field((string) $params['hcaptcha_site_key']));
+        }
+        if (isset($params['hcaptcha_secret_key'])) {
+            update_option('mikroplaneta_booking_hcaptcha_secret_key', sanitize_text_field((string) $params['hcaptcha_secret_key']));
+        }
+
+        // Global REST API Rate Limiting
+        if (isset($params['rate_limit_enabled'])) {
+            update_option('mikroplaneta_booking_rate_limit_enabled', (bool) $params['rate_limit_enabled']);
+        }
+        if (isset($params['rate_limit_window_seconds'])) {
+            $window = max(10, (int) $params['rate_limit_window_seconds']);
+            update_option('mikroplaneta_booking_rate_limit_window_seconds', $window);
+        }
+        if (isset($params['rate_limit_max_requests'])) {
+            $max_requests = max(1, (int) $params['rate_limit_max_requests']);
+            update_option('mikroplaneta_booking_rate_limit_max_requests', $max_requests);
         }
         
         return $this->get_settings($request);

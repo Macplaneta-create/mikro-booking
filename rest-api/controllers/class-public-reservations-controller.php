@@ -13,6 +13,7 @@ namespace MikroPlaneta\Booking\RestApi\Controllers;
 use MikroPlaneta\Booking\RestApi\RestController;
 use MikroPlaneta\Booking\Core\Services\ReservationService;
 use MikroPlaneta\Booking\Core\Services\GuestService;
+use MikroPlaneta\Booking\Core\Services\AvailabilityService;
 use MikroPlaneta\Booking\Core\Models\Reservation;
 use WP_REST_Response;
 
@@ -24,16 +25,19 @@ class PublicReservationsController extends RestController {
 
     private ReservationService $reservation_service;
     private GuestService $guest_service;
+    private ?AvailabilityService $availability_service;
 
     /**
      * Constructor
      */
     public function __construct(
         ReservationService $reservation_service,
-        GuestService $guest_service
+        GuestService $guest_service,
+        ?AvailabilityService $availability_service = null
     ) {
         $this->reservation_service = $reservation_service;
         $this->guest_service = $guest_service;
+        $this->availability_service = $availability_service;
         $this->rest_base = 'public/reservations';
     }
 
@@ -54,7 +58,20 @@ class PublicReservationsController extends RestController {
                     'adults' => ['type' => 'integer', 'default' => 1],
                     'children' => ['type' => 'integer', 'default' => 0],
                     'notes' => ['type' => 'string'],
-                    'captcha_token' => ['required' => true, 'type' => 'string'],
+                    'captcha_token' => ['required' => false, 'type' => 'string'],
+                ],
+            ],
+        ]);
+
+        register_rest_route($this->namespace, '/public/availability/beds', [
+            [
+                'methods' => 'GET',
+                'callback' => [$this, 'public_available_beds'],
+                'permission_callback' => '__return_true',
+                'args' => [
+                    'check_in' => ['required' => true, 'type' => 'string', 'format' => 'date'],
+                    'check_out' => ['required' => true, 'type' => 'string', 'format' => 'date'],
+                    'room_id' => ['required' => false, 'type' => 'integer'],
                 ],
             ],
         ]);
@@ -65,6 +82,10 @@ class PublicReservationsController extends RestController {
      */
     public function create_request($request): WP_REST_Response {
         $params = $request->get_params();
+
+        if (!$this->enforce_rate_limit()) {
+            return $this->error('Too many reservation attempts. Please try again in a few minutes.', 429);
+        }
 
         $captcha_token = isset($params['captcha_token']) ? (string) $params['captcha_token'] : '';
         if (!$this->verify_captcha($captcha_token)) {
@@ -102,7 +123,9 @@ class PublicReservationsController extends RestController {
         ];
 
         try {
-            $guest = $this->guest_service->findOrCreateGuest($guest_data);
+            // Security-first: do not auto-bind public reservation to existing guest record by email.
+            // Existing-email flow should use verified ownership (OTP/link) in a dedicated implementation.
+            $guest = $this->guest_service->createGuest($guest_data);
             $data['guest_id'] = $guest->id;
 
             $reservation = $this->reservation_service->createReservation($data);
@@ -112,7 +135,13 @@ class PublicReservationsController extends RestController {
                 'status' => $reservation->status,
             ], 201);
         } catch (\Exception $e) {
-            return $this->error($e->getMessage(), 400);
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroBooking] Public reservation error: ' . $e->getMessage());
+            }
+            if (strpos($e->getMessage(), 'Guest with this email already exists') !== false) {
+                return $this->error('Email already exists. Please contact reception to confirm reservation ownership.', 409);
+            }
+            return $this->error('Unable to create reservation request', 400);
         }
     }
 
@@ -120,19 +149,31 @@ class PublicReservationsController extends RestController {
      * Simulated captcha verification during development
      */
     private function verify_captcha(string $token): bool {
+        $provider = (string) get_option('mikroplaneta_booking_captcha_provider', 'recaptcha_v3');
+        if ($provider === 'none') {
+            return true;
+        }
+
         if ($token === '') {
             return false;
         }
 
-        $simulate = (bool) apply_filters(
-            'mikroplaneta_booking_recaptcha_simulate',
-            defined('WP_DEBUG') && WP_DEBUG
-        );
+        $environment = function_exists('wp_get_environment_type') ? wp_get_environment_type() : 'production';
+        $is_dev_environment = in_array($environment, ['local', 'development'], true);
+        $simulate = (bool) apply_filters('mikroplaneta_booking_recaptcha_simulate', false);
 
-        if ($simulate) {
+        if ($simulate && $is_dev_environment) {
             return true;
         }
 
+        if ($provider === 'hcaptcha') {
+            return $this->verify_hcaptcha($token);
+        }
+
+        return $this->verify_recaptcha($token);
+    }
+
+    private function verify_recaptcha(string $token): bool {
         $secret_key = trim((string) get_option('mikroplaneta_booking_recaptcha_secret_key', ''));
         if ($secret_key === '') {
             if (defined('WP_DEBUG') && WP_DEBUG) {
@@ -177,12 +218,119 @@ class PublicReservationsController extends RestController {
 
         // Optional score check for reCAPTCHA v3
         if (isset($payload['score'])) {
-            $min_score = (float) apply_filters('mikroplaneta_booking_recaptcha_min_score', 0.5);
+            $min_score = (float) get_option('mikroplaneta_booking_recaptcha_min_score', 0.5);
+            $min_score = (float) apply_filters('mikroplaneta_booking_recaptcha_min_score', $min_score);
             if ((float) $payload['score'] < $min_score) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    private function verify_hcaptcha(string $token): bool {
+        $secret_key = trim((string) get_option('mikroplaneta_booking_hcaptcha_secret_key', ''));
+        if ($secret_key === '') {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroBooking] CAPTCHA verification failed: missing hCaptcha secret key.');
+            }
+            return false;
+        }
+
+        $body = [
+            'secret' => $secret_key,
+            'response' => $token,
+        ];
+
+        if (!empty($_SERVER['REMOTE_ADDR'])) {
+            $body['remoteip'] = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
+        }
+
+        $response = wp_remote_post('https://hcaptcha.com/siteverify', [
+            'timeout' => 10,
+            'body' => $body,
+        ]);
+
+        if (is_wp_error($response)) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroBooking] hCaptcha verification HTTP error: ' . $response->get_error_message());
+            }
+            return false;
+        }
+
+        $status_code = (int) wp_remote_retrieve_response_code($response);
+        if ($status_code < 200 || $status_code >= 300) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroBooking] hCaptcha verification HTTP status: ' . $status_code);
+            }
+            return false;
+        }
+
+        $payload = json_decode(wp_remote_retrieve_body($response), true);
+        return is_array($payload) && !empty($payload['success']);
+    }
+
+    /**
+     * Basic IP-based throttling for public reservation endpoint.
+     */
+    private function enforce_rate_limit(): bool {
+        $ip = $this->get_client_ip();
+        if ($ip === '') {
+            return true;
+        }
+
+        $window_seconds = (int) apply_filters('mikroplaneta_booking_public_rate_limit_window', 10 * MINUTE_IN_SECONDS);
+        $max_attempts = (int) apply_filters('mikroplaneta_booking_public_rate_limit_max_attempts', 20);
+
+        $window_seconds = max(60, $window_seconds);
+        $max_attempts = max(1, $max_attempts);
+
+        $key = 'mb_public_res_rate_' . md5($ip);
+        $attempts = (int) get_transient($key);
+
+        if ($attempts >= $max_attempts) {
+            return false;
+        }
+
+        set_transient($key, $attempts + 1, $window_seconds);
+        return true;
+    }
+
+    private function get_client_ip(): string {
+        if (!empty($_SERVER['REMOTE_ADDR'])) {
+            return sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
+        }
+
+        return '';
+    }
+
+    public function public_available_beds($request): WP_REST_Response {
+        if (!$this->availability_service) {
+            return $this->error('Availability service unavailable', 503);
+        }
+
+        $check_in = sanitize_text_field((string) $request->get_param('check_in'));
+        $check_out = sanitize_text_field((string) $request->get_param('check_out'));
+        $room_id = max(0, (int) $request->get_param('room_id'));
+
+        if ($check_in === '' || $check_out === '') {
+            return $this->error('check_in and check_out are required', 400);
+        }
+
+        try {
+            $beds = $room_id > 0
+                ? $this->availability_service->findAvailableBedsByRoom($room_id, $check_in, $check_out)
+                : $this->availability_service->findAvailableBeds($check_in, $check_out);
+            $payload = array_map(static function($bed) {
+                return $bed->toArray();
+            }, $beds);
+
+            return $this->success($payload);
+        } catch (\Throwable $e) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroBooking] Public availability error: ' . $e->getMessage());
+            }
+            return $this->error('Unable to fetch available beds', 400);
+        }
     }
 }

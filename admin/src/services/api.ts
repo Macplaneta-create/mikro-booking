@@ -389,6 +389,15 @@ export const SettingsAPI = {
             multiplier_double: number;
             multiplier_bunk: number;
             multiplier_children: number;
+            captcha_provider: 'none' | 'recaptcha_v3' | 'hcaptcha';
+            recaptcha_site_key: string;
+            recaptcha_secret_key: string;
+            recaptcha_min_score: number;
+            hcaptcha_site_key: string;
+            hcaptcha_secret_key: string;
+            rate_limit_enabled: boolean;
+            rate_limit_window_seconds: number;
+            rate_limit_max_requests: number;
         };
     },
     update: async (data: {
@@ -401,7 +410,19 @@ export const SettingsAPI = {
         pending_timeout_hours?: number;
         auto_expire_pending?: boolean;
         require_payment_confirmation?: boolean;
+        multiplier_single?: number;
+        multiplier_double?: number;
+        multiplier_bunk?: number;
         multiplier_children?: number;
+        captcha_provider?: 'none' | 'recaptcha_v3' | 'hcaptcha';
+        recaptcha_site_key?: string;
+        recaptcha_secret_key?: string;
+        recaptcha_min_score?: number;
+        hcaptcha_site_key?: string;
+        hcaptcha_secret_key?: string;
+        rate_limit_enabled?: boolean;
+        rate_limit_window_seconds?: number;
+        rate_limit_max_requests?: number;
     }) => {
         const res = await api.post('/settings', data);
         return res.data.data;

@@ -13,7 +13,7 @@ use Tests\Integration\Support\FakeRestRequest;
 
 require_once __DIR__ . '/support/FakeRestRequest.php';
 
-class TestReservationsControllerUpdateEndpoint extends TestCase {
+class ReservationsControllerUpdateEndpointTest extends TestCase {
     public function testUpdateEndpointForwardsBedIdsToService(): void {
         $service = $this->createMock(ReservationService::class);
         $repository = $this->createMock(ReservationRepository::class);

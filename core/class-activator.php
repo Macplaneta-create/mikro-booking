@@ -79,6 +79,15 @@ class Activator {
             'mikroplaneta_booking_pending_timeout_hours' => 48,
             'mikroplaneta_booking_auto_expire_pending' => true,
             'mikroplaneta_booking_require_payment_confirmation' => true,
+            'mikroplaneta_booking_captcha_provider' => 'recaptcha_v3',
+            'mikroplaneta_booking_recaptcha_site_key' => '',
+            'mikroplaneta_booking_recaptcha_secret_key' => '',
+            'mikroplaneta_booking_recaptcha_min_score' => 0.5,
+            'mikroplaneta_booking_hcaptcha_site_key' => '',
+            'mikroplaneta_booking_hcaptcha_secret_key' => '',
+            'mikroplaneta_booking_rate_limit_enabled' => true,
+            'mikroplaneta_booking_rate_limit_window_seconds' => 60,
+            'mikroplaneta_booking_rate_limit_max_requests' => 120,
         ];
         
         foreach ($defaults as $key => $value) {

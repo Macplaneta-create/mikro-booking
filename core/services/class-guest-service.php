@@ -12,6 +12,7 @@ namespace MikroPlaneta\Booking\Core\Services;
 
 use MikroPlaneta\Booking\Core\Repositories\GuestRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationRepository;
+use MikroPlaneta\Booking\Core\Repositories\BedRepository;
 use MikroPlaneta\Booking\Core\Models\Guest;
 
 if (!defined('ABSPATH')) {
@@ -22,16 +23,19 @@ class GuestService {
     
     private GuestRepository $guest_repository;
     private ReservationRepository $reservation_repository;
+    private BedRepository $bed_repository;
     
     /**
      * Constructor
      */
     public function __construct(
         GuestRepository $guest_repository,
-        ReservationRepository $reservation_repository
+        ReservationRepository $reservation_repository,
+        BedRepository $bed_repository
     ) {
         $this->guest_repository = $guest_repository;
         $this->reservation_repository = $reservation_repository;
+        $this->bed_repository = $bed_repository;
     }
     
     /**
@@ -226,10 +230,16 @@ class GuestService {
             $stats['total_nights'] += $reservation->getNights();
             $stats['total_spent'] += $reservation->total_price;
             
-            // Track bed types
-            $bed = $this->guest_repository->find($reservation->bed_id);
-            if ($bed) {
-                $bed_types[$bed->bed_type] = ($bed_types[$bed->bed_type] ?? 0) + 1;
+            // Track bed types from reservation_beds relation.
+            $reservation_bed_ids = is_array($reservation->bed_ids)
+                ? array_values(array_unique(array_map('intval', $reservation->bed_ids)))
+                : [];
+
+            foreach ($reservation_bed_ids as $bed_id) {
+                $bed = $this->bed_repository->find($bed_id);
+                if ($bed) {
+                    $bed_types[$bed->bed_type] = ($bed_types[$bed->bed_type] ?? 0) + 1;
+                }
             }
         }
         
@@ -269,3 +279,4 @@ class GuestService {
         }
     }
 }
+

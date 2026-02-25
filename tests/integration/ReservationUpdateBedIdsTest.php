@@ -17,7 +17,7 @@ use MikroPlaneta\Booking\Core\Services\PricingService;
 use MikroPlaneta\Booking\Core\Services\ReservationService;
 use PHPUnit\Framework\TestCase;
 
-class TestReservationUpdateBedIds extends TestCase {
+class ReservationUpdateBedIdsTest extends TestCase {
     protected function setUp(): void {
         $GLOBALS['__mb_actions'] = [];
     }
@@ -65,10 +65,10 @@ class TestReservationUpdateBedIds extends TestCase {
         $activeBed4 = Bed::fromArray(['id' => 4, 'is_active' => true]);
 
         $reservationRepository
-            ->expects($this->exactly(2))
+            ->expects($this->exactly(3))
             ->method('find')
-            ->withConsecutive([10], [10])
-            ->willReturnOnConsecutiveCalls($existing, $updated);
+            ->withConsecutive([10], [10], [10])
+            ->willReturnOnConsecutiveCalls($existing, $existing, $updated);
 
         $bedRepository
             ->expects($this->atLeast(4))

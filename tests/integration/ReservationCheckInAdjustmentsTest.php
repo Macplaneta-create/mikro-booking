@@ -17,7 +17,7 @@ use MikroPlaneta\Booking\Core\Services\PricingService;
 use MikroPlaneta\Booking\Core\Services\ReservationService;
 use PHPUnit\Framework\TestCase;
 
-class TestReservationCheckInAdjustments extends TestCase {
+class ReservationCheckInAdjustmentsTest extends TestCase {
     protected function setUp(): void {
         $GLOBALS['__mb_actions'] = [];
     }
@@ -69,10 +69,10 @@ class TestReservationCheckInAdjustments extends TestCase {
         $bed4 = Bed::fromArray(['id' => 4, 'is_active' => true]);
 
         $reservationRepository
-            ->expects($this->once())
+            ->expects($this->exactly(2))
             ->method('find')
-            ->with(21)
-            ->willReturn($reservation);
+            ->withConsecutive([21], [21])
+            ->willReturnOnConsecutiveCalls($reservation, $reservation);
 
         $bedRepository
             ->expects($this->atLeast(4))
@@ -148,10 +148,10 @@ class TestReservationCheckInAdjustments extends TestCase {
         ]);
 
         $reservationRepository
-            ->expects($this->once())
+            ->expects($this->exactly(2))
             ->method('find')
-            ->with(22)
-            ->willReturn($reservation);
+            ->withConsecutive([22], [22])
+            ->willReturnOnConsecutiveCalls($reservation, $reservation);
 
         $reservationRepository
             ->expects($this->never())

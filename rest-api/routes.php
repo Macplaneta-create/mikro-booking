@@ -52,6 +52,7 @@ function register_routes(): void {
     $guest_repo = new GuestRepository();
     $pricing_repo = new PricingRepository();
     $res_bed_repo = new ReservationBedRepository();
+    $logs_repo = new \MikroPlaneta\Booking\Core\Repositories\ChangesLogRepository();
     $extra_service_repo = new \MikroPlaneta\Booking\Core\Repositories\ExtraServiceRepository();
     $res_extra_repo = new \MikroPlaneta\Booking\Core\Repositories\ReservationExtraRepository();
     
@@ -62,11 +63,14 @@ function register_routes(): void {
     // Pricing Service needs PricingRepo, BedRepo & RoomRepo
     $pricing_service = new PricingService($pricing_repo, $bed_repo, $room_repo);
     
-    // Guest Service needs GuestRepo & ReservationRepo
-    $guest_service = new GuestService($guest_repo, $reservation_repo);
+    // Guest Service needs GuestRepo, ReservationRepo & BedRepo
+    $guest_service = new GuestService($guest_repo, $reservation_repo, $bed_repo);
     
     // Notification Service (no deps)
     $notification_service = new NotificationService();
+    
+    // Changes logger service
+    $logger_service = new \MikroPlaneta\Booking\Core\Services\LoggerService($logs_repo);
     
     // Extra Service Service
     $extra_service_service = new \MikroPlaneta\Booking\Core\Services\ExtraServiceService(
@@ -84,7 +88,8 @@ function register_routes(): void {
         $pricing_service,
         $res_bed_repo,
         $notification_service,
-        $room_repo
+        $room_repo,
+        $logger_service
     );
     
     // 3. Initialize Controllers & Register Routes
@@ -98,7 +103,7 @@ function register_routes(): void {
     $reservations_controller->register_routes();
 
     // Public Reservations Controller
-    $public_reservations_controller = new PublicReservationsController($reservation_service, $guest_service);
+    $public_reservations_controller = new PublicReservationsController($reservation_service, $guest_service, $availability_service);
     $public_reservations_controller->register_routes();
     
     // Guests Controller
@@ -122,8 +127,6 @@ function register_routes(): void {
     $settings_controller->register_routes();
     
     // Logs Controller
-    $logs_repo = new \MikroPlaneta\Booking\Core\Repositories\ChangesLogRepository();
-    $logger_service = new \MikroPlaneta\Booking\Core\Services\LoggerService($logs_repo);
     $logs_controller = new \MikroPlaneta\Booking\RestApi\Controllers\LogsController($logger_service);
     $logs_controller->register_routes();
 

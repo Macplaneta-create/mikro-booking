@@ -33,6 +33,7 @@ class ReservationService {
     private ReservationBedRepository $reservation_bed_repository;
     private NotificationService $notification_service;
     private RoomRepository $room_repository;
+    private ?LoggerService $logger_service;
     
     /**
      * Constructor
@@ -45,7 +46,8 @@ class ReservationService {
         PricingService $pricing_service,
         ReservationBedRepository $reservation_bed_repository,
         NotificationService $notification_service,
-        RoomRepository $room_repository
+        RoomRepository $room_repository,
+        ?LoggerService $logger_service = null
     ) {
         $this->reservation_repository = $reservation_repository;
         $this->guest_repository = $guest_repository;
@@ -55,6 +57,7 @@ class ReservationService {
         $this->reservation_bed_repository = $reservation_bed_repository;
         $this->notification_service = $notification_service;
         $this->room_repository = $room_repository;
+        $this->logger_service = $logger_service;
     }
     
     /**
@@ -83,56 +86,48 @@ class ReservationService {
         if (!$guest) {
             throw new \Exception('Guest not found');
         }
-        
-        // Validate all beds and check availability
-        $total_price = 0;
-        foreach ($bed_ids as $bed_id) {
-            // Verify bed exists and is active
-            $bed = $this->bed_repository->find($bed_id);
-            if (!$bed || !$bed->is_active) {
-                throw new \Exception("Bed #{$bed_id} not found or inactive");
+
+        $reservation = $this->withBedLocks($bed_ids, function() use ($bed_ids, $data): Reservation {
+            // Validate all beds and check availability under lock
+            $total_price = 0;
+            foreach ($bed_ids as $bed_id) {
+                $bed = $this->bed_repository->find($bed_id);
+                if (!$bed || !$bed->is_active) {
+                    throw new \Exception("Bed #{$bed_id} not found or inactive");
+                }
+
+                if (!$this->availability_service->isBedAvailable(
+                    $bed_id,
+                    $data['check_in'],
+                    $data['check_out']
+                )) {
+                    throw new \Exception("Bed #{$bed_id} is not available for selected dates");
+                }
+
+                $total_price += $this->calculatePrice(
+                    $bed_id,
+                    $data['check_in'],
+                    $data['check_out']
+                );
             }
-            
-            // Check bed availability
-            if (!$this->availability_service->isBedAvailable(
-                $bed_id,
-                $data['check_in'],
-                $data['check_out']
-            )) {
-                throw new \Exception("Bed #{$bed_id} is not available for selected dates");
+
+            $reservation_data = $data;
+            if (!isset($reservation_data['total_price'])) {
+                $reservation_data['total_price'] = $total_price;
             }
-            
-            // Calculate price for this bed
-            $total_price += $this->calculatePrice(
-                $bed_id,
-                $data['check_in'],
-                $data['check_out']
-            );
-        }
-        
-        // Use calculated price if not provided
-        if (!isset($data['total_price'])) {
-            $data['total_price'] = $total_price;
-        }
-        
-        // CRITICAL: Force all reservations to start as PENDING
-        // This ensures they must be explicitly confirmed before finalization
-        $data['status'] = Reservation::STATUS_PENDING;
-        
-        // Remove bed_ids from data before creating reservation
-        unset($data['bed_ids']);
-        
-        // Create reservation
-        $reservation = $this->reservation_repository->create($data);
-        
-        // Link all beds to this reservation
-        $this->reservation_bed_repository->setBedsForReservation(
-            $reservation->id,
-            $bed_ids
-        );
-        
-        // Re-fetch to get beds and updated data
-        $reservation = $this->reservation_repository->find($reservation->id);
+            $reservation_data['status'] = Reservation::STATUS_PENDING;
+            unset($reservation_data['bed_ids']);
+
+            $reservation = $this->reservation_repository->create($reservation_data);
+            $this->reservation_bed_repository->setBedsForReservation($reservation->id, $bed_ids);
+
+            $reloaded = $this->reservation_repository->find($reservation->id);
+            if (!$reloaded) {
+                throw new \Exception('Reservation not found after create');
+            }
+
+            return $reloaded;
+        });
         
         // Send confirmation email if enabled in settings
         $email_notifications = (bool) get_option('mikroplaneta_booking_email_notifications', true);
@@ -160,72 +155,76 @@ class ReservationService {
         if (!$reservation) {
             throw new \Exception('Reservation not found');
         }
-        
-        $normalized_bed_ids = null;
 
-        // If dates or beds are being changed, check availability
-        if (isset($data['check_in']) || isset($data['check_out']) || isset($data['bed_ids'])) {
-            $check_in = $data['check_in'] ?? $reservation->check_in;
-            $check_out = $data['check_out'] ?? $reservation->check_out;
-            $bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($data['bed_ids'] ?? $reservation->bed_ids));
+        $current_bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($reservation->bed_ids));
+        $candidate_bed_ids = isset($data['bed_ids'])
+            ? $this->expandBedsForExclusiveRooms($this->normalizeBedIds($data['bed_ids']))
+            : $current_bed_ids;
+        $lock_bed_ids = array_values(array_unique(array_merge($current_bed_ids, $candidate_bed_ids)));
 
-            if (isset($data['bed_ids'])) {
-                $bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($data['bed_ids']));
-                if (empty($bed_ids)) {
-                    throw new \Exception('At least one bed must be selected');
-                }
-                $normalized_bed_ids = $bed_ids;
+        return $this->withBedLocks($lock_bed_ids, function() use ($id, $data): Reservation {
+            $reservation = $this->reservation_repository->find($id);
+            if (!$reservation) {
+                throw new \Exception('Reservation not found');
             }
-            
-            $this->validateDates($check_in, $check_out);
-            
-            foreach ($bed_ids as $bed_id) {
-                $bed = $this->bed_repository->find((int) $bed_id);
-                if (!$bed || !$bed->is_active) {
-                    throw new \Exception("Bed #{$bed_id} not found or inactive");
+
+            $normalized_bed_ids = null;
+
+            if (isset($data['check_in']) || isset($data['check_out']) || isset($data['bed_ids'])) {
+                $check_in = $data['check_in'] ?? $reservation->check_in;
+                $check_out = $data['check_out'] ?? $reservation->check_out;
+                $bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($data['bed_ids'] ?? $reservation->bed_ids));
+
+                if (isset($data['bed_ids'])) {
+                    $bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($data['bed_ids']));
+                    if (empty($bed_ids)) {
+                        throw new \Exception('At least one bed must be selected');
+                    }
+                    $normalized_bed_ids = $bed_ids;
                 }
 
-                if (!$this->availability_service->isBedAvailable(
-                    (int) $bed_id,
-                    $check_in,
-                    $check_out,
-                    $id // Exclude current reservation
-                )) {
-                    throw new \Exception("Bed #{$bed_id} is not available for selected dates");
+                $this->validateDates($check_in, $check_out);
+
+                foreach ($bed_ids as $bed_id) {
+                    $bed = $this->bed_repository->find((int) $bed_id);
+                    if (!$bed || !$bed->is_active) {
+                        throw new \Exception("Bed #{$bed_id} not found or inactive");
+                    }
+
+                    if (!$this->availability_service->isBedAvailable(
+                        (int) $bed_id,
+                        $check_in,
+                        $check_out,
+                        $id
+                    )) {
+                        throw new \Exception("Bed #{$bed_id} is not available for selected dates");
+                    }
                 }
             }
-        }
 
-        // Validate guests vs effective capacity when any of these fields change.
-        if (isset($data['adults']) || isset($data['children']) || isset($data['bed_ids'])) {
-            $adults = isset($data['adults']) ? max(1, (int) $data['adults']) : (int) $reservation->adults;
-            $children = isset($data['children']) ? max(0, (int) $data['children']) : (int) $reservation->children;
-            $effective_bed_ids = $normalized_bed_ids ?? $this->expandBedsForExclusiveRooms($this->normalizeBedIds($reservation->bed_ids));
-            $this->assertGuestCountFitsCapacity($adults, $children, $effective_bed_ids);
-        }
-        
-        // Store old values for logging
-        $old_data = $reservation->toArray();
-        
-        // Update reservation
-        $updated_reservation = $this->reservation_repository->update($id, $data);
-
-        // Persist bed relation updates when bed_ids were provided
-        if ($normalized_bed_ids !== null) {
-            $this->reservation_bed_repository->setBedsForReservation($id, $normalized_bed_ids);
-            $updated_reservation = $this->reservation_repository->find($id);
-            if (!$updated_reservation) {
-                throw new \Exception('Reservation not found after bed update');
+            if (isset($data['adults']) || isset($data['children']) || isset($data['bed_ids'])) {
+                $adults = isset($data['adults']) ? max(1, (int) $data['adults']) : (int) $reservation->adults;
+                $children = isset($data['children']) ? max(0, (int) $data['children']) : (int) $reservation->children;
+                $effective_bed_ids = $normalized_bed_ids ?? $this->expandBedsForExclusiveRooms($this->normalizeBedIds($reservation->bed_ids));
+                $this->assertGuestCountFitsCapacity($adults, $children, $effective_bed_ids);
             }
-        }
-        
-        // Log changes
-        $this->logChanges($id, $old_data, $updated_reservation->toArray());
-        
-        // Fire WordPress action
-        do_action('mikroplaneta_booking_reservation_updated', $updated_reservation, $old_data);
-        
-        return $updated_reservation;
+
+            $old_data = $reservation->toArray();
+            $updated_reservation = $this->reservation_repository->update($id, $data);
+
+            if ($normalized_bed_ids !== null) {
+                $this->reservation_bed_repository->setBedsForReservation($id, $normalized_bed_ids);
+                $updated_reservation = $this->reservation_repository->find($id);
+                if (!$updated_reservation) {
+                    throw new \Exception('Reservation not found after bed update');
+                }
+            }
+
+            $this->logChanges($id, $old_data, $updated_reservation->toArray());
+            do_action('mikroplaneta_booking_reservation_updated', $updated_reservation, $old_data);
+
+            return $updated_reservation;
+        });
     }
     
     /**
@@ -307,72 +306,87 @@ class ReservationService {
             throw new \Exception('Only pending or confirmed reservations can be checked in');
         }
 
-        // Apply adjustments if provided (e.g., when fewer guests arrived)
-        if (!empty($adjustment)) {
-            $update_data = [];
-            if (isset($adjustment['adults'])) {
-                $update_data['adults'] = max(1, (int) $adjustment['adults']);
-            }
-            if (isset($adjustment['children'])) {
-                $update_data['children'] = max(0, (int) $adjustment['children']);
+        $current_bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($reservation->bed_ids));
+        $candidate_bed_ids = isset($adjustment['bed_ids'])
+            ? $this->expandBedsForExclusiveRooms($this->normalizeBedIds($adjustment['bed_ids']))
+            : $current_bed_ids;
+        $lock_bed_ids = array_values(array_unique(array_merge($current_bed_ids, $candidate_bed_ids)));
+
+        return $this->withBedLocks($lock_bed_ids, function() use ($id, $adjustment): Reservation {
+            $reservation = $this->reservation_repository->find($id);
+            if (!$reservation) {
+                throw new \Exception('Reservation not found');
             }
 
-            $effective_bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($reservation->bed_ids));
-            if (isset($adjustment['bed_ids'])) {
-                $effective_bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($adjustment['bed_ids']));
-                if (empty($effective_bed_ids)) {
-                    throw new \Exception('At least one bed must be selected');
+            if ($reservation->status !== Reservation::STATUS_CONFIRMED && $reservation->status !== Reservation::STATUS_PENDING) {
+                throw new \Exception('Only pending or confirmed reservations can be checked in');
+            }
+
+            if (!empty($adjustment)) {
+                $update_data = [];
+                if (isset($adjustment['adults'])) {
+                    $update_data['adults'] = max(1, (int) $adjustment['adults']);
                 }
-            }
+                if (isset($adjustment['children'])) {
+                    $update_data['children'] = max(0, (int) $adjustment['children']);
+                }
 
-            $effective_adults = $update_data['adults'] ?? $reservation->adults;
-            $effective_children = $update_data['children'] ?? $reservation->children;
-            $this->assertGuestCountFitsCapacity($effective_adults, $effective_children, $effective_bed_ids);
-            
-            if (!empty($update_data)) {
-                $this->reservation_repository->update($id, $update_data);
-            }
-            
-            if (isset($adjustment['bed_ids'])) {
-                foreach ($effective_bed_ids as $bed_id) {
-                    $bed = $this->bed_repository->find($bed_id);
-                    if (!$bed || !$bed->is_active) {
-                        throw new \Exception("Bed #{$bed_id} not found or inactive");
-                    }
-
-                    if (!$this->availability_service->isBedAvailable(
-                        $bed_id,
-                        $reservation->check_in,
-                        $reservation->check_out,
-                        $id
-                    )) {
-                        throw new \Exception("Bed #{$bed_id} is not available for selected dates");
+                $effective_bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($reservation->bed_ids));
+                if (isset($adjustment['bed_ids'])) {
+                    $effective_bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($adjustment['bed_ids']));
+                    if (empty($effective_bed_ids)) {
+                        throw new \Exception('At least one bed must be selected');
                     }
                 }
 
-                $this->reservation_bed_repository->setBedsForReservation($id, $effective_bed_ids);
+                $effective_adults = $update_data['adults'] ?? $reservation->adults;
+                $effective_children = $update_data['children'] ?? $reservation->children;
+                $this->assertGuestCountFitsCapacity($effective_adults, $effective_children, $effective_bed_ids);
+
+                if (!empty($update_data)) {
+                    $this->reservation_repository->update($id, $update_data);
+                }
+
+                if (isset($adjustment['bed_ids'])) {
+                    foreach ($effective_bed_ids as $bed_id) {
+                        $bed = $this->bed_repository->find($bed_id);
+                        if (!$bed || !$bed->is_active) {
+                            throw new \Exception("Bed #{$bed_id} not found or inactive");
+                        }
+
+                        if (!$this->availability_service->isBedAvailable(
+                            $bed_id,
+                            $reservation->check_in,
+                            $reservation->check_out,
+                            $id
+                        )) {
+                            throw new \Exception("Bed #{$bed_id} is not available for selected dates");
+                        }
+                    }
+
+                    $this->reservation_bed_repository->setBedsForReservation($id, $effective_bed_ids);
+                }
+
+                do_action(
+                    'mikroplaneta_booking_reservation_adjusted_during_checkin',
+                    $id,
+                    [
+                        'adults' => $effective_adults,
+                        'children' => $effective_children,
+                        'bed_ids' => $effective_bed_ids,
+                    ]
+                );
             }
 
-            do_action(
-                'mikroplaneta_booking_reservation_adjusted_during_checkin',
-                $id,
-                [
-                    'adults' => $effective_adults,
-                    'children' => $effective_children,
-                    'bed_ids' => $effective_bed_ids,
-                ]
-            );
-        }
-        
-        $reservation->checkIn();
-        $updated = $this->reservation_repository->update($id, [
-            'status' => $reservation->status,
-        ]);
-        
-        // Fire WordPress action
-        do_action('mikroplaneta_booking_guest_checked_in', $updated);
-        
-        return $updated;
+            $reservation->checkIn();
+            $updated = $this->reservation_repository->update($id, [
+                'status' => $reservation->status,
+            ]);
+
+            do_action('mikroplaneta_booking_guest_checked_in', $updated);
+
+            return $updated;
+        });
     }
     
     /**
@@ -557,13 +571,65 @@ class ReservationService {
             return $id > 0;
         })));
     }
+
+    /**
+     * Execute reservation critical section with advisory bed locks and DB transaction.
+     */
+    private function withBedLocks(array $bed_ids, callable $callback) {
+        global $wpdb;
+
+        if (!isset($wpdb) || !is_object($wpdb)) {
+            return $callback();
+        }
+
+        $normalized = $this->normalizeBedIds($bed_ids);
+        sort($normalized);
+
+        $acquired = [];
+
+        try {
+            foreach ($normalized as $bed_id) {
+                $lock_key = 'mikro_booking_bed_' . (int) $bed_id;
+                $locked = (string) $wpdb->get_var(
+                    $wpdb->prepare('SELECT GET_LOCK(%s, %d)', $lock_key, 10)
+                );
+
+                if ($locked !== '1') {
+                    throw new \Exception('Failed to acquire booking lock for bed #' . (int) $bed_id);
+                }
+
+                $acquired[] = $lock_key;
+            }
+
+            $wpdb->query('START TRANSACTION');
+
+            try {
+                $result = $callback();
+                $wpdb->query('COMMIT');
+                return $result;
+            } catch (\Throwable $e) {
+                $wpdb->query('ROLLBACK');
+                throw $e;
+            }
+        } finally {
+            for ($i = count($acquired) - 1; $i >= 0; $i--) {
+                $wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)', $acquired[$i]));
+            }
+        }
+    }
     
     /**
      * Log changes to reservation
      */
     private function logChanges(int $reservation_id, array $old_data, array $new_data): void {
-        // TODO: Implement changes logging to wp_hotel_changes_log table
-        // For now, just fire an action
+        if ($this->logger_service) {
+            try {
+                $this->logger_service->log($reservation_id, 'updated', $old_data, $new_data);
+            } catch (\Throwable $e) {
+                error_log('[MikroBooking] Failed to write reservation change log: ' . $e->getMessage());
+            }
+        }
+
         do_action('mikroplaneta_booking_reservation_changed', $reservation_id, $old_data, $new_data);
     }
 }
