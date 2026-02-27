@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Save, AlertCircle, Building2, Mail, Globe, Shield } from 'lucide-react';
-import { SettingsAPI } from '../services/api';
+import { SettingsAPI, RoomsAPI, type Room } from '../services/api';
 
 interface PluginSettings {
     hotel_name: string;
@@ -25,6 +25,29 @@ interface PluginSettings {
     rate_limit_enabled: boolean;
     rate_limit_window_seconds: number;
     rate_limit_max_requests: number;
+}
+
+interface EmailTemplate {
+    key: string;
+    label: string;
+    subject: string;
+    body: string;
+    default_subject: string;
+    default_body: string;
+}
+
+interface NotificationLogEntry {
+    id: number;
+    template_name: string;
+    status: 'sent' | 'failed' | 'pending';
+    sent_at: string | null;
+    created_at: string;
+    error_message?: string | null;
+    reservation_id?: number | null;
+    guest_id: number;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
 }
 
 const Settings: React.FC = () => {
@@ -57,10 +80,27 @@ const Settings: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [rooms, setRooms] = useState<Room[]>([]);
+    const [roomsLoading, setRoomsLoading] = useState(false);
+    const [shortcodeMode, setShortcodeMode] = useState<'booking' | 'card'>('booking');
+    const [selectedRoomId, setSelectedRoomId] = useState<number>(0);
+    const [shortcodeButtonLabel, setShortcodeButtonLabel] = useState('Rezerwuj');
+    const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
+    const [templatePlaceholders, setTemplatePlaceholders] = useState<string[]>([]);
+    const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>('reservation_confirmation');
+    const [templateSaving, setTemplateSaving] = useState(false);
+    const [templateSaved, setTemplateSaved] = useState(false);
+    const [notificationLog, setNotificationLog] = useState<NotificationLogEntry[]>([]);
+    const [notificationLogLoading, setNotificationLogLoading] = useState(false);
+    const [testEmail, setTestEmail] = useState('');
+    const [sendingTestEmail, setSendingTestEmail] = useState(false);
 
     // Load settings on mount
     useEffect(() => {
         loadSettings();
+        loadRooms();
+        loadEmailTemplates();
+        loadNotificationLog();
     }, []);
 
     const loadSettings = async () => {
@@ -90,6 +130,46 @@ const Settings: React.FC = () => {
         }
     };
 
+    const loadRooms = async () => {
+        try {
+            setRoomsLoading(true);
+            const data = await RoomsAPI.getAll({ status: 'active' });
+            setRooms(data);
+            if (data.length > 0) {
+                setSelectedRoomId(prev => (prev > 0 ? prev : (data[0].id || 0)));
+            }
+        } catch (error) {
+            console.error('Failed to load rooms for shortcode generator:', error);
+        } finally {
+            setRoomsLoading(false);
+        }
+    };
+
+    const loadEmailTemplates = async () => {
+        try {
+            const data = await SettingsAPI.getEmailTemplates();
+            setEmailTemplates(data.templates);
+            setTemplatePlaceholders(data.placeholders || []);
+            if (data.templates.length > 0 && !data.templates.find(t => t.key === selectedTemplateKey)) {
+                setSelectedTemplateKey(data.templates[0].key);
+            }
+        } catch (error) {
+            console.error('Failed to load email templates:', error);
+        }
+    };
+
+    const loadNotificationLog = async () => {
+        try {
+            setNotificationLogLoading(true);
+            const rows = await SettingsAPI.getNotificationsLog(50);
+            setNotificationLog(rows);
+        } catch (error) {
+            console.error('Failed to load notifications log:', error);
+        } finally {
+            setNotificationLogLoading(false);
+        }
+    };
+
     const handleActivate = (e: React.FormEvent) => {
         e.preventDefault();
         if (licenseKey.startsWith('mikro-')) {
@@ -113,6 +193,86 @@ const Settings: React.FC = () => {
         } finally {
             setSaving(false);
         }
+    };
+
+    const generatedShortcode = (() => {
+        if (!selectedRoomId) {
+            return '[mikroplaneta_booking]';
+        }
+
+        if (shortcodeMode === 'booking') {
+            return `[mikroplaneta_booking room_id="${selectedRoomId}"]`;
+        }
+
+        const trimmedLabel = shortcodeButtonLabel.trim();
+        if (trimmedLabel && trimmedLabel !== 'Rezerwuj') {
+            return `[mikroplaneta_booking_card room_id="${selectedRoomId}" button_label="${trimmedLabel}"]`;
+        }
+
+        return `[mikroplaneta_booking_card room_id="${selectedRoomId}"]`;
+    })();
+
+    const selectedTemplate = emailTemplates.find(t => t.key === selectedTemplateKey) || emailTemplates[0] || null;
+
+    const updateSelectedTemplate = (patch: Partial<EmailTemplate>) => {
+        if (!selectedTemplate) return;
+        setEmailTemplates(prev => prev.map(t => t.key === selectedTemplate.key ? { ...t, ...patch } : t));
+    };
+
+    const saveEmailTemplates = async () => {
+        try {
+            setTemplateSaving(true);
+            await SettingsAPI.updateEmailTemplates(
+                emailTemplates.map(t => ({ key: t.key, subject: t.subject, body: t.body }))
+            );
+            setTemplateSaved(true);
+            setTimeout(() => setTemplateSaved(false), 3000);
+            await loadEmailTemplates();
+        } catch (error) {
+            console.error('Failed to save email templates:', error);
+            alert('Błąd przy zapisywaniu szablonów email');
+        } finally {
+            setTemplateSaving(false);
+        }
+    };
+
+    const sendTestEmail = async () => {
+        if (!selectedTemplate) return;
+        const to = testEmail.trim();
+        if (!to) {
+            alert('Podaj adres email do testu.');
+            return;
+        }
+        try {
+            setSendingTestEmail(true);
+            await SettingsAPI.sendTestEmail(selectedTemplate.key, to);
+            alert('Wysłano testową wiadomość.');
+        } catch (error) {
+            console.error('Failed to send test email:', error);
+            alert('Nie udało się wysłać maila testowego.');
+        } finally {
+            setSendingTestEmail(false);
+        }
+    };
+
+    const previewHtml = (template: EmailTemplate | null): string => {
+        if (!template) return '';
+        const replacements: Record<string, string> = {
+            '{{guest_name}}': 'Jan Kowalski',
+            '{{guest_email}}': 'jan@example.com',
+            '{{reservation_id}}': '1001',
+            '{{check_in}}': '10.03.2026',
+            '{{check_out}}': '12.03.2026',
+            '{{nights}}': '2',
+            '{{total_price}}': '799.00',
+            '{{hotel_name}}': settings.hotel_name || 'Mój Hotel',
+            '{{home_url}}': window.location.origin,
+            '{{reason}}': 'Przykładowy powód',
+        };
+        return Object.entries(replacements).reduce(
+            (acc, [token, value]) => acc.split(token).join(value),
+            template.body || ''
+        );
     };
 
     return (
@@ -241,6 +401,153 @@ const Settings: React.FC = () => {
                         </div>
                     </form>
                 )}
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Mail className="text-brand-600" size={20} />
+                    Powiadomienia Email
+                </h3>
+                <p className="text-gray-600 mb-6 text-sm">
+                    Edytuj wiadomości wysyłane do gości i sprawdzaj historię wysyłek.
+                </p>
+
+                <div className="grid grid-cols-1 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Typ wiadomości</label>
+                        <select
+                            value={selectedTemplate?.key || ''}
+                            onChange={(e) => setSelectedTemplateKey(e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                        >
+                            {emailTemplates.map((template) => (
+                                <option key={template.key} value={template.key}>
+                                    {template.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Temat wiadomości</label>
+                        <input
+                            type="text"
+                            value={selectedTemplate?.subject || ''}
+                            onChange={(e) => updateSelectedTemplate({ subject: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                            placeholder="Temat emaila"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Treść wiadomości (HTML)</label>
+                        <textarea
+                            value={selectedTemplate?.body || ''}
+                            onChange={(e) => updateSelectedTemplate({ body: e.target.value })}
+                            className="w-full min-h-[220px] px-4 py-3 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-mono text-xs"
+                            placeholder="Treść HTML wiadomości"
+                        />
+                    </div>
+
+                    <div>
+                        <p className="text-xs text-gray-500 mb-2">
+                            Dostępne znaczniki: {templatePlaceholders.join(', ')}
+                        </p>
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 max-h-60 overflow-auto">
+                            <div className="text-xs font-semibold text-gray-600 mb-2">Podgląd HTML (przykładowe dane)</div>
+                            <div
+                                className="prose prose-sm max-w-none"
+                                dangerouslySetInnerHTML={{ __html: previewHtml(selectedTemplate) }}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="flex gap-2">
+                            <input
+                                type="email"
+                                value={testEmail}
+                                onChange={(e) => setTestEmail(e.target.value)}
+                                placeholder="adres@email.pl"
+                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                            />
+                            <button
+                                type="button"
+                                onClick={sendTestEmail}
+                                disabled={sendingTestEmail || !selectedTemplate}
+                                className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition disabled:opacity-50"
+                            >
+                                {sendingTestEmail ? 'Wysyłanie...' : 'Wyślij test'}
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2 justify-start md:justify-end">
+                            <button
+                                type="button"
+                                onClick={saveEmailTemplates}
+                                disabled={templateSaving || emailTemplates.length === 0}
+                                className="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700 transition disabled:opacity-50"
+                            >
+                                <Save className="inline-block mr-2" size={16} />
+                                {templateSaving ? 'Zapisywanie...' : 'Zapisz szablony'}
+                            </button>
+                            {templateSaved && (
+                                <span className="text-green-600 text-sm flex items-center gap-1">
+                                    <AlertCircle size={16} />
+                                    Zapisano
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-gray-200">
+                    <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-bold text-gray-900">Historia wysyłek</h4>
+                        <button
+                            type="button"
+                            onClick={loadNotificationLog}
+                            className="text-xs bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-gray-500 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm"
+                        >
+                            Odśwież
+                        </button>
+                    </div>
+
+                    {notificationLogLoading ? (
+                        <p className="text-sm text-gray-500">Ładowanie historii...</p>
+                    ) : notificationLog.length === 0 ? (
+                        <p className="text-sm text-gray-500">Brak wpisów historii powiadomień.</p>
+                    ) : (
+                        <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                            <table className="min-w-full text-sm">
+                                <thead className="bg-gray-50 text-gray-600">
+                                    <tr>
+                                        <th className="text-left p-2 font-semibold">Data</th>
+                                        <th className="text-left p-2 font-semibold">Typ</th>
+                                        <th className="text-left p-2 font-semibold">Odbiorca</th>
+                                        <th className="text-left p-2 font-semibold">Status</th>
+                                        <th className="text-left p-2 font-semibold">Rezerwacja</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {notificationLog.map((row) => (
+                                        <tr key={row.id} className="border-t border-gray-100">
+                                            <td className="p-2 text-gray-700">{row.sent_at || row.created_at}</td>
+                                            <td className="p-2 text-gray-700">{row.template_name}</td>
+                                            <td className="p-2 text-gray-700">
+                                                {row.first_name || ''} {row.last_name || ''} {row.email ? `(${row.email})` : ''}
+                                            </td>
+                                            <td className={`p-2 font-medium ${row.status === 'sent' ? 'text-green-600' : row.status === 'failed' ? 'text-red-600' : 'text-amber-600'}`}>
+                                                {row.status}
+                                                {row.status === 'failed' && row.error_message ? `: ${row.error_message}` : ''}
+                                            </td>
+                                            <td className="p-2 text-gray-700">{row.reservation_id ? `#${row.reservation_id}` : '-'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
@@ -631,6 +938,72 @@ const Settings: React.FC = () => {
                         <div className="w-1.5 h-1.5 rounded-full bg-brand-400"></div>
                         Obsługuje Elementor
                     </div>
+                </div>
+
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                    <h4 className="text-sm font-bold text-gray-900 mb-3">Generator shortcode dla domków/pokoi</h4>
+                    <p className="text-xs text-gray-500 mb-3">1. Wybierz domek/pokój. 2. Wybierz typ shortcode. 3. Kliknij Kopiuj. 4. Wklej na stronie w bloku „Shortcode”.</p>
+
+                    {roomsLoading ? (
+                        <p className="text-xs text-gray-500">Ładowanie pokoi...</p>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Domek / Pokój</label>
+                                    <select
+                                        value={selectedRoomId}
+                                        onChange={(e) => setSelectedRoomId(parseInt(e.target.value, 10) || 0)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                    >
+                                        {rooms.length === 0 && <option value={0}>Brak aktywnych pokoi</option>}
+                                        {rooms.map((room) => (
+                                            <option key={room.id} value={room.id}>
+                                                #{room.id} - {room.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Typ shortcode</label>
+                                    <select
+                                        value={shortcodeMode}
+                                        onChange={(e) => setShortcodeMode(e.target.value as 'booking' | 'card')}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                    >
+                                        <option value="booking">Formularz rezerwacji</option>
+                                        <option value="card">Karta + formularz</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {shortcodeMode === 'card' && (
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Tekst przycisku (opcjonalnie)</label>
+                                    <input
+                                        type="text"
+                                        value={shortcodeButtonLabel}
+                                        onChange={(e) => setShortcodeButtonLabel(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                        placeholder="Rezerwuj"
+                                    />
+                                </div>
+                            )}
+
+                            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex items-center justify-between">
+                                <code className="text-brand-700 font-bold font-mono text-sm break-all mr-3">{generatedShortcode}</code>
+                                <button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(generatedShortcode);
+                                        alert('Skopiowano shortcode!');
+                                    }}
+                                    className="text-xs bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-gray-500 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm shrink-0"
+                                >
+                                    Kopiuj
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

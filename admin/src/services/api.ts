@@ -430,6 +430,57 @@ export const SettingsAPI = {
     triggerCron: async () => {
         const res = await api.post('/settings/trigger-cron');
         return res.data;
+    },
+    getEmailTemplates: async () => {
+        const res = await api.get('/settings/email-templates');
+        return res.data.data as {
+            templates: Array<{
+                key: string;
+                label: string;
+                subject: string;
+                body: string;
+                default_subject: string;
+                default_body: string;
+            }>;
+            placeholders: string[];
+        };
+    },
+    updateEmailTemplates: async (templates: Array<{ key: string; subject: string; body: string }>) => {
+        const res = await api.post('/settings/email-templates', { templates });
+        return res.data.data as {
+            message: string;
+            templates: {
+                templates: Array<{
+                    key: string;
+                    label: string;
+                    subject: string;
+                    body: string;
+                    default_subject: string;
+                    default_body: string;
+                }>;
+                placeholders: string[];
+            };
+        };
+    },
+    getNotificationsLog: async (limit = 100) => {
+        const res = await api.get('/settings/notifications-log', { params: { limit } });
+        return res.data.data as Array<{
+            id: number;
+            template_name: string;
+            status: 'sent' | 'failed' | 'pending';
+            sent_at: string | null;
+            created_at: string;
+            error_message?: string | null;
+            reservation_id?: number | null;
+            guest_id: number;
+            first_name?: string;
+            last_name?: string;
+            email?: string;
+        }>;
+    },
+    sendTestEmail: async (template_key: string, to_email: string) => {
+        const res = await api.post('/settings/test-email', { template_key, to_email });
+        return res.data.data as { message: string };
     }
 };
 

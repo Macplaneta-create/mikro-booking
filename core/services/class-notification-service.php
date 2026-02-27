@@ -12,29 +12,41 @@ namespace MikroPlaneta\Booking\Core\Services;
 
 use MikroPlaneta\Booking\Core\Models\Reservation;
 use MikroPlaneta\Booking\Core\Models\Guest;
+use MikroPlaneta\Booking\Core\Database\Schema;
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
 class NotificationService {
+    private const TEMPLATE_DEFINITIONS = [
+        'reservation_confirmation' => 'Potwierdzenie rezerwacji',
+        'reservation_cancellation' => 'Anulowanie rezerwacji',
+        'checkin_reminder' => 'Przypomnienie o zameldowaniu',
+        'checkout_reminder' => 'Przypomnienie o wymeldowaniu',
+    ];
+
+    private ?bool $notifications_table_available = null;
     
     /**
      * Send reservation confirmation email
      */
     public function sendReservationConfirmation(Reservation $reservation, Guest $guest): bool {
-        $subject = sprintf(
-            __('Reservation Confirmation - %s', 'mikroplaneta-booking'),
-            get_bloginfo('name')
-        );
-        
-        $message = $this->getReservationConfirmationTemplate($reservation, $guest);
+        [$subject, $message] = $this->resolveTemplate('reservation_confirmation', $reservation, $guest);
         
         $sent = wp_mail(
             $guest->email,
             $subject,
             $message,
             $this->getEmailHeaders()
+        );
+
+        $this->logNotification(
+            'reservation_confirmation',
+            $reservation,
+            $guest,
+            $sent,
+            $sent ? '' : 'wp_mail() returned false'
         );
         
         if ($sent) {
@@ -48,18 +60,23 @@ class NotificationService {
      * Send reservation cancellation email
      */
     public function sendReservationCancellation(Reservation $reservation, Guest $guest, string $reason = ''): bool {
-        $subject = sprintf(
-            __('Reservation Cancelled - %s', 'mikroplaneta-booking'),
-            get_bloginfo('name')
-        );
-        
-        $message = $this->getReservationCancellationTemplate($reservation, $guest, $reason);
+        [$subject, $message] = $this->resolveTemplate('reservation_cancellation', $reservation, $guest, [
+            'reason' => $reason,
+        ]);
         
         $sent = wp_mail(
             $guest->email,
             $subject,
             $message,
             $this->getEmailHeaders()
+        );
+
+        $this->logNotification(
+            'reservation_cancellation',
+            $reservation,
+            $guest,
+            $sent,
+            $sent ? '' : 'wp_mail() returned false'
         );
         
         if ($sent) {
@@ -73,18 +90,21 @@ class NotificationService {
      * Send check-in reminder
      */
     public function sendCheckInReminder(Reservation $reservation, Guest $guest): bool {
-        $subject = sprintf(
-            __('Check-in Reminder - %s', 'mikroplaneta-booking'),
-            get_bloginfo('name')
-        );
-        
-        $message = $this->getCheckInReminderTemplate($reservation, $guest);
+        [$subject, $message] = $this->resolveTemplate('checkin_reminder', $reservation, $guest);
         
         $sent = wp_mail(
             $guest->email,
             $subject,
             $message,
             $this->getEmailHeaders()
+        );
+
+        $this->logNotification(
+            'checkin_reminder',
+            $reservation,
+            $guest,
+            $sent,
+            $sent ? '' : 'wp_mail() returned false'
         );
         
         if ($sent) {
@@ -98,12 +118,7 @@ class NotificationService {
      * Send check-out reminder
      */
     public function sendCheckOutReminder(Reservation $reservation, Guest $guest): bool {
-        $subject = sprintf(
-            __('Check-out Reminder - %s', 'mikroplaneta-booking'),
-            get_bloginfo('name')
-        );
-        
-        $message = $this->getCheckOutReminderTemplate($reservation, $guest);
+        [$subject, $message] = $this->resolveTemplate('checkout_reminder', $reservation, $guest);
         
         $sent = wp_mail(
             $guest->email,
@@ -111,12 +126,298 @@ class NotificationService {
             $message,
             $this->getEmailHeaders()
         );
+
+        $this->logNotification(
+            'checkout_reminder',
+            $reservation,
+            $guest,
+            $sent,
+            $sent ? '' : 'wp_mail() returned false'
+        );
         
         if ($sent) {
             do_action('mikroplaneta_booking_notification_sent', 'checkout_reminder', $reservation, $guest);
         }
         
         return $sent;
+    }
+
+    /**
+     * Get editable template definitions for admin UI
+     */
+    public function getTemplateDefinitions(): array {
+        $guest = new Guest([
+            'id' => 1,
+            'first_name' => 'Jan',
+            'last_name' => 'Kowalski',
+            'email' => 'jan@example.com',
+        ]);
+        $reservation = new Reservation([
+            'id' => 1001,
+            'guest_id' => 1,
+            'check_in' => date('Y-m-d', strtotime('+7 days')),
+            'check_out' => date('Y-m-d', strtotime('+10 days')),
+            'total_price' => 999.99,
+            'adults' => 2,
+            'children' => 1,
+            'notes' => 'Pokój z widokiem.',
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        $templates = [];
+        foreach (self::TEMPLATE_DEFINITIONS as $key => $label) {
+            $default_subject = $this->getDefaultSubject($key);
+            $default_body = $this->getDefaultBody($key, $reservation, $guest, [
+                'reason' => 'Przykładowy powód anulowania.',
+            ]);
+
+            $subject = (string) get_option(
+                "mikroplaneta_booking_email_subject_{$key}",
+                $default_subject
+            );
+            $body = (string) get_option(
+                "mikroplaneta_booking_email_body_{$key}",
+                $default_body
+            );
+
+            $templates[] = [
+                'key' => $key,
+                'label' => $label,
+                'subject' => $subject,
+                'body' => $body,
+                'default_subject' => $default_subject,
+                'default_body' => $default_body,
+            ];
+        }
+
+        return [
+            'templates' => $templates,
+            'placeholders' => array_keys($this->buildPlaceholders($reservation, $guest, ['reason' => 'Powód'])),
+        ];
+    }
+
+    /**
+     * Persist templates from admin UI
+     */
+    public function saveTemplateDefinitions(array $templates): void {
+        foreach ($templates as $template) {
+            $key = sanitize_key((string) ($template['key'] ?? ''));
+            if (!array_key_exists($key, self::TEMPLATE_DEFINITIONS)) {
+                continue;
+            }
+
+            $subject = sanitize_text_field((string) ($template['subject'] ?? ''));
+            $body = wp_kses_post((string) ($template['body'] ?? ''));
+
+            $default_subject = $this->getDefaultSubject($key);
+            $default_body = $this->getDefaultBody(
+                $key,
+                new Reservation([
+                    'id' => 1,
+                    'guest_id' => 1,
+                    'check_in' => date('Y-m-d', strtotime('+1 day')),
+                    'check_out' => date('Y-m-d', strtotime('+2 days')),
+                    'total_price' => 100,
+                ]),
+                new Guest([
+                    'id' => 1,
+                    'first_name' => 'Jan',
+                    'last_name' => 'Kowalski',
+                    'email' => 'jan@example.com',
+                ]),
+                ['reason' => '']
+            );
+
+            if ($subject === '' || $subject === $default_subject) {
+                delete_option("mikroplaneta_booking_email_subject_{$key}");
+            } else {
+                update_option("mikroplaneta_booking_email_subject_{$key}", $subject);
+            }
+
+            if ($body === '' || $body === $default_body) {
+                delete_option("mikroplaneta_booking_email_body_{$key}");
+            } else {
+                update_option("mikroplaneta_booking_email_body_{$key}", $body);
+            }
+        }
+    }
+
+    /**
+     * Send test email for selected template
+     */
+    public function sendTestEmail(string $template_key, string $to_email): bool {
+        if (!array_key_exists($template_key, self::TEMPLATE_DEFINITIONS)) {
+            return false;
+        }
+
+        $guest = new Guest([
+            'id' => 0,
+            'first_name' => 'Test',
+            'last_name' => 'Klient',
+            'email' => $to_email,
+        ]);
+        $reservation = new Reservation([
+            'id' => 9999,
+            'guest_id' => 0,
+            'check_in' => date('Y-m-d', strtotime('+5 days')),
+            'check_out' => date('Y-m-d', strtotime('+7 days')),
+            'total_price' => 555.0,
+            'adults' => 2,
+            'children' => 0,
+            'status' => Reservation::STATUS_CONFIRMED,
+        ]);
+
+        [$subject, $message] = $this->resolveTemplate($template_key, $reservation, $guest, [
+            'reason' => 'To jest testowa wiadomość.',
+        ]);
+
+        return wp_mail($to_email, $subject, $message, $this->getEmailHeaders());
+    }
+
+    /**
+     * Read recent notifications history
+     */
+    public function getNotificationHistory(int $limit = 100): array {
+        if (!$this->isNotificationsTableAvailable()) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $limit = max(1, min(500, $limit));
+        $table = Schema::get_table_name('notifications');
+        $guests_table = Schema::get_table_name('guests');
+
+        $sql = $wpdb->prepare(
+            "SELECT n.id, n.template_name, n.status, n.sent_at, n.created_at, n.error_message, n.reservation_id, n.guest_id,
+                    g.first_name, g.last_name, g.email
+             FROM {$table} n
+             LEFT JOIN {$guests_table} g ON g.id = n.guest_id
+             ORDER BY n.created_at DESC
+             LIMIT %d",
+            $limit
+        );
+
+        return $wpdb->get_results($sql, ARRAY_A) ?: [];
+    }
+
+    /**
+     * Resolve template subject/body, with option overrides and placeholders
+     *
+     * @return array{0:string,1:string}
+     */
+    private function resolveTemplate(string $template_key, Reservation $reservation, Guest $guest, array $context = []): array {
+        $default_subject = $this->getDefaultSubject($template_key);
+        $default_body = $this->getDefaultBody($template_key, $reservation, $guest, $context);
+
+        $subject = (string) get_option(
+            "mikroplaneta_booking_email_subject_{$template_key}",
+            $default_subject
+        );
+        $body = (string) get_option(
+            "mikroplaneta_booking_email_body_{$template_key}",
+            $default_body
+        );
+
+        $placeholders = $this->buildPlaceholders($reservation, $guest, $context);
+
+        return [
+            strtr($subject, $placeholders),
+            strtr($body, $placeholders),
+        ];
+    }
+
+    private function getDefaultSubject(string $template_key): string {
+        switch ($template_key) {
+            case 'reservation_confirmation':
+                return sprintf(__('Reservation Confirmation - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+            case 'reservation_cancellation':
+                return sprintf(__('Reservation Cancelled - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+            case 'checkin_reminder':
+                return sprintf(__('Check-in Reminder - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+            case 'checkout_reminder':
+                return sprintf(__('Check-out Reminder - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+            default:
+                return sprintf(__('Reservation Message - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+        }
+    }
+
+    private function getDefaultBody(string $template_key, Reservation $reservation, Guest $guest, array $context = []): string {
+        switch ($template_key) {
+            case 'reservation_confirmation':
+                return $this->getReservationConfirmationTemplate($reservation, $guest);
+            case 'reservation_cancellation':
+                return $this->getReservationCancellationTemplate(
+                    $reservation,
+                    $guest,
+                    (string) ($context['reason'] ?? '')
+                );
+            case 'checkin_reminder':
+                return $this->getCheckInReminderTemplate($reservation, $guest);
+            case 'checkout_reminder':
+                return $this->getCheckOutReminderTemplate($reservation, $guest);
+            default:
+                return $this->getReservationConfirmationTemplate($reservation, $guest);
+        }
+    }
+
+    private function buildPlaceholders(Reservation $reservation, Guest $guest, array $context = []): array {
+        $reason = (string) ($context['reason'] ?? '');
+        return [
+            '{{guest_name}}' => esc_html($guest->getFullName()),
+            '{{guest_email}}' => esc_html($guest->email),
+            '{{reservation_id}}' => (string) intval($reservation->id),
+            '{{check_in}}' => esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_in))),
+            '{{check_out}}' => esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_out))),
+            '{{nights}}' => (string) intval($reservation->getNights()),
+            '{{total_price}}' => esc_html(number_format((float) $reservation->total_price, 2)),
+            '{{hotel_name}}' => esc_html(get_bloginfo('name')),
+            '{{home_url}}' => esc_url(home_url()),
+            '{{reason}}' => nl2br(esc_html($reason)),
+        ];
+    }
+
+    private function logNotification(
+        string $template_name,
+        Reservation $reservation,
+        Guest $guest,
+        bool $sent,
+        string $error_message = ''
+    ): void {
+        if (!$this->isNotificationsTableAvailable()) {
+            return;
+        }
+
+        if ((int) $guest->id <= 0) {
+            return;
+        }
+
+        global $wpdb;
+        $table = Schema::get_table_name('notifications');
+
+        $wpdb->insert($table, [
+            'reservation_id' => ($reservation->id > 0 ? (int) $reservation->id : null),
+            'guest_id' => (int) $guest->id,
+            'channel' => 'email',
+            'template_name' => $template_name,
+            'status' => $sent ? 'sent' : 'failed',
+            'sent_at' => $sent ? current_time('mysql') : null,
+            'error_message' => $sent ? null : sanitize_text_field($error_message),
+            'created_at' => current_time('mysql'),
+        ]);
+    }
+
+    private function isNotificationsTableAvailable(): bool {
+        if ($this->notifications_table_available !== null) {
+            return $this->notifications_table_available;
+        }
+
+        global $wpdb;
+        $table = Schema::get_table_name('notifications');
+        $found = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        $this->notifications_table_available = ($found === $table);
+
+        return $this->notifications_table_available;
     }
     
     /**

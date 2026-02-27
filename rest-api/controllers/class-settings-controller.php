@@ -11,6 +11,7 @@
 namespace MikroPlaneta\Booking\RestApi\Controllers;
 
 use MikroPlaneta\Booking\RestApi\RestController;
+use MikroPlaneta\Booking\Core\Services\NotificationService;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -69,6 +70,48 @@ class SettingsController extends RestController {
                 'methods' => 'POST',
                 'callback' => [$this, 'trigger_cron'],
                 'permission_callback' => [$this, 'check_permission'],
+            ],
+        ]);
+
+        // Email templates settings
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/email-templates', [
+            [
+                'methods' => 'GET',
+                'callback' => [$this, 'get_email_templates'],
+                'permission_callback' => [$this, 'check_permission'],
+            ],
+            [
+                'methods' => 'POST',
+                'callback' => [$this, 'update_email_templates'],
+                'permission_callback' => [$this, 'check_permission'],
+                'args' => [
+                    'templates' => ['type' => 'array', 'required' => true],
+                ],
+            ],
+        ]);
+
+        // Notifications delivery log
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/notifications-log', [
+            [
+                'methods' => 'GET',
+                'callback' => [$this, 'get_notifications_log'],
+                'permission_callback' => [$this, 'check_permission'],
+                'args' => [
+                    'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 500],
+                ],
+            ],
+        ]);
+
+        // Test email sending
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/test-email', [
+            [
+                'methods' => 'POST',
+                'callback' => [$this, 'send_test_email'],
+                'permission_callback' => [$this, 'check_permission'],
+                'args' => [
+                    'template_key' => ['type' => 'string', 'required' => true],
+                    'to_email' => ['type' => 'string', 'required' => true],
+                ],
             ],
         ]);
     }
@@ -238,6 +281,63 @@ class SettingsController extends RestController {
         } catch (\Exception $e) {
             return $this->error($e->getMessage());
         }
+    }
+
+    /**
+     * Get email templates configuration
+     */
+    public function get_email_templates(WP_REST_Request $request): WP_REST_Response {
+        $service = new NotificationService();
+        return $this->success($service->getTemplateDefinitions());
+    }
+
+    /**
+     * Save email templates configuration
+     */
+    public function update_email_templates(WP_REST_Request $request): WP_REST_Response {
+        $templates = $request->get_param('templates');
+        if (!is_array($templates)) {
+            return $this->error('Nieprawidłowe dane templates', 400);
+        }
+
+        $service = new NotificationService();
+        $service->saveTemplateDefinitions($templates);
+
+        return $this->success([
+            'message' => 'Szablony wiadomości zapisane.',
+            'templates' => $service->getTemplateDefinitions(),
+        ]);
+    }
+
+    /**
+     * Get notifications log entries
+     */
+    public function get_notifications_log(WP_REST_Request $request): WP_REST_Response {
+        $limit = (int) ($request->get_param('limit') ?: 100);
+        $service = new NotificationService();
+        $rows = $service->getNotificationHistory($limit);
+        return $this->success($rows);
+    }
+
+    /**
+     * Send test email
+     */
+    public function send_test_email(WP_REST_Request $request): WP_REST_Response {
+        $template_key = sanitize_key((string) $request->get_param('template_key'));
+        $to_email = sanitize_email((string) $request->get_param('to_email'));
+
+        if (!$to_email || !is_email($to_email)) {
+            return $this->error('Nieprawidłowy adres email', 400);
+        }
+
+        $service = new NotificationService();
+        $sent = $service->sendTestEmail($template_key, $to_email);
+
+        if (!$sent) {
+            return $this->error('Nie udało się wysłać maila testowego', 500);
+        }
+
+        return $this->success(['message' => 'Wysłano mail testowy.']);
     }
 
     /**
