@@ -1,8 +1,8 @@
 # 📝 TODO - MikroPlaneta Booking Development Roadmap
 
-**Last Updated:** 2026-02-19  
+**Last Updated:** 2026-02-27  
 **Status:** In Production (Ongoing Development)
-**Latest Achievement:** ✅ Calendar turnover clickability & segment rendering (v1.0.6)
+**Latest Achievement:** ✅ Email template editor + test email + delivery log in admin settings
 
 ---
 
@@ -216,6 +216,71 @@ docs/LICENSE.md                                 (NEW)
 
 ---
 
+### 🆕 6A. Płatności Rezerwacji (Nowy priorytet)
+**Priority:** HIGH  
+**Current:** Brak pełnego workflow płatności online i statusów płatności
+
+**Tasks:**
+- [ ] Dodać model/status płatności do rezerwacji
+  - [ ] `payment_status` (unpaid / partially_paid / paid / refunded)
+  - [ ] `payment_method` (cash / transfer / card / online)
+  - [ ] `amount_paid`, `amount_due`, `paid_at`
+- [ ] REST API płatności
+  - [ ] `POST /reservations/{id}/payments` (rejestracja wpłaty)
+  - [ ] `GET /reservations/{id}/payments` (historia wpłat)
+- [ ] UI recepcji
+  - [ ] Sekcja „Płatności” w modalu rezerwacji
+  - [ ] Akcja „Oznacz jako opłacona” + częściowa wpłata
+- [ ] Integracja online (etap 2)
+  - [ ] Stripe/Przelewy24/PayU (wybór dostawcy)
+  - [ ] Link do płatności dla klienta
+  - [ ] Webhook aktualizujący status rezerwacji
+
+---
+
+### 🆕 6B. Powiadomienia Mailowe do Klientów (Rozszerzenie)
+**Priority:** HIGH  
+**Current:** Rozszerzone o panel administracyjny (szablony + test + historia wysyłek)
+
+**Tasks:**
+- [ ] Uporządkować i domknąć scenariusze mailowe
+  - [ ] Potwierdzenie utworzenia rezerwacji
+  - [ ] Potwierdzenie płatności (po wpłacie online/manualnej)
+  - [ ] Przypomnienie o płatności (dla nieopłaconych)
+  - [ ] Przypomnienie o przyjeździe (24h)
+  - [ ] Informacja o zmianie/anulowaniu
+- [ ] Dodać ustawienia i kontrolę wysyłki
+  - [ ] Włącz/wyłącz typy maili w Settings
+  - [x] Edycja tematu i treści szablonów ✅ 2026-02-27
+  - [x] Testowy mail z panelu admin ✅ 2026-02-27
+- [ ] Audyt i śledzenie
+  - [x] Log wysłanych maili per rezerwacja ✅ 2026-02-27
+  - [x] Status doręczenia (na poziomie aplikacji: wysłane/błąd) ✅ 2026-02-27
+  - [ ] Filtry logu (status / typ / zakres dat)
+  - [ ] Retry dla wiadomości `failed`
+
+---
+
+## 🧭 Next Focus (Po dzisiejszym wdrożeniu)
+
+### 1. Płatności rezerwacji (najwyższy priorytet)
+- [ ] Dodać tabelę płatności i model danych (wpłaty cząstkowe, metoda, status)
+- [ ] Endpointy REST `GET/POST /reservations/{id}/payments`
+- [ ] UI recepcji: sekcja Płatności w modalu rezerwacji
+- [ ] Powiązać statusy płatności z wysyłką maili (potwierdzenie wpłaty, przypomnienie)
+
+### 2. Frontend sprzedażowy (karty pokoi/domków + CTA)
+- [ ] Domknąć shortcode card flow dla domków (spójne CTA „Sprawdź dostępność / Rezerwuj”)
+- [ ] Ujednolicić dane prezentacyjne: łóżka informacyjne + pojemność miejsc
+- [ ] Dodać prostą telemetrię konwersji (klik CTA -> utworzenie rezerwacji)
+
+### 3. Stabilizacja i jakość przed publikacją
+- [ ] Testy integracyjne: pricing + reservations + notifications
+- [ ] PHPCS/ESLint cleanup dla standardów WP.org
+- [ ] Smoke test checklist (admin + frontend + cron + email)
+
+---
+
 ## 🟡 MEDIUM PRIORITY
 
 ### ❌ 7. Unit & Integration Tests
@@ -294,6 +359,12 @@ admin/package.json                              (UPDATE - add lint script)
 
 ### ❌ 9. Documentation Tasks
 **Tasks:**
+- [ ] WordPress.org release docs (wymagane)
+  - [ ] `readme.txt` zgodny ze standardem WordPress.org
+  - [ ] `README.md` dla GitHub (developer-focused)
+  - [ ] `CHANGELOG.md` (semver + migration notes)
+  - [ ] `LICENSE` (GPLv2+)
+  - [ ] `assets/` dla repo WP (banner, icon, screenshots)
 - [ ] API Documentation (OpenAPI/Swagger)
   - [ ] File: `docs/openapi.yaml`
   - [ ] All endpoints documented
@@ -424,5 +495,5 @@ docs/adr/001-rest-api-design.md                 (NEW)
 
 ---
 
-**Last Updated:** 2026-02-19  
-**Next Review:** 2026-02-26
+**Last Updated:** 2026-02-27  
+**Next Review:** 2026-03-06
