@@ -49,6 +49,8 @@ interface CalendarGridProps {
     onBookingClick: (reservation: Reservation) => void;
 }
 
+const FIRST_COLUMN_CLASS = 'w-48 min-w-48 max-w-48 flex-none';
+
 const CalendarGrid: React.FC<CalendarGridProps> = ({
     rooms,
     bookings,
@@ -71,7 +73,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
             <div className="min-w-[1200px]">
                 {/* Day headers */}
                 <div className="flex border-b border-gray-200 sticky top-0 bg-white z-20 shadow-sm">
-                    <div className="w-48 p-3 font-semibold text-gray-500 bg-gray-50 border-r border-gray-200 sticky left-0 z-20 flex items-center">
+                    <div className={`${FIRST_COLUMN_CLASS} p-3 font-semibold text-gray-500 bg-gray-50 border-r border-gray-200 sticky left-0 z-20 flex items-center`}>
                         Pokoje i Łóżka
                     </div>
                     {days.map((day, index) => (
@@ -79,9 +81,9 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                             key={day.toString()}
                             className={`flex-1 min-w-[80px] p-2 text-center border-r border-gray-100 ${
                                 isWeekendDay(day)
-                                    ? 'bg-amber-50/70'
+                                    ? 'bg-amber-100/70'
                                     : index % 2 === 1
-                                        ? 'bg-slate-50/70'
+                                        ? 'bg-slate-100/75'
                                         : 'bg-white'
                             } ${isSameDay(day, new Date()) ? 'ring-1 ring-inset ring-brand-200 bg-brand-50/80' : ''}`}
                         >
@@ -109,7 +111,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                                 className="flex bg-gray-50/50 border-b border-gray-200 sticky left-0 group cursor-pointer hover:bg-gray-100/80 transition-colors h-12"
                                 onClick={() => onToggleRoom(room.id!)}
                             >
-                                <div className="w-48 p-2 border-r border-gray-200 sticky left-0 bg-gray-50 z-10 flex items-center gap-2 pl-3">
+                                <div className={`${FIRST_COLUMN_CLASS} p-2 border-r border-gray-200 sticky left-0 bg-gray-50 z-10 flex items-center gap-2 pl-3`}>
                                     <div className="text-gray-400">
                                         {isExpanded ? <ChevronDown size={16} /> : <ChevronRightIcon size={16} />}
                                     </div>
@@ -130,9 +132,9 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                                                 key={`room-bg-${room.id}-${day.toString()}`}
                                                 className={`flex-1 min-w-[80px] border-r border-gray-200/70 ${
                                                     isWeekendDay(day)
-                                                        ? 'bg-amber-50/45'
+                                                        ? 'bg-amber-100/55'
                                                         : index % 2 === 1
-                                                            ? 'bg-slate-50/55'
+                                                            ? 'bg-slate-100/60'
                                                             : 'bg-transparent'
                                                 }`}
                                             />
@@ -232,7 +234,7 @@ const BedRow: React.FC<BedRowProps> = ({
     return (
         <div className="flex border-b border-gray-100 h-14 relative hover:bg-gray-50/30 transition-colors group/row">
             {/* Bed label */}
-            <div className={`w-48 px-4 border-r border-gray-200 sticky left-0 z-10 flex items-center gap-3 text-sm text-gray-600 pl-8 ${isSelected ? 'bg-brand-50 border-l-4 border-l-brand-500' : 'bg-white border-l-4 border-l-brand-100/50'}`}>
+            <div className={`${FIRST_COLUMN_CLASS} px-4 border-r border-gray-200 sticky left-0 z-10 flex items-center gap-3 text-sm text-gray-600 pl-8 ${isSelected ? 'bg-brand-50 border-l-4 border-l-brand-500' : 'bg-white border-l-4 border-l-brand-100/50'}`}>
                 <div className="w-5 h-5 bg-gray-50 border border-gray-100 rounded text-[9px] flex items-center justify-center font-bold text-gray-500 group-hover/row:bg-brand-50 group-hover/row:text-brand-600 transition-colors">
                     {bed.bed_number}
                 </div>
@@ -250,9 +252,9 @@ const BedRow: React.FC<BedRowProps> = ({
                         onClick={(e) => onCellClick(bed.id!, room.id!, day, e)}
                         className={`flex-1 min-w-[80px] border-r border-gray-200 relative cursor-pointer hover:bg-brand-50/20 transition-colors ${
                             isWeekendDay(day)
-                                ? 'bg-amber-50/40'
+                                ? 'bg-amber-100/50'
                                 : index % 2 === 1
-                                    ? 'bg-slate-50/35'
+                                    ? 'bg-slate-100/45'
                                     : ''
                         } ${isSameDay(day, new Date()) ? 'bg-brand-50/20 ring-1 ring-inset ring-brand-100' : ''}`}
                     >
