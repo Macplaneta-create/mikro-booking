@@ -44,25 +44,26 @@ class GuestService {
     public function createGuest(array $data): Guest {
         // Validate required fields
         $this->validateGuestData($data);
-        
-        // Check if email already exists
-        $existing = $this->guest_repository->findByEmail($data['email']);
-        if ($existing) {
-            throw new \Exception('Guest with this email already exists');
-        }
-        
+
         // Validate email format
         if (!is_email($data['email'])) {
             throw new \Exception('Invalid email format');
         }
-        
+
         // Create guest
         $guest = $this->guest_repository->create($data);
-        
+
         // Fire WordPress action
         do_action('mikroplaneta_booking_guest_created', $guest);
-        
+
         return $guest;
+    }
+
+    /**
+     * Find guest by email
+     */
+    public function findByEmail(string $email): ?Guest {
+        return $this->guest_repository->findByEmail($email);
     }
     
     /**

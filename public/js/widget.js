@@ -189,14 +189,14 @@
         if (!bedsContainer) return;
 
         if (!Array.isArray(beds) || beds.length === 0) {
-            bedsContainer.innerHTML = `<div style="padding:8px; font-size:13px; color:#6b7280;">${escapeHtml(settings.i18n.noBeds)}</div>`;
+            bedsContainer.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">${escapeHtml(settings.i18n.noBeds)}</div>`;
             return;
         }
 
         bedsContainer.innerHTML = beds.map((bed) => {
             const label = `#${bed.id} • Pokój ${bed.room_id} • Łóżko ${bed.bed_number} (${bed.bed_type})`;
             return `
-                <label style="display:flex; align-items:center; gap:8px; padding:6px 0; font-size:13px; color:#374151;">
+                <label class="mp-booking-form__bed-item">
                     <input type="checkbox" name="mp-bed-checkbox" value="${bed.id}" />
                     <span>${escapeHtml(label)}</span>
                 </label>
@@ -205,9 +205,11 @@
     }
 
     async function fetchAvailableBeds(settings, checkIn, checkOut) {
+        console.log('[MP Booking] fetchAvailableBeds called with roomId:', settings.roomId);
         let url = `${settings.apiUrl}/public/availability/beds?check_in=${encodeURIComponent(checkIn)}&check_out=${encodeURIComponent(checkOut)}`;
         if (settings.roomId && Number(settings.roomId) > 0) {
             url += `&room_id=${encodeURIComponent(String(settings.roomId))}`;
+            console.log('[MP Booking] Adding room_id filter to URL:', url);
         }
         const response = await fetch(url, {
             method: 'GET',
@@ -217,6 +219,7 @@
         });
 
         const data = await response.json();
+        console.log('[MP Booking] Fetched beds:', data);
         if (!response.ok || !data || !data.success || !Array.isArray(data.data)) {
             throw new Error(settings.i18n.error);
         }
@@ -323,90 +326,380 @@
         };
         const isHcaptcha = settings.captcha && settings.captcha.provider === 'hcaptcha';
 
+        // Check for prefill data (from modal)
+        const prefill = settings.prefill || {};
+        
+        // Check if room is per_room or per_bed
+        const isPerRoom = settings.roomId && Number(settings.roomId) > 0;
+        let roomPricingMode = 'per_bed'; // default
+
+        // Fetch room info to determine pricing mode
+        if (isPerRoom) {
+            fetch(`${settings.apiUrl}/rooms/${settings.roomId}`, {
+                headers: { 'X-WP-Nonce': settings.nonce || '' }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.data && data.data.pricing_mode) {
+                    roomPricingMode = data.data.pricing_mode;
+                    if (roomPricingMode === 'per_room') {
+                        // Hide beds section for per_room mode
+                        const bedsSection = container.querySelector('.mp-booking-form__beds-section');
+                        if (bedsSection) bedsSection.style.display = 'none';
+                    }
+                }
+            })
+            .catch(console.error);
+        }
+
         container.innerHTML = `
-            <div class="mp-booking-form-wrapper" style="max-width: 680px; margin: 20px auto; padding: 25px; background: white; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #f0f0f0;">
-                <h3 style="margin-top:0; color: #111827; font-size: 1.25rem; font-weight: 700; margin-bottom: 20px; text-align:center;">${escapeHtml(settings.title || settings.i18n.submit)}</h3>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                    <div>
-                        <label style="display:block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px;">${escapeHtml(settings.i18n.firstName)} *</label>
-                        <input type="text" id="mp-first-name" style="width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:8px;" />
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px;">${escapeHtml(settings.i18n.lastName)} *</label>
-                        <input type="text" id="mp-last-name" style="width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:8px;" />
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px;">${escapeHtml(settings.i18n.email)} *</label>
-                        <input type="email" id="mp-email" style="width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:8px;" />
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px;">${escapeHtml(settings.i18n.phone)}</label>
-                        <input type="text" id="mp-phone" style="width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:8px;" />
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px;">${escapeHtml(settings.i18n.checkIn)} *</label>
-                        <input type="date" id="mp-check-in" style="width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:8px;" />
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px;">${escapeHtml(settings.i18n.checkOut)} *</label>
-                        <input type="date" id="mp-check-out" style="width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:8px;" />
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px;">${escapeHtml(settings.i18n.adults)}</label>
-                        <input type="number" id="mp-adults" min="1" value="1" style="width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:8px;" />
-                    </div>
-                    <div>
-                        <label style="display:block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px;">${escapeHtml(settings.i18n.children)}</label>
-                        <input type="number" id="mp-children" min="0" value="0" style="width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:8px;" />
-                    </div>
-                </div>
-                <div style="margin-top:12px; border:1px solid #e5e7eb; border-radius:8px; padding:10px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                        <label style="font-size: 12px; font-weight: 600; color: #6b7280;">${escapeHtml(settings.i18n.availableBeds)} *</label>
-                        <div style="display:flex; gap:6px;">
-                            <button type="button" id="mp-suggest-beds-btn" style="background:#eef2ff; border:1px solid #c7d2fe; color:#3730a3; padding:6px 10px; border-radius:6px; font-size:12px; cursor:pointer;">
-                                ${escapeHtml(settings.i18n.suggestBeds)}
-                            </button>
-                            <button type="button" id="mp-find-beds-btn" style="background:#f3f4f6; border:1px solid #e5e7eb; color:#111827; padding:6px 10px; border-radius:6px; font-size:12px; cursor:pointer;">
-                                ${escapeHtml(settings.i18n.findBeds)}
-                            </button>
+            <div class="mp-booking-form-wrapper">
+                <div class="mp-booking-form__header">
+                    <h3 class="mp-booking-form-wrapper__title">${escapeHtml(settings.title || 'Rezerwacja')}</h3>
+                    <div class="mp-booking-form__steps">
+                        <div class="mp-booking-form__step mp-booking-form__step--active" data-step="1">
+                            <span class="mp-booking-form__step-number">1</span>
+                            <span class="mp-booking-form__step-label">Termin</span>
+                        </div>
+                        <div class="mp-booking-form__step" data-step="2">
+                            <span class="mp-booking-form__step-number">2</span>
+                            <span class="mp-booking-form__step-label">Dane</span>
                         </div>
                     </div>
-                    <div id="mp-beds-list" style="margin-top:8px; max-height:180px; overflow:auto;"></div>
-                    <div id="mp-beds-summary" style="margin-top:8px; font-size:12px; color:#6b7280;"></div>
+                    ${roomPricingMode === 'per_room' ? '<div class="mp-booking-form__mode-badge">Rezerwacja całego obiektu</div>' : ''}
                 </div>
-                <div style="margin-top:12px;">
-                    <label style="display:block; font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 5px;">${escapeHtml(settings.i18n.notes)}</label>
-                    <textarea id="mp-notes" rows="3" style="width:100%; padding:10px; border:1px solid #e5e7eb; border-radius:8px;"></textarea>
+
+                <!-- Step 1: Dates & Guests -->
+                <div class="mp-booking-form__step-content mp-booking-form__step-content--active" id="mp-step-1">
+                    <div class="mp-booking-form__grid">
+                        <div class="mp-booking-form__group">
+                            <label class="mp-booking-form__label">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                ${escapeHtml(settings.i18n.checkIn)} *
+                            </label>
+                            <input type="date" id="mp-check-in" value="${escapeHtml(prefill.checkIn || '')}" class="mp-booking-form__input" />
+                        </div>
+                        <div class="mp-booking-form__group">
+                            <label class="mp-booking-form__label">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                ${escapeHtml(settings.i18n.checkOut)} *
+                            </label>
+                            <input type="date" id="mp-check-out" value="${escapeHtml(prefill.checkOut || '')}" class="mp-booking-form__input" />
+                        </div>
+                        <div class="mp-booking-form__group">
+                            <label class="mp-booking-form__label">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                ${escapeHtml(settings.i18n.adults)}
+                            </label>
+                            <input type="number" id="mp-adults" min="1" max="50" value="${escapeHtml(String(prefill.adults || 1))}" class="mp-booking-form__number-input" />
+                        </div>
+                        <div class="mp-booking-form__group">
+                            <label class="mp-booking-form__label">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                ${escapeHtml(settings.i18n.children)}
+                            </label>
+                            <input type="number" id="mp-children" min="0" max="50" value="${escapeHtml(String(prefill.children || 0))}" class="mp-booking-form__number-input" />
+                        </div>
+                    </div>
+
+                    <div class="mp-booking-form__beds-section">
+                        <div class="mp-booking-form__beds-header">
+                            <label class="mp-booking-form__beds-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>
+                                ${escapeHtml(settings.i18n.availableBeds)}
+                            </label>
+                            <div class="mp-booking-form__beds-actions">
+                                <button type="button" id="mp-suggest-beds-btn" class="mp-booking-form__btn mp-booking-form__btn--suggest">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                                    ${escapeHtml(settings.i18n.suggestBeds)}
+                                </button>
+                                <button type="button" id="mp-find-beds-btn" class="mp-booking-form__btn mp-booking-form__btn--find">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                    ${escapeHtml(settings.i18n.findBeds)}
+                                </button>
+                            </div>
+                        </div>
+                        <div id="mp-beds-list" class="mp-booking-form__beds-list"></div>
+                        <div id="mp-beds-summary" class="mp-booking-form__beds-summary"></div>
+                    </div>
+
+                    <div class="mp-booking-form__footer">
+                        <button type="button" id="mp-step-1-next" class="mp-booking-form__btn mp-booking-form__btn--primary mp-booking-form__btn--full">
+                            ${escapeHtml(settings.i18n.next || 'Dalej')}
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                        </button>
+                    </div>
                 </div>
-                <div id="mp-hcaptcha-wrap" style="margin-top:12px; ${isHcaptcha ? '' : 'display:none;'}">
-                    <div class="h-captcha"
-                         data-sitekey="${escapeHtml(settings.captcha.hcaptchaSiteKey || '')}"
-                         data-callback="mpHcaptchaDone"
-                         data-expired-callback="mpHcaptchaExpired"></div>
+
+                <!-- Step 2: Guest Data -->
+                <div class="mp-booking-form__step-content" id="mp-step-2">
+                    <!-- Booking Summary -->
+                    <div class="mp-booking-form__summary">
+                        <h4 class="mp-booking-form__summary-title">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            Podsumowanie rezerwacji
+                        </h4>
+                        <div class="mp-booking-form__summary-details">
+                            <div class="mp-booking-form__summary-item">
+                                <span class="mp-booking-form__summary-label">Termin:</span>
+                                <span class="mp-booking-form__summary-value" id="mp-summary-dates"></span>
+                            </div>
+                            <div class="mp-booking-form__summary-item">
+                                <span class="mp-booking-form__summary-label">Goście:</span>
+                                <span class="mp-booking-form__summary-value" id="mp-summary-guests"></span>
+                            </div>
+                            <div class="mp-booking-form__summary-item ${roomPricingMode === 'per_bed' ? '' : 'mp-hidden'}" id="mp-summary-beds-item">
+                                <span class="mp-booking-form__summary-label">Wybrane łóżka:</span>
+                                <span class="mp-booking-form__summary-value" id="mp-summary-beds"></span>
+                            </div>
+                            <div class="mp-booking-form__summary-item mp-booking-form__summary-item--price" id="mp-summary-price-item">
+                                <span class="mp-booking-form__summary-label">Szacowany koszt:</span>
+                                <span class="mp-booking-form__summary-value mp-booking-form__summary-value--price" id="mp-summary-price">-- zł</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mp-booking-form__grid">
+                        <div class="mp-booking-form__group">
+                            <label class="mp-booking-form__label">${escapeHtml(settings.i18n.firstName)} *</label>
+                            <input type="text" id="mp-first-name" class="mp-booking-form__input" placeholder="Jan" />
+                        </div>
+                        <div class="mp-booking-form__group">
+                            <label class="mp-booking-form__label">${escapeHtml(settings.i18n.lastName)} *</label>
+                            <input type="text" id="mp-last-name" class="mp-booking-form__input" placeholder="Kowalski" />
+                        </div>
+                        <div class="mp-booking-form__group mp-booking-form__group--full">
+                            <label class="mp-booking-form__label">${escapeHtml(settings.i18n.email)} *</label>
+                            <input type="email" id="mp-email" class="mp-booking-form__input" placeholder="jan@example.pl" />
+                        </div>
+                        <div class="mp-booking-form__group mp-booking-form__group--full">
+                            <label class="mp-booking-form__label">${escapeHtml(settings.i18n.phone)}</label>
+                            <input type="tel" id="mp-phone" class="mp-booking-form__input" placeholder="+48 123 456 789" />
+                        </div>
+                    </div>
+
+                    <div class="mp-booking-form__group mp-booking-form__group--notes">
+                        <label class="mp-booking-form__label">${escapeHtml(settings.i18n.notes)}</label>
+                        <textarea id="mp-notes" rows="3" class="mp-booking-form__textarea" placeholder="Dodatkowe uwagi..."></textarea>
+                    </div>
+
+                    <div class="mp-booking-form__consent">
+                        <label class="mp-booking-form__consent-label">
+                            <input type="checkbox" id="mp-consent-data" class="mp-booking-form__checkbox" />
+                            <span>
+                                <strong>Wyrażam zgodę na przetwarzanie moich danych osobowych</strong> w celu realizacji rezerwacji. 
+                                Administratorem danych jest <strong>${escapeHtml(settings.hotelName || 'Hotel')}</strong>. 
+                                Więcej informacji w <a href="${escapeHtml(settings.privacyPolicyUrl || '#')}" target="_blank">Polityce prywatności</a>.
+                            </span>
+                        </label>
+                        
+                        <label class="mp-booking-form__consent-label">
+                            <input type="checkbox" id="mp-consent-terms" class="mp-booking-form__checkbox" />
+                            <span>
+                                <strong>Zapoznałem się i akceptuję Regulamin</strong> świadczenia usług rezerwacji.
+                                <a href="${escapeHtml(settings.termsUrl || '#')}" target="_blank">Przeczytaj regulamin</a>.
+                            </span>
+                        </label>
+                        
+                        <label class="mp-booking-form__consent-label mp-booking-form__consent-label--optional">
+                            <input type="checkbox" id="mp-consent-marketing" class="mp-booking-form__checkbox" />
+                            <span>
+                                Chcę otrzymywać newsletter z ofertami specjalnymi i informacjami o hotelu.
+                            </span>
+                        </label>
+                    </div>
+
+                    <div id="mp-consent-error" class="mp-booking-form__message mp-booking-form__message--error mp-hidden" style="display: none;">
+                        Musisz wyrazić wymagane zgody przed wysłaniem rezerwacji.
+                    </div>
+
+                    <div id="mp-hcaptcha-wrap" class="mp-booking-form__hcaptcha" ${isHcaptcha ? '' : 'style="display:none;"'}>
+                        <div class="h-captcha"
+                             data-sitekey="${escapeHtml(settings.captcha.hcaptchaSiteKey || '')}"
+                             data-callback="mpHcaptchaDone"
+                             data-expired-callback="mpHcaptchaExpired"></div>
+                    </div>
+
+                    <div class="mp-booking-form__footer mp-booking-form__footer--split">
+                        <button type="button" id="mp-step-2-back" class="mp-booking-form__btn mp-booking-form__btn--secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                            ${escapeHtml(settings.i18n.back || 'Wstecz')}
+                        </button>
+                        <button type="button" id="mp-submit-btn" class="mp-booking-form__btn mp-booking-form__btn--primary">
+                            ${escapeHtml(settings.i18n.submit)}
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                        </button>
+                    </div>
+                    <div id="mp-results-container" class="mp-booking-form__results"></div>
                 </div>
-                <button id="mp-submit-btn" type="button" style="margin-top:14px; width:100%; background:#2563eb; color:white; border:none; padding:12px; border-radius:8px; font-weight:600; cursor:pointer;">
-                    ${escapeHtml(settings.i18n.submit)}
-                </button>
-                <div id="mp-results-container" style="margin-top:16px;"></div>
             </div>
         `;
 
+        // Step navigation
+        const step1 = container.querySelector('#mp-step-1');
+        const step2 = container.querySelector('#mp-step-2');
+        const step1Next = container.querySelector('#mp-step-1-next');
+        const step2Back = container.querySelector('#mp-step-2-back');
         const submitBtn = container.querySelector('#mp-submit-btn');
         const findBedsBtn = container.querySelector('#mp-find-beds-btn');
         const suggestBedsBtn = container.querySelector('#mp-suggest-beds-btn');
         const results = container.querySelector('#mp-results-container');
 
+        // Step indicators
+        const stepIndicators = container.querySelectorAll('.mp-booking-form__step');
+
+        const goToStep = (step) => {
+            if (step === 1) {
+                step1.classList.add('mp-booking-form__step-content--active');
+                step2.classList.remove('mp-booking-form__step-content--active');
+                stepIndicators[0].classList.add('mp-booking-form__step--active');
+                stepIndicators[1].classList.remove('mp-booking-form__step--active');
+            } else {
+                // Update summary before showing step 2
+                updateBookingSummary();
+                
+                step1.classList.remove('mp-booking-form__step-content--active');
+                step2.classList.add('mp-booking-form__step-content--active');
+                stepIndicators[0].classList.remove('mp-booking-form__step--active');
+                stepIndicators[1].classList.add('mp-booking-form__step--active');
+            }
+        };
+
+        const updateBookingSummary = () => {
+            const checkIn = container.querySelector('#mp-check-in').value;
+            const checkOut = container.querySelector('#mp-check-out').value;
+            const adults = parseInt(container.querySelector('#mp-adults').value, 10) || 1;
+            const children = parseInt(container.querySelector('#mp-children').value, 10) || 0;
+            
+            // Format dates
+            if (checkIn && checkOut) {
+                const checkInDate = new Date(checkIn);
+                const checkOutDate = new Date(checkOut);
+                const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+                document.getElementById('mp-summary-dates').textContent = 
+                    `${checkIn} → ${checkOut} (${nights} ${nights === 1 ? 'noc' : 'noce'})`;
+            }
+            
+            // Format guests
+            document.getElementById('mp-summary-guests').textContent = 
+                `${adults} dorosłych${children > 0 ? `, ${children} dzieci` : ''}`;
+            
+            // Format beds (for per_bed mode)
+            if (roomPricingMode === 'per_bed') {
+                const bedIds = getSelectedBedIds(container);
+                const selectedCapacity = computeSelectedCapacity(container, availableBeds);
+                document.getElementById('mp-summary-beds').textContent = 
+                    bedIds.length > 0 
+                        ? `${bedIds.length} łóżek (${selectedCapacity} miejsc)`
+                        : 'Brak wybranych łóżek';
+                
+                // Calculate and show price
+                calculatePrice(checkIn, checkOut, bedIds);
+            } else {
+                // For per_room mode, calculate room price
+                calculatePrice(checkIn, checkOut, [settings.roomId]);
+            }
+        };
+
+        const calculatePrice = async (checkIn, checkOut, ids) => {
+            const priceEl = document.getElementById('mp-summary-price');
+            if (!checkIn || !checkOut || ids.length === 0) {
+                priceEl.textContent = '-- zł';
+                return;
+            }
+            
+            try {
+                // Use calculate-group endpoint (POST method)
+                const url = `${settings.apiUrl}/pricing/calculate-group`;
+                
+                const body = {
+                    check_in: checkIn,
+                    check_out: checkOut,
+                    adults: parseInt(container.querySelector('#mp-adults').value, 10) || 1,
+                    children: parseInt(container.querySelector('#mp-children').value, 10) || 0,
+                };
+                
+                if (roomPricingMode === 'per_room' && settings.roomId) {
+                    body.room_id = settings.roomId;
+                } else if (roomPricingMode === 'per_bed' && ids.length > 0) {
+                    body.bed_ids = ids;
+                }
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-WP-Nonce': settings.nonce || '',
+                    },
+                    body: JSON.stringify(body),
+                });
+                const data = await response.json();
+                
+                console.log('[Price Calc] Response:', data);
+                
+                if (data && data.success && data.data) {
+                    const price = data.data.total || data.data.price || data.data.total_price || 0;
+                    priceEl.textContent = `${price.toFixed(2)} zł`;
+                } else {
+                    console.warn('[Price Calc] No price data:', data);
+                    priceEl.textContent = '-- zł';
+                }
+            } catch (err) {
+                console.error('[Price Calc Error]', err);
+                priceEl.textContent = '-- zł';
+            }
+        };
+
+        step1Next.addEventListener('click', async function() {
+            const checkIn = container.querySelector('#mp-check-in').value;
+            const checkOut = container.querySelector('#mp-check-out').value;
+            if (!checkIn || !checkOut) {
+                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(settings.i18n.formInvalid)}</div>`;
+                return;
+            }
+            
+            // For per_bed mode, require bed selection
+            if (roomPricingMode === 'per_bed') {
+                // Auto-find beds if not already loaded
+                if (availableBeds.length === 0 && findBedsBtn) {
+                    findBedsBtn.disabled = true;
+                    try {
+                        availableBeds = await fetchAvailableBeds(settings, checkIn, checkOut);
+                        renderBedsList(container, settings, availableBeds);
+                        const checks = container.querySelectorAll('input[name="mp-bed-checkbox"]');
+                        checks.forEach((input) => {
+                            input.addEventListener('change', function () {
+                                updateSelectionSummary(container, settings, availableBeds);
+                            });
+                        });
+                        const selected = suggestBedsSelection(container, availableBeds);
+                        updateSelectionSummary(container, settings, availableBeds);
+                    } catch (err) {
+                        results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(err && err.message ? err.message : settings.i18n.error)}</div>`;
+                        return;
+                    } finally {
+                        findBedsBtn.disabled = false;
+                    }
+                }
+            }
+            
+            goToStep(2);
+        });
+
+        step2Back.addEventListener('click', function() {
+            goToStep(1);
+        });
+
         findBedsBtn.addEventListener('click', async function () {
             const checkIn = container.querySelector('#mp-check-in').value;
             const checkOut = container.querySelector('#mp-check-out').value;
             if (!checkIn || !checkOut) {
-                results.innerHTML = `<div style="padding:12px; background:#fef2f2; border:1px solid #fee2e2; border-radius:8px; color:#991b1b;">${escapeHtml(settings.i18n.formInvalid)}</div>`;
+                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(settings.i18n.formInvalid)}</div>`;
                 return;
             }
 
             findBedsBtn.disabled = true;
-            results.innerHTML = `<div style="padding:12px; color:#6b7280;">${escapeHtml(settings.i18n.loading)}</div>`;
+            results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">${escapeHtml(settings.i18n.loading)}</div>`;
             try {
                 availableBeds = await fetchAvailableBeds(settings, checkIn, checkOut);
                 renderBedsList(container, settings, availableBeds);
@@ -419,10 +712,10 @@
                 const selected = suggestBedsSelection(container, availableBeds);
                 updateSelectionSummary(container, settings, availableBeds);
                 results.innerHTML = selected.length > 0
-                    ? `<div style="padding:10px; background:#eff6ff; border:1px solid #dbeafe; border-radius:8px; color:#1e3a8a;">${escapeHtml(settings.i18n.suggestedBeds)}</div>`
+                    ? `<div class="mp-booking-form__message mp-booking-form__message--success">${escapeHtml(settings.i18n.suggestedBeds)}</div>`
                     : '';
             } catch (err) {
-                results.innerHTML = `<div style="padding:12px; background:#fef2f2; border:1px solid #fee2e2; border-radius:8px; color:#991b1b;">${escapeHtml(err && err.message ? err.message : settings.i18n.error)}</div>`;
+                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(err && err.message ? err.message : settings.i18n.error)}</div>`;
             } finally {
                 findBedsBtn.disabled = false;
             }
@@ -432,7 +725,7 @@
             const selected = suggestBedsSelection(container, availableBeds);
             updateSelectionSummary(container, settings, availableBeds);
             if (selected.length > 0) {
-                results.innerHTML = `<div style="padding:10px; background:#eff6ff; border:1px solid #dbeafe; border-radius:8px; color:#1e3a8a;">${escapeHtml(settings.i18n.suggestedBeds)}</div>`;
+                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--info">${escapeHtml(settings.i18n.suggestedBeds)}</div>`;
             }
         });
 
@@ -446,6 +739,78 @@
             });
         });
 
+        // Update summary when beds selection changes (for step 2)
+        container.addEventListener('change', function(e) {
+            if (e.target && e.target.name === 'mp-bed-checkbox') {
+                updateSelectionSummary(container, settings, availableBeds);
+            }
+        });
+        
+        // Auto-find beds if prefill data is present (modal mode)
+        if (prefill.checkIn && prefill.checkOut) {
+            // Trigger find beds automatically after a short delay
+            setTimeout(async function() {
+                const checkIn = container.querySelector('#mp-check-in').value;
+                const checkOut = container.querySelector('#mp-check-out').value;
+                if (checkIn && checkOut && findBedsBtn) {
+                    findBedsBtn.disabled = true;
+                    try {
+                        availableBeds = await fetchAvailableBeds(settings, checkIn, checkOut);
+                        renderBedsList(container, settings, availableBeds);
+                        const checks = container.querySelectorAll('input[name="mp-bed-checkbox"]');
+                        checks.forEach((input) => {
+                            input.addEventListener('change', function () {
+                                updateSelectionSummary(container, settings, availableBeds);
+                            });
+                        });
+                        const selected = suggestBedsSelection(container, availableBeds);
+                        updateSelectionSummary(container, settings, availableBeds);
+                        results.innerHTML = selected.length > 0
+                            ? `<div class="mp-booking-form__message mp-booking-form__message--info">${escapeHtml(settings.i18n.suggestedBeds)}</div>`
+                            : '';
+                    } catch (err) {
+                        results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(err && err.message ? err.message : settings.i18n.error)}</div>`;
+                    } finally {
+                        findBedsBtn.disabled = false;
+                    }
+                }
+            }, 300);
+        }
+
+        // Auto-find beds when both dates are filled
+        const checkInInput = container.querySelector('#mp-check-in');
+        const checkOutInput = container.querySelector('#mp-check-out');
+        
+        const autoFindBeds = async function() {
+            const checkIn = container.querySelector('#mp-check-in').value;
+            const checkOut = container.querySelector('#mp-check-out').value;
+            if (checkIn && checkOut && findBedsBtn && !findBedsBtn.disabled) {
+                findBedsBtn.disabled = true;
+                try {
+                    availableBeds = await fetchAvailableBeds(settings, checkIn, checkOut);
+                    renderBedsList(container, settings, availableBeds);
+                    const checks = container.querySelectorAll('input[name="mp-bed-checkbox"]');
+                    checks.forEach((input) => {
+                        input.addEventListener('change', function () {
+                            updateSelectionSummary(container, settings, availableBeds);
+                        });
+                    });
+                    const selected = suggestBedsSelection(container, availableBeds);
+                    updateSelectionSummary(container, settings, availableBeds);
+                    results.innerHTML = selected.length > 0
+                        ? `<div class="mp-booking-form__message mp-booking-form__message--info">${escapeHtml(settings.i18n.suggestedBeds)}</div>`
+                        : `<div class="mp-booking-form__message mp-booking-form__message--info">Wybierz łóżka z listy powyżej.</div>`;
+                } catch (err) {
+                    results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(err && err.message ? err.message : settings.i18n.error)}</div>`;
+                } finally {
+                    findBedsBtn.disabled = false;
+                }
+            }
+        };
+
+        if (checkInInput) checkInInput.addEventListener('change', autoFindBeds);
+        if (checkOutInput) checkOutInput.addEventListener('change', autoFindBeds);
+
         submitBtn.addEventListener('click', async function () {
             const firstName = container.querySelector('#mp-first-name').value.trim();
             const lastName = container.querySelector('#mp-last-name').value.trim();
@@ -456,20 +821,47 @@
             const adults = parseInt(container.querySelector('#mp-adults').value, 10) || 1;
             const children = parseInt(container.querySelector('#mp-children').value, 10) || 0;
             const notes = container.querySelector('#mp-notes').value.trim();
-            const bedIds = getSelectedBedIds(container);
+            
+            // For per_bed mode, require bed selection
+            let bedIds = [];
+            if (roomPricingMode === 'per_bed') {
+                bedIds = getSelectedBedIds(container);
+                if (bedIds.length === 0) {
+                    results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(settings.i18n.bedRequired)}</div>`;
+                    return;
+                }
+            }
 
+            // Validate required fields
             if (!firstName || !lastName || !email || !checkIn || !checkOut) {
-                results.innerHTML = `<div style="padding:12px; background:#fef2f2; border:1px solid #fee2e2; border-radius:8px; color:#991b1b;">${escapeHtml(settings.i18n.formInvalid)}</div>`;
+                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(settings.i18n.formInvalid)}</div>`;
                 return;
             }
-            if (bedIds.length === 0) {
-                results.innerHTML = `<div style="padding:12px; background:#fef2f2; border:1px solid #fee2e2; border-radius:8px; color:#991b1b;">${escapeHtml(settings.i18n.bedRequired)}</div>`;
+            
+            // Validate consent checkboxes
+            const consentData = container.querySelector('#mp-consent-data');
+            const consentTerms = container.querySelector('#mp-consent-terms');
+            const consentError = container.querySelector('#mp-consent-error');
+            
+            if (!consentData || !consentTerms || !consentData.checked || !consentTerms.checked) {
+                consentError.style.display = 'block';
+                consentError.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return;
             }
+            consentError.style.display = 'none';
+            
+            // Get consent values
+            const consents = {
+                data_processing: consentData.checked,
+                terms_accepted: consentTerms.checked,
+                marketing: container.querySelector('#mp-consent-marketing')?.checked || false,
+                ip_address: '', // Will be filled by server
+                timestamp: new Date().toISOString(),
+            };
 
             submitBtn.disabled = true;
-            submitBtn.style.opacity = '0.7';
-            results.innerHTML = `<div style="padding:12px; color:#6b7280;">${escapeHtml(settings.i18n.loading)}</div>`;
+            submitBtn.classList.add('disabled');
+            results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">${escapeHtml(settings.i18n.loading)}</div>`;
 
             try {
                 const captchaToken = await getCaptchaToken(settings);
@@ -487,12 +879,14 @@
                             email: email,
                             phone: phone,
                         },
-                        bed_ids: bedIds,
+                        room_id: roomPricingMode === 'per_room' ? settings.roomId : undefined,
+                        bed_ids: roomPricingMode === 'per_bed' ? bedIds : undefined,
                         check_in: checkIn,
                         check_out: checkOut,
                         adults: adults,
                         children: children,
                         notes: notes,
+                        consents: consents,
                         captcha_token: captchaToken,
                     }),
                 });
@@ -503,40 +897,173 @@
                     throw new Error(msg);
                 }
 
-                results.innerHTML = `<div style="padding:12px; background:#ecfdf5; border:1px solid #d1fae5; border-radius:8px; color:#065f46;">${escapeHtml(settings.i18n.success)}</div>`;
+                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--success">${escapeHtml(settings.i18n.success)}</div>`;
                 hcaptchaToken = '';
             } catch (err) {
-                results.innerHTML = `<div style="padding:12px; background:#fef2f2; border:1px solid #fee2e2; border-radius:8px; color:#991b1b;">${escapeHtml(err && err.message ? err.message : settings.i18n.error)}</div>`;
+                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(err && err.message ? err.message : settings.i18n.error)}</div>`;
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.style.opacity = '1';
+                submitBtn.classList.remove('disabled');
             }
         });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        console.log('[MP Booking] DOMContentLoaded fired');
+        
         const containers = document.querySelectorAll('.mp-booking-widget-container');
-        if (!containers || containers.length === 0) return;
+        console.log('[MP Booking] Found widget containers:', containers.length);
+        
+        // Initialize widget containers if present
+        if (containers && containers.length > 0) {
+            containers.forEach((container) => {
+                console.log('[MP Booking] Initializing widget container:', container);
+                setupWidget(container);
+            });
+        }
 
-        containers.forEach((container) => setupWidget(container));
-
-        const jumpButtons = document.querySelectorAll('.mp-booking-open-widget');
-        jumpButtons.forEach((btn) => {
-            btn.addEventListener('click', function () {
+        // Handle modal open buttons (from booking cards)
+        // This runs regardless of whether widget containers exist
+        const modalOpenButtons = document.querySelectorAll('.mp-booking-open-modal');
+        console.log('[MP Booking] Found modal open buttons:', modalOpenButtons.length);
+        modalOpenButtons.forEach((btn) => {
+            console.log('[MP Booking] Attaching click handler to button:', btn);
+            btn.addEventListener('click', function (e) {
+                console.log('[MP Booking] Button clicked!', e);
                 const roomId = parseInt(btn.getAttribute('data-room-id') || '0', 10);
-                const target = Array.from(document.querySelectorAll('.mp-booking-widget-container')).find((node) => {
-                    try {
-                        const cfg = JSON.parse(node.getAttribute('data-mp-settings') || '{}');
-                        return parseInt(cfg.roomId || '0', 10) === roomId;
-                    } catch (e) {
-                        return false;
-                    }
-                });
+                const roomName = btn.getAttribute('data-room-name') || '';
+                
+                console.log('[MP Booking] Room ID:', roomId, 'Room Name:', roomName);
 
-                if (target) {
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // Get dates and guest count from the card's mini form
+                const cardWrapper = btn.closest('.mp-booking-room-card');
+                console.log('[MP Booking] Card wrapper:', cardWrapper);
+                const checkInInput = cardWrapper ? cardWrapper.querySelector('.mp-card-check-in[data-room-id="' + roomId + '"]') : null;
+                const checkOutInput = cardWrapper ? cardWrapper.querySelector('.mp-card-check-out[data-room-id="' + roomId + '"]') : null;
+                const adultsInput = cardWrapper ? cardWrapper.querySelector('.mp-card-adults[data-room-id="' + roomId + '"]') : null;
+                const childrenInput = cardWrapper ? cardWrapper.querySelector('.mp-card-children[data-room-id="' + roomId + '"]') : null;
+                
+                const checkIn = checkInInput ? checkInInput.value : '';
+                const checkOut = checkOutInput ? checkOutInput.value : '';
+                const adults = adultsInput ? parseInt(adultsInput.value, 10) || 1 : 1;
+                const children = childrenInput ? parseInt(childrenInput.value, 10) || 0 : 0;
+                
+                console.log('[MP Booking] Check-in:', checkIn, 'Check-out:', checkOut, 'Adults:', adults, 'Children:', children);
+
+                if (!checkIn || !checkOut) {
+                    alert('Proszę wybrać daty przyjazdu i wyjazdu.');
+                    return;
                 }
+
+                // Open modal and pre-fill data
+                console.log('[MP Booking] Opening modal...');
+                openBookingModal(roomId, roomName, {
+                    roomId: roomId,
+                    roomName: roomName,
+                    checkIn: checkIn,
+                    checkOut: checkOut,
+                    adults: adults,
+                    children: children
+                });
             });
         });
     });
+    
+    /**
+     * Open booking modal with pre-filled data
+     */
+    function openBookingModal(roomId, roomName, data) {
+        // Check if modal already exists
+        let modalContainer = document.querySelector('.mp-booking-modal[data-room-id="' + roomId + '"]');
+        
+        if (!modalContainer) {
+            // Create new modal
+            modalContainer = document.createElement('div');
+            modalContainer.className = 'mp-booking-modal';
+            modalContainer.setAttribute('data-room-id', roomId);
+            modalContainer.setAttribute('data-room-name', roomName);
+            modalContainer.innerHTML = `
+                <div class="mp-modal-backdrop"></div>
+                <div class="mp-modal-content">
+                    <div class="mp-modal-header">
+                        <h3 class="mp-modal-title">
+                            <span class="mp-modal-room-name">${escapeHtml(roomName)}</span>
+                        </h3>
+                        <button type="button" class="mp-modal-close" aria-label="Zamknij">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="mp-modal-body"></div>
+                </div>
+            `;
+            
+            // Close on backdrop click
+            const backdrop = modalContainer.querySelector('.mp-modal-backdrop');
+            backdrop.addEventListener('click', function () {
+                closeBookingModal(modalContainer);
+            });
+            
+            // Close on X button
+            const closeBtn = modalContainer.querySelector('.mp-modal-close');
+            closeBtn.addEventListener('click', function () {
+                closeBookingModal(modalContainer);
+            });
+            
+            // Close on ESC
+            const handleEsc = function(e) {
+                if (e.key === 'Escape' && modalContainer.parentElement) {
+                    closeBookingModal(modalContainer);
+                    document.removeEventListener('keydown', handleEsc);
+                }
+            };
+            document.addEventListener('keydown', handleEsc);
+            
+            document.body.appendChild(modalContainer);
+        }
+        
+        const body = modalContainer.querySelector('.mp-modal-body');
+        const roomNameEl = modalContainer.querySelector('.mp-modal-room-name');
+        
+        if (roomNameEl) {
+            roomNameEl.textContent = data.roomName || 'Rezerwacja';
+        }
+        
+        // Create widget container inside modal with prefill data
+        body.innerHTML = '<div class="mp-booking-widget-container mp-modal-widget" data-mp-settings="' + escapeHtml(JSON.stringify({
+            roomId: data.roomId,
+            title: '',
+            prefill: {
+                checkIn: data.checkIn,
+                checkOut: data.checkOut,
+                adults: data.adults,
+                children: data.children
+            }
+        })) + '"></div>';
+        
+        // Show modal
+        modalContainer.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        
+        // Initialize widget inside modal
+        const widgetContainer = body.querySelector('.mp-booking-widget-container');
+        if (widgetContainer) {
+            setupWidget(widgetContainer);
+        }
+    }
+    
+    /**
+     * Close booking modal
+     */
+    function closeBookingModal(modalContainer) {
+        modalContainer.style.display = 'none';
+        document.body.style.overflow = '';
+        // Clear content to free memory
+        const body = modalContainer.querySelector('.mp-modal-body');
+        if (body) {
+            body.innerHTML = '';
+        }
+    }
 })();

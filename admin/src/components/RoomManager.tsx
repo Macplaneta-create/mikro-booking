@@ -73,27 +73,42 @@ const RoomManager: React.FC = () => {
     }, []);
 
     const handleOpenMediaLibrary = () => {
-        // @ts-ignore
-        if (!window.wp || !window.wp.media) {
-            alert('Biblioteka mediów WordPress nie jest dostępna.');
+        console.log('[RoomManager] Opening media library...');
+        console.log('[RoomManager] window:', typeof window !== 'undefined');
+        console.log('[RoomManager] window.wp:', typeof window !== 'undefined' ? (window as any).wp : 'window not defined');
+        console.log('[RoomManager] window.wp.media:', typeof window !== 'undefined' ? (window as any).wp?.media : 'undefined');
+        
+        // Check if WordPress media library is available
+        if (typeof window === 'undefined') {
+            alert('Środowisko przeglądarki nie jest dostępne.');
             return;
         }
 
-        // @ts-ignore
-        const frame = window.wp.media({
+        const wpMedia = (window as any).wp?.media;
+        if (!wpMedia) {
+            console.error('[RoomManager] wp.media not found! Available window.wp:', (window as any).wp);
+            alert('Biblioteka mediów WordPress nie jest załadowana.\n\nSpróbuj:\n1. Odśwież stronę (Ctrl+F5)\n2. Sprawdź konsolę (F12) pod kątem błędów\n3. Wyłącz inne wtyczki i sprawdź czy jest konflikt');
+            return;
+        }
+
+        const frame = wpMedia({
             title: 'Wybierz zdjęcie pokoju',
             button: {
                 text: 'Użyj tego zdjęcia'
             },
-            multiple: false
+            multiple: false,
+            library: {
+                type: 'image'
+            }
         });
 
         frame.on('select', () => {
             const attachment = frame.state().get('selection').first().toJSON();
+            console.log('[RoomManager] Selected attachment:', attachment);
             setFormData({
                 ...formData,
                 image_id: attachment.id,
-                image_url: attachment.url
+                image_url: attachment.url || attachment.sizes?.full?.url || attachment.sizes?.large?.url || attachment.sizes?.medium?.url
             });
         });
 

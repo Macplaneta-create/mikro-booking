@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Save, AlertCircle, Building2, Mail, Globe, Shield } from 'lucide-react';
 import { SettingsAPI, RoomsAPI, type Room } from '../services/api';
 
+interface Page {
+    id: number;
+    title: {
+        rendered: string;
+    };
+}
+
 interface PluginSettings {
     hotel_name: string;
     check_in_time: string;
@@ -25,6 +32,9 @@ interface PluginSettings {
     rate_limit_enabled: boolean;
     rate_limit_window_seconds: number;
     rate_limit_max_requests: number;
+    // GDPR/RODO settings
+    privacy_policy_page_id: number;
+    terms_page_id: number;
 }
 
 interface EmailTemplate {
@@ -76,13 +86,14 @@ const Settings: React.FC = () => {
         rate_limit_enabled: true,
         rate_limit_window_seconds: 60,
         rate_limit_max_requests: 120,
+        privacy_policy_page_id: 0,
+        terms_page_id: 0,
     });
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
     const [rooms, setRooms] = useState<Room[]>([]);
     const [roomsLoading, setRoomsLoading] = useState(false);
-    const [shortcodeMode, setShortcodeMode] = useState<'booking' | 'card'>('booking');
     const [selectedRoomId, setSelectedRoomId] = useState<number>(0);
     const [shortcodeButtonLabel, setShortcodeButtonLabel] = useState('Rezerwuj');
     const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
@@ -94,6 +105,7 @@ const Settings: React.FC = () => {
     const [notificationLogLoading, setNotificationLogLoading] = useState(false);
     const [testEmail, setTestEmail] = useState('');
     const [sendingTestEmail, setSendingTestEmail] = useState(false);
+    const [pages, setPages] = useState<Page[]>([]);
 
     // Load settings on mount
     useEffect(() => {
@@ -101,6 +113,7 @@ const Settings: React.FC = () => {
         loadRooms();
         loadEmailTemplates();
         loadNotificationLog();
+        loadPages();
     }, []);
 
     const loadSettings = async () => {
@@ -122,7 +135,24 @@ const Settings: React.FC = () => {
                 rate_limit_enabled: data.rate_limit_enabled ?? true,
                 rate_limit_window_seconds: data.rate_limit_window_seconds ?? 60,
                 rate_limit_max_requests: data.rate_limit_max_requests ?? 120,
+                privacy_policy_page_id: data.privacy_policy_page_id ?? 0,
+                terms_page_id: data.terms_page_id ?? 0,
             });
+            
+            // Load GDPR settings separately
+            const gdprResponse = await fetch('/wp-json/mikroplaneta/v1/settings/gdpr', {
+                headers: {
+                    'X-WP-Nonce': window.mikroplanetaBooking?.nonce || '',
+                },
+            });
+            if (gdprResponse.ok) {
+                const gdprData = await gdprResponse.json();
+                setSettings(prev => ({
+                    ...prev,
+                    privacy_policy_page_id: gdprData.data?.privacy_policy_page_id || prev.privacy_policy_page_id,
+                    terms_page_id: gdprData.data?.terms_page_id || prev.terms_page_id,
+                }));
+            }
         } catch (error) {
             console.error('Failed to load settings:', error);
         } finally {
@@ -158,6 +188,22 @@ const Settings: React.FC = () => {
         }
     };
 
+    const loadPages = async () => {
+        try {
+            const response = await fetch('/wp-json/wp/v2/pages?per_page=100&status=publish', {
+                headers: {
+                    'X-WP-Nonce': window.mikroplanetaBooking?.nonce || '',
+                },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setPages(data);
+            }
+        } catch (err) {
+            console.error('Failed to load pages:', err);
+        }
+    };
+
     const loadNotificationLog = async () => {
         try {
             setNotificationLogLoading(true);
@@ -185,6 +231,20 @@ const Settings: React.FC = () => {
         try {
             setSaving(true);
             await SettingsAPI.update(settings);
+            
+            // Save GDPR settings separately
+            await fetch('/wp-json/mikroplaneta/v1/settings/gdpr', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-WP-Nonce': window.mikroplanetaBooking?.nonce || '',
+                },
+                body: JSON.stringify({
+                    privacy_policy_page_id: settings.privacy_policy_page_id,
+                    terms_page_id: settings.terms_page_id,
+                }),
+            });
+            
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
         } catch (error) {
@@ -197,15 +257,11 @@ const Settings: React.FC = () => {
 
     const generatedShortcode = (() => {
         if (!selectedRoomId) {
-            return '[mikroplaneta_booking]';
-        }
-
-        if (shortcodeMode === 'booking') {
-            return `[mikroplaneta_booking room_id="${selectedRoomId}"]`;
+            return '[mikroplaneta_booking]'; // Default if no room selected
         }
 
         const trimmedLabel = shortcodeButtonLabel.trim();
-        if (trimmedLabel && trimmedLabel !== 'Rezerwuj') {
+        if (trimmedLabel && trimmedLabel !== 'Rezerwuj' && trimmedLabel !== 'Sprawdź dostępność') {
             return `[mikroplaneta_booking_card room_id="${selectedRoomId}" button_label="${trimmedLabel}"]`;
         }
 
@@ -400,6 +456,75 @@ const Settings: React.FC = () => {
                             )}
                         </div>
                     </form>
+                )}
+            </div>
+
+            {/* GDPR/RODO Section */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Shield className="text-brand-600" size={20} />
+                    RODO / GDPR
+                </h3>
+                <p className="text-gray-600 mb-6 text-sm">
+                    Skonfiguruj strony z polityką prywatności i regulaminem dla formularzy rezerwacji.
+                </p>
+
+                {loading ? (
+                    <p className="text-gray-500">Ładowanie ustawień...</p>
+                ) : (
+                    <div className="space-y-4">
+                        {/* Privacy Policy Page */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Strona z Polityką Prywatności
+                            </label>
+                            <select
+                                value={settings.privacy_policy_page_id || ''}
+                                onChange={(e) => setSettings({ ...settings, privacy_policy_page_id: parseInt(e.target.value) || 0 })}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                            >
+                                <option value="">-- Wybierz stronę --</option>
+                                {pages.map((page) => (
+                                    <option key={page.id} value={page.id}>
+                                        {page.title.rendered}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Ta strona będzie linkowana w formularzu rezerwacji jako "Polityka prywatności".
+                            </p>
+                        </div>
+
+                        {/* Terms Page */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Strona z Regulaminem
+                            </label>
+                            <select
+                                value={settings.terms_page_id || ''}
+                                onChange={(e) => setSettings({ ...settings, terms_page_id: parseInt(e.target.value) || 0 })}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                            >
+                                <option value="">-- Wybierz stronę --</option>
+                                {pages.map((page) => (
+                                    <option key={page.id} value={page.id}>
+                                        {page.title.rendered}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Ta strona będzie linkowana w formularzu rezerwacji jako "Regulamin".
+                            </p>
+                        </div>
+
+                        {/* Info box */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <p className="text-sm text-blue-800">
+                                <strong>Ważne:</strong> Zgodnie z RODO, użytkownicy muszą wyrazić świadomą zgodę na przetwarzanie danych. 
+                                Upewnij się, że wybrane strony zawierają wszystkie wymagane informacje prawne.
+                            </p>
+                        </div>
+                    </div>
                 )}
             </div>
 
@@ -941,54 +1066,38 @@ const Settings: React.FC = () => {
                 </div>
 
                 <div className="mt-6 pt-6 border-t border-gray-200">
-                    <h4 className="text-sm font-bold text-gray-900 mb-3">Generator shortcode dla domków/pokoi</h4>
-                    <p className="text-xs text-gray-500 mb-3">1. Wybierz domek/pokój. 2. Wybierz typ shortcode. 3. Kliknij Kopiuj. 4. Wklej na stronie w bloku „Shortcode”.</p>
+                    <h4 className="text-sm font-bold text-gray-900 mb-3">Generator krótkiego kodu dla karty pokoju (wizytówki)</h4>
+                    <p className="text-xs text-gray-500 mb-3">1. Wybierz domek/pokój. 2. Zmień tekst przycisku (opcjonalnie). 3. Skopiuj i wklej na swojej stronie.</p>
 
                     {roomsLoading ? (
                         <p className="text-xs text-gray-500">Ładowanie pokoi...</p>
                     ) : (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">Domek / Pokój</label>
-                                    <select
-                                        value={selectedRoomId}
-                                        onChange={(e) => setSelectedRoomId(parseInt(e.target.value, 10) || 0)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                                    >
-                                        {rooms.length === 0 && <option value={0}>Brak aktywnych pokoi</option>}
-                                        {rooms.map((room) => (
-                                            <option key={room.id} value={room.id}>
-                                                #{room.id} - {room.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">Typ shortcode</label>
-                                    <select
-                                        value={shortcodeMode}
-                                        onChange={(e) => setShortcodeMode(e.target.value as 'booking' | 'card')}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                                    >
-                                        <option value="booking">Formularz rezerwacji</option>
-                                        <option value="card">Karta + formularz</option>
-                                    </select>
-                                </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Domek / Pokój</label>
+                                <select
+                                    value={selectedRoomId}
+                                    onChange={(e) => setSelectedRoomId(parseInt(e.target.value, 10) || 0)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                >
+                                    {rooms.length === 0 && <option value={0}>Brak aktywnych pokoi</option>}
+                                    {rooms.map((room) => (
+                                        <option key={room.id} value={room.id}>
+                                            #{room.id} - {room.name}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
-
-                            {shortcodeMode === 'card' && (
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-600 mb-1">Tekst przycisku (opcjonalnie)</label>
-                                    <input
-                                        type="text"
-                                        value={shortcodeButtonLabel}
-                                        onChange={(e) => setShortcodeButtonLabel(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                                        placeholder="Rezerwuj"
-                                    />
-                                </div>
-                            )}
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Tekst przycisku rezerwacji (opcjonalnie)</label>
+                                <input
+                                    type="text"
+                                    value={shortcodeButtonLabel}
+                                    onChange={(e) => setShortcodeButtonLabel(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                    placeholder="Sprawdź dostępność"
+                                />
+                            </div>
 
                             <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex items-center justify-between">
                                 <code className="text-brand-700 font-bold font-mono text-sm break-all mr-3">{generatedShortcode}</code>

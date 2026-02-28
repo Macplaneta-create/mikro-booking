@@ -114,6 +114,24 @@ class SettingsController extends RestController {
                 ],
             ],
         ]);
+        
+        // GDPR/RODO settings
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/gdpr', [
+            [
+                'methods' => 'POST',
+                'callback' => [$this, 'update_gdpr_settings'],
+                'permission_callback' => [$this, 'check_permission'],
+                'args' => [
+                    'privacy_policy_page_id' => ['type' => 'integer'],
+                    'terms_page_id' => ['type' => 'integer'],
+                ],
+            ],
+            [
+                'methods' => 'GET',
+                'callback' => [$this, 'get_gdpr_settings'],
+                'permission_callback' => [$this, 'check_permission'],
+            ],
+        ]);
     }
     
     /**
@@ -338,6 +356,31 @@ class SettingsController extends RestController {
         }
 
         return $this->success(['message' => 'Wysłano mail testowy.']);
+    }
+
+    /**
+     * Update GDPR settings
+     */
+    public function update_gdpr_settings(WP_REST_Request $request): WP_REST_Response {
+        $privacy_policy_page_id = (int) $request->get_param('privacy_policy_page_id');
+        $terms_page_id = (int) $request->get_param('terms_page_id');
+
+        update_option('mikroplaneta_booking_privacy_policy_page_id', $privacy_policy_page_id);
+        update_option('mikroplaneta_booking_terms_page_id', $terms_page_id);
+
+        return $this->success(['message' => 'Ustawienia RODO zapisane']);
+    }
+
+    /**
+     * Get GDPR settings
+     */
+    public function get_gdpr_settings(WP_REST_Request $request): WP_REST_Response {
+        $settings = [
+            'privacy_policy_page_id' => (int) get_option('mikroplaneta_booking_privacy_policy_page_id', 0),
+            'terms_page_id' => (int) get_option('mikroplaneta_booking_terms_page_id', 0),
+        ];
+
+        return $this->success($settings);
     }
 
     /**

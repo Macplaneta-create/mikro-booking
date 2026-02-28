@@ -121,27 +121,52 @@ class PublicReservationsController extends RestController {
             'notes' => isset($params['notes']) ? sanitize_text_field($params['notes']) : null,
             'status' => Reservation::STATUS_PENDING,
         ];
+        
+        // Handle GDPR consents
+        $consents = isset($params['consents']) && is_array($params['consents']) ? $params['consents'] : [];
+        if (!empty($consents)) {
+            $data['consents'] = [
+                'data_processing' => !empty($consents['data_processing']),
+                'terms_accepted' => !empty($consents['terms_accepted']),
+                'marketing' => !empty($consents['marketing']),
+                'timestamp' => sanitize_text_field($consents['timestamp'] ?? current_time('mysql')),
+                'ip_address' => sanitize_text_field($_SERVER['REMOTE_ADDR'] ?? ''),
+                'user_agent' => sanitize_text_field($_SERVER['HTTP_USER_AGENT'] ?? ''),
+            ];
+        }
 
         try {
-            // Security-first: do not auto-bind public reservation to existing guest record by email.
-            // Existing-email flow should use verified ownership (OTP/link) in a dedicated implementation.
-            $guest = $this->guest_service->createGuest($guest_data);
-            $data['guest_id'] = $guest->id;
+            // For public widget: allow multiple reservations per email
+            // First try to find existing guest by email
+            $existing_guest = $this->guest_service->findByEmail($guest_data['email']);
+
+            if ($existing_guest) {
+                // Use existing guest - allow multiple reservations
+                $data['guest_id'] = $existing_guest->id;
+                $guest = $existing_guest;
+            } else {
+                // Create new guest
+                $guest = $this->guest_service->createGuest($guest_data);
+                $data['guest_id'] = $guest->id;
+            }
 
             $reservation = $this->reservation_service->createReservation($data);
+            
+            // Log consents after reservation is created
+            if (!empty($data['consents'])) {
+                do_action('mikroplaneta_booking_consents_given', $reservation->id, $data['consents'], $guest->email);
+            }
 
             return $this->success([
                 'reservation_id' => $reservation->id,
                 'status' => $reservation->status,
+                'message' => 'Rezerwacja została utworzona pomyślnie.',
             ], 201);
         } catch (\Exception $e) {
             if (defined('WP_DEBUG') && WP_DEBUG) {
                 error_log('[MikroBooking] Public reservation error: ' . $e->getMessage());
             }
-            if (strpos($e->getMessage(), 'Guest with this email already exists') !== false) {
-                return $this->error('Email already exists. Please contact reception to confirm reservation ownership.', 409);
-            }
-            return $this->error('Unable to create reservation request', 400);
+            return $this->error('Nie udało się utworzyć rezerwacji. Spróbuj ponownie lub skontaktuj się z recepcją.', 400);
         }
     }
 

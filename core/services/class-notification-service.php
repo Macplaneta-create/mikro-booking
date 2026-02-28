@@ -31,9 +31,9 @@ class NotificationService {
     /**
      * Send reservation confirmation email
      */
-    public function sendReservationConfirmation(Reservation $reservation, Guest $guest): bool {
-        [$subject, $message] = $this->resolveTemplate('reservation_confirmation', $reservation, $guest);
-        
+    public function sendReservationConfirmation(Reservation $reservation, Guest $guest, array $context = []): bool {
+        [$subject, $message] = $this->resolveTemplate('reservation_confirmation', $reservation, $guest, $context);
+
         $sent = wp_mail(
             $guest->email,
             $subject,
@@ -48,11 +48,11 @@ class NotificationService {
             $sent,
             $sent ? '' : 'wp_mail() returned false'
         );
-        
+
         if ($sent) {
             do_action('mikroplaneta_booking_notification_sent', 'reservation_confirmation', $reservation, $guest);
         }
-        
+
         return $sent;
     }
     
@@ -363,6 +363,29 @@ class NotificationService {
 
     private function buildPlaceholders(Reservation $reservation, Guest $guest, array $context = []): array {
         $reason = (string) ($context['reason'] ?? '');
+        
+        // Check if consents were passed in context (from reservation data)
+        $consents = $context['consents'] ?? null;
+        
+        $consent_text = '';
+        if ($consents) {
+            $consent_items = [];
+            if (!empty($consents['data_processing'])) {
+                $consent_items[] = '✓ Wyraziłem zgodę na przetwarzanie danych osobowych';
+            }
+            if (!empty($consents['terms_accepted'])) {
+                $consent_items[] = '✓ Zapoznałem się i akceptuję regulamin';
+            }
+            if (!empty($consents['marketing'])) {
+                $consent_items[] = '✓ Chcę otrzymywać newsletter';
+            }
+            $consent_text = !empty($consent_items) 
+                ? "\n\n---\n" . __('Zgody RODO:', 'mikroplaneta-booking') . "\n" . implode("\n", $consent_items) 
+                    . "\n" . __('Data wyrażenia:', 'mikroplaneta-booking') . ' ' . date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($consents['timestamp'] ?? current_time('mysql')))
+                    . "\n" . __('IP:', 'mikroplaneta-booking') . ' ' . ($consents['ip_address'] ?? '')
+                : '';
+        }
+        
         return [
             '{{guest_name}}' => esc_html($guest->getFullName()),
             '{{guest_email}}' => esc_html($guest->email),
@@ -374,6 +397,7 @@ class NotificationService {
             '{{hotel_name}}' => esc_html(get_bloginfo('name')),
             '{{home_url}}' => esc_url(home_url()),
             '{{reason}}' => nl2br(esc_html($reason)),
+            '{{consents}}' => nl2br(esc_html($consent_text)),
         ];
     }
 
@@ -477,7 +501,16 @@ class NotificationService {
                         <p><?php echo nl2br(esc_html($reservation->notes)); ?></p>
                     </div>
                     <?php endif; ?>
-                    
+
+                    <div class="details" style="border-left-color: #28a745;">
+                        <p><strong><?php _e('GDPR Consents:', 'mikroplaneta-booking'); ?></strong></p>
+                        <p style="font-size: 13px;">{{consents}}</p>
+                        <p style="font-size: 11px; color: #666; margin-top: 10px;">
+                            <?php _e('By making this reservation, you have agreed to our', 'mikroplaneta-booking'); ?> 
+                            <a href="<?php echo esc_url(get_privacy_policy_url()); ?>"><?php _e('Privacy Policy', 'mikroplaneta-booking'); ?></a>.
+                        </p>
+                    </div>
+
                     <p><?php _e('We look forward to welcoming you!', 'mikroplaneta-booking'); ?></p>
                 </div>
                 

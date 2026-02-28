@@ -618,13 +618,15 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                             >-</button>
                                             <input
                                                 type="number"
+                                                min="1"
+                                                max="50"
                                                 value={formData.adults}
-                                                readOnly
-                                                className="w-full text-center bg-transparent text-sm font-bold outline-none"
+                                                onChange={(e) => setFormData(f => ({ ...f, adults: Math.max(1, Math.min(50, parseInt(e.target.value) || 1)) }))}
+                                                className="w-full text-center bg-transparent text-sm font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => setFormData(f => ({ ...f, adults: f.adults + 1 }))}
+                                                onClick={() => setFormData(f => ({ ...f, adults: Math.min(50, f.adults + 1) }))}
                                                 className="px-3 py-2 hover:bg-gray-100 text-gray-600 font-bold"
                                             >+</button>
                                         </div>
@@ -641,13 +643,15 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                             >-</button>
                                             <input
                                                 type="number"
+                                                min="0"
+                                                max="50"
                                                 value={formData.children}
-                                                readOnly
-                                                className="w-full text-center bg-transparent text-sm font-bold outline-none"
+                                                onChange={(e) => setFormData(f => ({ ...f, children: Math.max(0, Math.min(50, parseInt(e.target.value) || 0)) }))}
+                                                className="w-full text-center bg-transparent text-sm font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             />
                                             <button
                                                 type="button"
-                                                onClick={() => setFormData(f => ({ ...f, children: f.children + 1 }))}
+                                                onClick={() => setFormData(f => ({ ...f, children: Math.min(50, f.children + 1) }))}
                                                 className="px-3 py-2 hover:bg-gray-100 text-gray-600 font-bold"
                                             >+</button>
                                         </div>
@@ -727,13 +731,18 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                                                                 >-</button>
                                                                 <input
                                                                     type="number"
+                                                                    min="1"
+                                                                    max="100"
                                                                     value={quantity}
-                                                                    readOnly
-                                                                    className="w-10 text-center bg-transparent text-xs font-bold outline-none"
+                                                                    onChange={(e) => {
+                                                                        const val = Math.max(1, Math.min(100, parseInt(e.target.value) || 1));
+                                                                        setSelectedServices(s => ({ ...s, [service.id!]: val }));
+                                                                    }}
+                                                                    className="w-12 text-center bg-transparent text-xs font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 />
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => setSelectedServices(s => ({ ...s, [service.id!]: s[service.id!] + 1 }))}
+                                                                    onClick={() => setSelectedServices(s => ({ ...s, [service.id!]: Math.min(100, s[service.id!] + 1) }))}
                                                                     className="px-2 hover:bg-gray-50 text-gray-600 font-bold"
                                                                 >+</button>
                                                             </div>

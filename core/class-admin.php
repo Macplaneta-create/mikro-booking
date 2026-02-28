@@ -23,6 +23,8 @@ class Admin {
         add_action('admin_menu', [$this, 'register_menu']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
     }
+
+
     
     /**
      * Register admin menu
@@ -117,7 +119,7 @@ class Admin {
      */
     public function render_admin_page(): void {
         $js_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'assets/admin/index.js';
-        
+
         if (!file_exists($js_file)) {
             ?>
             <div class="wrap">
@@ -135,6 +137,15 @@ class Admin {
             <?php
             return;
         }
+
+        ?>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('[MikroPlaneta] DOMContentLoaded - wp.media:', typeof window.wp?.media);
+            console.log('[MikroPlaneta] DOMContentLoaded - wp.media.view:', typeof window.wp?.media?.view);
+        });
+        </script>
+        <?php
         
         echo '<div id="mikroplaneta-booking-root"></div>';
     }
@@ -250,8 +261,9 @@ class Admin {
             return;
         }
 
+        // Load WordPress Media Library with all dependencies
         wp_enqueue_media();
-        
+
         // Check if React app is built
         $js_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'assets/admin/index.js';
         $css_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'assets/admin/index.css';
@@ -270,7 +282,7 @@ class Admin {
             wp_enqueue_script(
                 'mikroplaneta-booking-admin',
                 MIKROPLANETA_BOOKING_PLUGIN_URL . 'assets/admin/index.js',
-                [],
+                ['jquery'],
                 $js_version,
                 true
             );
@@ -284,7 +296,7 @@ class Admin {
                 $css_version
             );
         }
-        
+
         // Pass data to React app
         wp_localize_script('mikroplaneta-booking-admin', 'mikroplanetaBooking', [
             'apiUrl' => rest_url('mikroplaneta/v1'),
@@ -292,5 +304,10 @@ class Admin {
             'currentPage' => isset($_GET['page']) ? sanitize_text_field($_GET['page']) : '',
             'version' => MIKROPLANETA_BOOKING_VERSION,
         ]);
+        
+        // Debug: Check wp.media availability
+        wp_add_inline_script('mikroplaneta-booking-admin', '
+            console.log("[MikroPlaneta Admin Boot] Original window.wp:", typeof window.wp);
+        ', 'before');
     }
 }

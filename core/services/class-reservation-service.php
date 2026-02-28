@@ -133,7 +133,13 @@ class ReservationService {
         $email_notifications = (bool) get_option('mikroplaneta_booking_email_notifications', true);
         if ($email_notifications && $guest->email) {
             try {
-                $this->notification_service->sendReservationConfirmation($reservation, $guest);
+                // Pass consents in context if available
+                $context = [];
+                if (isset($data['consents']) && !empty($data['consents'])) {
+                    $context['consents'] = $data['consents'];
+                }
+                
+                $this->notification_service->sendReservationConfirmation($reservation, $guest, $context);
             } catch (\Exception $e) {
                 // Log error but don't fail the reservation
                 error_log('Failed to send reservation confirmation email: ' . $e->getMessage());

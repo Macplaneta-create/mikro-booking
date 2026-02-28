@@ -108,6 +108,7 @@ class Plugin {
         require_once $dir . 'public/class-frontend.php';
         require_once $dir . 'core/class-cron-handler.php';
         require_once $dir . 'core/class-logging-handler.php';
+        require_once $dir . 'core/class-consent-handler.php';
 
         // 8. Utilities
         if (file_exists($dir . 'force-update.php')) {
@@ -127,6 +128,9 @@ class Plugin {
         // Initialize frontend
         new \MikroPlaneta\Booking\Core\Frontend();
         
+        // Initialize consent handler (GDPR)
+        new \MikroPlaneta\Booking\Core\Consent_Handler();
+
         // Global REST API throttling
         (new \MikroPlaneta\Booking\Core\RestRateLimiter())->register();
     }

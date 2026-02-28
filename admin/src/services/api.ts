@@ -398,6 +398,8 @@ export const SettingsAPI = {
             rate_limit_enabled: boolean;
             rate_limit_window_seconds: number;
             rate_limit_max_requests: number;
+            privacy_policy_page_id: number;
+            terms_page_id: number;
         };
     },
     update: async (data: {
