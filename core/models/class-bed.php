@@ -55,12 +55,18 @@ class Bed {
      * Convert to array
      */
     public function toArray(): array {
+        // Get room pricing_mode
+        $room_repo = new \MikroPlaneta\Booking\Core\Repositories\RoomRepository();
+        $room = $room_repo->find($this->room_id);
+        $pricing_mode = $room ? $room->pricing_mode : 'per_bed';
+        
         return [
             'id' => $this->id,
             'room_id' => $this->room_id,
             'bed_number' => $this->bed_number,
             'bed_type' => $this->bed_type,
             'is_active' => $this->is_active,
+            'pricing_mode' => $pricing_mode,
             'created_at' => $this->created_at,
         ];
     }

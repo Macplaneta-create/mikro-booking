@@ -79,7 +79,7 @@ export const getBookingSlices = (booking: Reservation, startDate: Date, dayCount
                 : booking.status === 'checked_in'
                     ? 'ring-2 ring-emerald-700'
                     : booking.status === 'pending'
-                        ? 'animate-pulse'
+                        ? 'ring-1 ring-amber-700/70'
                         : booking.status === 'selecting'
                             ? 'ring-2 ring-brand-700 shadow-lg'
                             : 'ring-1 ring-white/40';

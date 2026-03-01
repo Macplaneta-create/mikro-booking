@@ -98,6 +98,15 @@ class SettingsController extends RestController {
             ],
         ]);
 
+        // Force add payment options (for migration)
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/force-add-payment-options', [
+            [
+                'methods' => 'POST',
+                'callback' => [$this, 'force_add_payment_options'],
+                'permission_callback' => [$this, 'check_permission'],
+            ],
+        ]);
+
         // Notifications delivery log
         register_rest_route($this->namespace, '/' . $this->rest_base . '/notifications-log', [
             [
@@ -419,6 +428,48 @@ class SettingsController extends RestController {
         ];
 
         return $this->success($settings);
+    }
+
+    /**
+     * Force add payment options to database
+     */
+    public function force_add_payment_options(WP_REST_Request $request): WP_REST_Response {
+        // Check if already added
+        if (get_option('mikroplaneta_booking_payment_options_added')) {
+            return $this->success([
+                'already_added' => true,
+                'message' => 'Ustawienia płatności zostały już dodane.',
+                'options' => [
+                    'deposit_enabled' => get_option('mikroplaneta_booking_deposit_enabled'),
+                    'deposit_percent' => get_option('mikroplaneta_booking_deposit_percent'),
+                    'payment_account' => get_option('mikroplaneta_booking_payment_account'),
+                    'payment_bank_name' => get_option('mikroplaneta_booking_payment_bank_name'),
+                    'payment_additional_info' => get_option('mikroplaneta_booking_payment_additional_info'),
+                ]
+            ]);
+        }
+
+        // Add payment options
+        add_option('mikroplaneta_booking_deposit_enabled', false);
+        add_option('mikroplaneta_booking_deposit_percent', 30);
+        add_option('mikroplaneta_booking_payment_account', '');
+        add_option('mikroplaneta_booking_payment_bank_name', '');
+        add_option('mikroplaneta_booking_payment_additional_info', '');
+
+        // Mark as added
+        update_option('mikroplaneta_booking_payment_options_added', true);
+
+        return $this->success([
+            'already_added' => false,
+            'message' => 'Dodano ustawienia płatności.',
+            'options' => [
+                'deposit_enabled' => get_option('mikroplaneta_booking_deposit_enabled'),
+                'deposit_percent' => get_option('mikroplaneta_booking_deposit_percent'),
+                'payment_account' => get_option('mikroplaneta_booking_payment_account'),
+                'payment_bank_name' => get_option('mikroplaneta_booking_payment_bank_name'),
+                'payment_additional_info' => get_option('mikroplaneta_booking_payment_additional_info'),
+            ]
+        ]);
     }
 
     /**

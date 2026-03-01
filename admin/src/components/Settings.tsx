@@ -1138,6 +1138,45 @@ const Settings: React.FC = () => {
                 <p className="text-xs text-gray-400 mt-2">Klucz otrzymasz po zakupie na mikroplaneta.pl</p>
             </div>
 
+            {/* Payment Settings Migration */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Aktualizacja Bazy Danych</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                    Jeśli po aktualizacji pluginu brakuje ustawień płatności, kliknij przycisk poniżej aby dodać nowe opcje do bazy danych.
+                </p>
+                <button
+                    onClick={async () => {
+                        try {
+                            const bookingData = (window as any).mikroplanetaBooking || {};
+                            const response = await fetch(`${bookingData.apiUrl || '/wp-json/mikroplaneta/v1'}/settings/force-add-payment-options`, {
+                                method: 'POST',
+                                headers: {
+                                    'X-WP-Nonce': bookingData.nonce || '',
+                                    'Content-Type': 'application/json',
+                                },
+                            });
+                            const data = await response.json();
+                            if (data.success) {
+                                alert('✅ Dodano ustawienia płatności!\n\n' + JSON.stringify(data.data, null, 2));
+                            } else {
+                                alert('❌ Błąd: ' + (data.message || 'Nieznany błąd'));
+                            }
+                        } catch (error: any) {
+                            alert('❌ Błąd: ' + (error.message || 'Nieznany błąd'));
+                        }
+                    }}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition flex items-center gap-2"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    Dodaj ustawienia płatności
+                </button>
+                <p className="text-xs text-gray-400 mt-2">Uruchom tylko raz po aktualizacji pluginu</p>
+            </div>
+
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm opacity-50 pointer-events-none">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Integracje (Wkrótce)</h3>
                 <p className="text-gray-500">Google Calendar, Booking.com, Airbnb</p>

@@ -835,17 +835,19 @@
                 });
 
                 const data = await response.json();
+                console.log('[Submit] API Response:', data);
 
                 if (response.ok && data.success) {
                     // Extract payment info from response
-                    const {
-                        deposit_required,
-                        deposit_amount,
-                        deposit_percent,
-                        payment_deadline,
-                        payment_info,
-                        total_price
-                    } = data.data || {};
+                    const responseData = data.data || {};
+                    const deposit_required = responseData.deposit_required || false;
+                    const deposit_amount = responseData.deposit_amount || 0;
+                    const deposit_percent = responseData.deposit_percent || 30;
+                    const payment_deadline = responseData.payment_deadline || '';
+                    const payment_info = responseData.payment_info || null;
+                    const total_price = responseData.total_price || 0;
+
+                    console.log('[Submit] Payment info:', { deposit_required, deposit_amount, deposit_percent, payment_info });
 
                     // Format deadline date
                     const formatDeadline = (dateString) => {
@@ -931,7 +933,12 @@
                                 </p>
                             </div>
                         `;
+                        console.log('[Submit] Payment HTML generated:', paymentHtml.length);
+                    } else {
+                        console.log('[Submit] No payment info - deposit_required:', deposit_required, 'payment_info:', payment_info);
                     }
+
+                    console.log('[Submit] Rendering success message, email:', email);
 
                     // SUCCESS: Lock form and show clear success message
                     results.innerHTML = `
@@ -942,11 +949,13 @@
                             </svg>
                             <h3 style="margin: 0 0 10px; font-size: 18px; font-weight: 700;">Rezerwacja wysłana!</h3>
                             <p style="margin: 0 0 15px; font-size: 14px;">
-                                Na adres <strong>${escapeHtml(email)}</strong> wysłaliśmy potwierdzenie.
+                                Na adres <strong>${escapeHtml(email || 'brak email')}</strong> wysłaliśmy potwierdzenie.
                             </p>
                             ${paymentHtml}
                         </div>
                     `;
+                    
+                    console.log('[Submit] Success message rendered, results.innerHTML length:', results.innerHTML.length);
 
                     // LOCK FORM: Disable all inputs and buttons
                     submitBtn.disabled = true;

@@ -83,22 +83,14 @@ class PricingService {
             $weekend_price = $pricing ? $pricing->weekend_price : $base_price;
 
             $is_weekend = $this->isWeekendNight($date, $pricing);
-            
+
             $price = $is_weekend ? $weekend_price : $base_price;
-            
-            $bed_type = $bed->bed_type ?: 'single';
-            if ((string) $room->room_type === 'dormitory') {
-                // In dormitory pricing we do not differentiate bed types by price.
-                $multiplier = 1.0;
-            } else {
-                $multiplier_key = 'mikroplaneta_booking_multiplier_' . $bed_type;
-                $default_multiplier = 1.0;
-                if ($bed_type === 'double') {
-                    $default_multiplier = 1.8;
-                }
-                $multiplier = (float) get_option($multiplier_key, $default_multiplier);
-            }
-            
+
+            // For dormitory rooms: price is per place, no bed type multipliers
+            // For other rooms: price will be handled by per_room pricing mode
+            // Bed type multipliers are not used - they don't make business sense
+            $multiplier = 1.0;
+
             $final_price = $price * $multiplier;
             $total += $final_price;
             
@@ -207,28 +199,51 @@ class PricingService {
         }
 
         // Handle Per-Bed pricing with child discount
-        if (!empty($individual_prices)) {
+        // Price is PER PLACE (per guest), not per bed
+        // Beds are just for capacity tracking
+        if (!empty($individual_prices) && $adults > 0) {
             $child_multiplier = (float) get_option('mikroplaneta_booking_multiplier_children', 0.5);
-            
-            // Sort by price descending so children take the cheapest beds
-            usort($individual_prices, fn($a, $b) => $a['total'] <=> $b['total']);
-            
-            foreach ($individual_prices as $index => $item) {
-                $is_child = $index < $children;
-                $multiplier = $is_child ? $child_multiplier : 1.0;
-                
-                $final_item_price = $item['total'] * $multiplier;
-                $grand_total += $final_item_price;
 
-                // Update details with child info if applicable
-                $details = $item['details'];
-                if ($is_child) {
-                    foreach ($details as &$d) {
-                        $d['price'] *= $child_multiplier;
-                        $d['is_child_rate'] = true;
-                    }
-                }
-                $all_details = array_merge($all_details, $details);
+            // For dormitory rooms: price from API is already PER PLACE
+            // We don't divide by bed capacity - each place costs the same
+            $first_bed = $beds_objects[0];
+            $first_bed_total = $individual_prices[0]['total'];
+            
+            // Check if this is a dormitory room
+            $first_room = $this->room_repository->find((int) $first_bed->room_id);
+            $is_dormitory = $first_room && (string) $first_room->room_type === 'dormitory';
+            
+            if ($is_dormitory) {
+                // Dormitory: price is per place (100 zł per person regardless of bed type)
+                $price_per_place = $first_bed_total;
+            } else {
+                // Other rooms: divide by bed capacity to get price per place
+                $first_bed_capacity = ($first_bed->bed_type === 'bunk') ? 2 : 1;
+                $price_per_place = $first_bed_total / $first_bed_capacity;
+            }
+
+            // Calculate: adults × price_per_place + children × price_per_place × child_multiplier
+            $adults_total = $adults * $price_per_place;
+            $children_total = $children * $price_per_place * $child_multiplier;
+
+            $grand_total = $adults_total + $children_total;
+
+            // Create details for each guest
+            for ($i = 0; $i < $adults; $i++) {
+                $all_details[] = [
+                    'type' => 'adult',
+                    'price' => $price_per_place,
+                    'nights' => $total_nights,
+                    'is_child_rate' => false
+                ];
+            }
+            for ($i = 0; $i < $children; $i++) {
+                $all_details[] = [
+                    'type' => 'child',
+                    'price' => $price_per_place * $child_multiplier,
+                    'nights' => $total_nights,
+                    'is_child_rate' => true
+                ];
             }
         }
 
