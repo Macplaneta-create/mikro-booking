@@ -19,6 +19,12 @@ interface PluginSettings {
     pending_timeout_hours: number;
     auto_expire_pending: boolean;
     require_payment_confirmation: boolean;
+    // Payment settings
+    deposit_enabled: boolean;
+    deposit_percent: number;
+    payment_account: string;
+    payment_bank_name: string;
+    payment_additional_info: string;
     multiplier_single: number;
     multiplier_double: number;
     multiplier_bunk: number;
@@ -88,6 +94,12 @@ const Settings: React.FC = () => {
         rate_limit_max_requests: 120,
         privacy_policy_page_id: 0,
         terms_page_id: 0,
+        // Payment settings
+        deposit_enabled: false,
+        deposit_percent: 30,
+        payment_account: '',
+        payment_bank_name: '',
+        payment_additional_info: '',
     });
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -122,6 +134,11 @@ const Settings: React.FC = () => {
             const data = await SettingsAPI.getAll();
             setSettings({
                 ...data,
+                deposit_enabled: (data as any).deposit_enabled ?? false,
+                deposit_percent: (data as any).deposit_percent ?? 30,
+                payment_account: (data as any).payment_account ?? '',
+                payment_bank_name: (data as any).payment_bank_name ?? '',
+                payment_additional_info: (data as any).payment_additional_info ?? '',
                 multiplier_single: data.multiplier_single ?? 1.0,
                 multiplier_double: data.multiplier_double ?? 2.0,
                 multiplier_bunk: data.multiplier_bunk ?? 2.0,
@@ -747,6 +764,126 @@ const Settings: React.FC = () => {
                             <label htmlFor="require_payment" className="text-sm font-medium text-gray-700 cursor-pointer">
                                 Wymagaj potwierdzenia płatności przed finalizacją rezerwacji
                             </label>
+                        </div>
+
+                        {/* Payment Settings Section */}
+                        <div className="mt-6 pt-6 border-t border-gray-200">
+                            <h4 className="text-md font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-brand-600">
+                                    <rect x="2" y="5" width="20" height="14" rx="2"/>
+                                    <line x1="2" y1="10" x2="22" y2="10"/>
+                                </svg>
+                                Płatności i Zaliczka
+                            </h4>
+
+                            {/* Deposit enabled checkbox */}
+                            <div className="flex items-center gap-3 py-2 mb-4">
+                                <input
+                                    type="checkbox"
+                                    id="deposit_enabled"
+                                    checked={settings.deposit_enabled}
+                                    onChange={(e) =>
+                                        setSettings({
+                                            ...settings,
+                                            deposit_enabled: e.target.checked,
+                                        })
+                                    }
+                                    className="w-4 h-4 rounded text-brand-600 cursor-pointer"
+                                />
+                                <label htmlFor="deposit_enabled" className="text-sm font-medium text-gray-700 cursor-pointer">
+                                    Wymagaj zaliczki na potwierdzenie rezerwacji
+                                </label>
+                            </div>
+
+                            {/* Deposit percent */}
+                            <div className="mb-4">
+                                <label htmlFor="deposit_percent" className="block text-sm font-medium text-gray-700 mb-2">
+                                    Wysokość zaliczki (%)
+                                </label>
+                                <input
+                                    type="number"
+                                    id="deposit_percent"
+                                    min="0"
+                                    max="100"
+                                    value={settings.deposit_percent}
+                                    onChange={(e) =>
+                                        setSettings({
+                                            ...settings,
+                                            deposit_percent: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)),
+                                        })
+                                    }
+                                    className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Procent całkowitej kwoty rezerwacji wymagany jako zaliczka (0-100%).
+                                </p>
+                            </div>
+
+                            {/* Payment account */}
+                            <div className="mb-4">
+                                <label htmlFor="payment_account" className="block text-sm font-medium text-gray-700 mb-2">
+                                    Numer konta bankowego
+                                </label>
+                                <input
+                                    type="text"
+                                    id="payment_account"
+                                    value={settings.payment_account}
+                                    onChange={(e) =>
+                                        setSettings({
+                                            ...settings,
+                                            payment_account: e.target.value,
+                                        })
+                                    }
+                                    placeholder="12 3456 7890 0000 1234 5678"
+                                    className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-mono"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Numer konta do przelewu zaliczki. Gość zobaczy go po wysłaniu rezerwacji.
+                                </p>
+                            </div>
+
+                            {/* Payment bank name */}
+                            <div className="mb-4">
+                                <label htmlFor="payment_bank_name" className="block text-sm font-medium text-gray-700 mb-2">
+                                    Nazwa banku
+                                </label>
+                                <input
+                                    type="text"
+                                    id="payment_bank_name"
+                                    value={settings.payment_bank_name}
+                                    onChange={(e) =>
+                                        setSettings({
+                                            ...settings,
+                                            payment_bank_name: e.target.value,
+                                        })
+                                    }
+                                    placeholder="Bank Testowy"
+                                    className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                            </div>
+
+                            {/* Payment additional info */}
+                            <div className="mb-4">
+                                <label htmlFor="payment_additional_info" className="block text-sm font-medium text-gray-700 mb-2">
+                                    Dodatkowe informacje dla gościa
+                                </label>
+                                <textarea
+                                    id="payment_additional_info"
+                                    rows={3}
+                                    value={settings.payment_additional_info}
+                                    onChange={(e) =>
+                                        setSettings({
+                                            ...settings,
+                                            payment_additional_info: e.target.value,
+                                        })
+                                    }
+                                    placeholder="Np. Prosimy o podanie imienia i nazwiska w tytule przelewu."
+                                    className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Dodatkowe instrukcje płatności wyświetlane gościowi po rezerwacji.
+                                </p>
+                            </div>
                         </div>
 
                         {/* Save button */}
