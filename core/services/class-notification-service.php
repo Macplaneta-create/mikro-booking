@@ -21,6 +21,7 @@ if (!defined('ABSPATH')) {
 class NotificationService {
     private const TEMPLATE_DEFINITIONS = [
         'reservation_confirmation' => 'Potwierdzenie rezerwacji',
+        'reservation_pending' => 'Rezerwacja oczekująca (zaliczka)',
         'reservation_cancellation' => 'Anulowanie rezerwacji',
         'checkin_reminder' => 'Przypomnienie o zameldowaniu',
         'checkout_reminder' => 'Przypomnienie o wymeldowaniu',
@@ -32,7 +33,12 @@ class NotificationService {
      * Send reservation confirmation email
      */
     public function sendReservationConfirmation(Reservation $reservation, Guest $guest, array $context = []): bool {
-        [$subject, $message] = $this->resolveTemplate('reservation_confirmation', $reservation, $guest, $context);
+        // Use different template based on reservation status
+        $template = ($reservation->status === 'pending') 
+            ? 'reservation_pending' 
+            : 'reservation_confirmation';
+        
+        [$subject, $message] = $this->resolveTemplate($template, $reservation, $guest, $context);
 
         $sent = wp_mail(
             $guest->email,
@@ -42,7 +48,7 @@ class NotificationService {
         );
 
         $this->logNotification(
-            'reservation_confirmation',
+            $template,
             $reservation,
             $guest,
             $sent,
@@ -330,7 +336,9 @@ class NotificationService {
     private function getDefaultSubject(string $template_key): string {
         switch ($template_key) {
             case 'reservation_confirmation':
-                return sprintf(__('Reservation Confirmation - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+                return sprintf(__('Reservation Confirmed - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+            case 'reservation_pending':
+                return sprintf(__('Reservation Received - Waiting for Confirmation - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
             case 'reservation_cancellation':
                 return sprintf(__('Reservation Cancelled - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
             case 'checkin_reminder':
@@ -346,6 +354,8 @@ class NotificationService {
         switch ($template_key) {
             case 'reservation_confirmation':
                 return $this->getReservationConfirmationTemplate($reservation, $guest);
+            case 'reservation_pending':
+                return $this->getReservationPendingTemplate($reservation, $guest);
             case 'reservation_cancellation':
                 return $this->getReservationCancellationTemplate(
                     $reservation,
@@ -524,7 +534,147 @@ class NotificationService {
         <?php
         return ob_get_clean();
     }
-    
+
+    /**
+     * Get reservation pending template (with deposit info)
+     */
+    private function getReservationPendingTemplate(Reservation $reservation, Guest $guest): string {
+        // Get deposit settings
+        $deposit_enabled = (bool) get_option('mikroplaneta_booking_deposit_enabled', false);
+        $deposit_percent = (int) get_option('mikroplaneta_booking_deposit_percent', 30);
+        $payment_account = (string) get_option('mikroplaneta_booking_payment_account', '');
+        $payment_bank_name = (string) get_option('mikroplaneta_booking_payment_bank_name', '');
+        $payment_additional_info = (string) get_option('mikroplaneta_booking_payment_additional_info', '');
+        $timeout_hours = (int) get_option('mikroplaneta_booking_pending_timeout_hours', 48);
+        
+        // Calculate deposit amount
+        $deposit_amount = $deposit_enabled ? ($reservation->total_price * $deposit_percent / 100) : 0;
+        
+        // Calculate deadline
+        $deadline = date_i18n(
+            get_option('date_format') . ' ' . get_option('time_format'),
+            strtotime("+{$timeout_hours} hours")
+        );
+
+        ob_start();
+        ?>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background: #f59e0b; color: white; padding: 20px; text-align: center; }
+                .content { padding: 20px; background: #f9f9f9; }
+                .details { background: white; padding: 15px; margin: 15px 0; border-left: 4px solid #f59e0b; }
+                .payment-info { background: #fef3c7; padding: 15px; margin: 15px 0; border-left: 4px solid #f59e0b; }
+                .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
+                .highlight { font-weight: bold; color: #d97706; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1><?php _e('Reservation Received', 'mikroplaneta-booking'); ?></h1>
+                    <p style="margin: 10px 0 0; font-size: 14px;"><?php _e('Waiting for confirmation', 'mikroplaneta-booking'); ?></p>
+                </div>
+
+                <div class="content">
+                    <p><?php printf(__('Dear %s,', 'mikroplaneta-booking'), esc_html($guest->getFullName())); ?></p>
+
+                    <p><?php _e('Thank you for your reservation request. We have received your booking and it is waiting for confirmation.', 'mikroplaneta-booking'); ?></p>
+
+                    <div class="details">
+                        <p><strong><?php _e('Reservation ID:', 'mikroplaneta-booking'); ?></strong> #<?php echo esc_html($reservation->id); ?></p>
+                        <p><strong><?php _e('Status:', 'mikroplaneta-booking'); ?></strong> <span class="highlight"><?php _e('Pending (waiting for confirmation)', 'mikroplaneta-booking'); ?></span></p>
+                        <p><strong><?php _e('Check-in:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_in))); ?></p>
+                        <p><strong><?php _e('Check-out:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_out))); ?></p>
+                        <p><strong><?php _e('Nights:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html($reservation->getNights()); ?></p>
+                        <p><strong><?php _e('Guests:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html($reservation->adults + $reservation->children); ?></p>
+                        <p><strong><?php _e('Total Price:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(number_format($reservation->total_price, 2)); ?> PLN</p>
+                    </div>
+
+                    <?php if ($deposit_enabled && $deposit_amount > 0): ?>
+                    <div class="payment-info">
+                        <h2 style="margin: 0 0 15px; color: #d97706;"><?php _e('Deposit Required', 'mikroplaneta-booking'); ?></h2>
+                        
+                        <p><?php _e('To confirm your reservation, please make a deposit payment:', 'mikroplaneta-booking'); ?></p>
+                        
+                        <p style="font-size: 18px; text-align: center; margin: 20px 0;">
+                            <strong><?php _e('Deposit Amount:', 'mikroplaneta-booking'); ?></strong><br>
+                            <span class="highlight" style="font-size: 24px;"><?php echo esc_html(number_format($deposit_amount, 2)); ?> PLN</span>
+                            <span style="font-size: 14px; color: #666;">(<?php echo esc_html($deposit_percent); ?>%)</span>
+                        </p>
+
+                        <div style="background: white; padding: 15px; margin: 15px 0; border-radius: 8px;">
+                            <p style="margin: 10px 0;"><strong><?php _e('Bank Account Number:', 'mikroplaneta-booking'); ?></strong></p>
+                            <p style="font-size: 18px; font-family: monospace; background: #f9f9f9; padding: 10px; text-align: center; letter-spacing: 2px;">
+                                <?php echo esc_html($payment_account ?: '---'); ?>
+                            </p>
+                            
+                            <?php if ($payment_bank_name): ?>
+                            <p style="margin: 10px 0;"><strong><?php _e('Bank:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html($payment_bank_name); ?></p>
+                            <?php endif; ?>
+                            
+                            <p style="margin: 10px 0;"><strong><?php _e('Payment Title:', 'mikroplaneta-booking'); ?></strong> <?php printf(__('Reservation #%d', 'mikroplaneta-booking'), intval($reservation->id)); ?></p>
+                            
+                            <?php if ($payment_additional_info): ?>
+                            <p style="margin: 10px 0;"><strong><?php _e('Additional Information:', 'mikroplaneta-booking'); ?></strong></p>
+                            <p style="font-size: 13px; color: #666;"><?php echo nl2br(esc_html($payment_additional_info)); ?></p>
+                            <?php endif; ?>
+                        </div>
+
+                        <p style="background: #fef3c7; padding: 10px; border-radius: 6px;">
+                            <strong><?php _e('Payment Deadline:', 'mikroplaneta-booking'); ?></strong><br>
+                            <?php printf(
+                                __('Please make the payment within %d hours (before %s).', 'mikroplaneta-booking'),
+                                intval($timeout_hours),
+                                esc_html($deadline)
+                            ); ?>
+                        </p>
+
+                        <p style="font-size: 13px; color: #666;">
+                            <?php _e('Your reservation will be confirmed automatically after the deposit is received. If we do not receive the payment within the deadline, your reservation will be automatically cancelled.', 'mikroplaneta-booking'); ?>
+                        </p>
+                    </div>
+                    <?php else: ?>
+                    <div class="payment-info" style="border-left-color: #10b981; background: #ecfdf5;">
+                        <h2 style="margin: 0 0 15px; color: #059669;"><?php _e('Waiting for Confirmation', 'mikroplaneta-booking'); ?></h2>
+                        <p><?php _e('Our team will review your reservation request and confirm it shortly. You will receive a confirmation email with further instructions.', 'mikroplaneta-booking'); ?></p>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if ($reservation->notes): ?>
+                    <div class="details">
+                        <p><strong><?php _e('Your Notes:', 'mikroplaneta-booking'); ?></strong></p>
+                        <p><?php echo nl2br(esc_html($reservation->notes)); ?></p>
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="details" style="border-left-color: #28a745;">
+                        <p><strong><?php _e('GDPR Consents:', 'mikroplaneta-booking'); ?></strong></p>
+                        <p style="font-size: 13px;">{{consents}}</p>
+                        <p style="font-size: 11px; color: #666; margin-top: 10px;">
+                            <?php _e('By making this reservation, you have agreed to our', 'mikroplaneta-booking'); ?>
+                            <a href="<?php echo esc_url(get_privacy_policy_url()); ?>"><?php _e('Privacy Policy', 'mikroplaneta-booking'); ?></a>.
+                        </p>
+                    </div>
+
+                    <p><?php _e('If you have any questions, please contact us.', 'mikroplaneta-booking'); ?></p>
+                </div>
+
+                <div class="footer">
+                    <p><?php echo esc_html(get_bloginfo('name')); ?></p>
+                    <p><a href="<?php echo esc_url(home_url()); ?>"><?php echo esc_url(home_url()); ?></a></p>
+                </div>
+            </div>
+        </body>
+        </html>
+        <?php
+        return ob_get_clean();
+    }
+
     /**
      * Get reservation cancellation template
      */
