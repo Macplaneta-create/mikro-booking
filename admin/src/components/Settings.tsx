@@ -96,7 +96,6 @@ const Settings: React.FC = () => {
     const [roomsLoading, setRoomsLoading] = useState(false);
     const [selectedRoomId, setSelectedRoomId] = useState<number>(0);
     const [shortcodeButtonLabel, setShortcodeButtonLabel] = useState('Rezerwuj');
-    const [shortcodeType, setShortcodeType] = useState<'card' | 'room_card'>('room_card'); // New simple card
     const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
     const [templatePlaceholders, setTemplatePlaceholders] = useState<string[]>([]);
     const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>('reservation_confirmation');
@@ -262,20 +261,11 @@ const Settings: React.FC = () => {
         }
 
         const trimmedLabel = shortcodeButtonLabel.trim();
-        
-        if (shortcodeType === 'room_card') {
-            // New simple card
-            if (trimmedLabel && trimmedLabel !== 'Rezerwuj') {
-                return `[mikroplaneta_room_card room_id="${selectedRoomId}" button_label="${trimmedLabel}"]`;
-            }
-            return `[mikroplaneta_room_card room_id="${selectedRoomId}"]`;
-        } else {
-            // Old complex card
-            if (trimmedLabel && trimmedLabel !== 'Rezerwuj' && trimmedLabel !== 'Sprawdź dostępność') {
-                return `[mikroplaneta_booking_card room_id="${selectedRoomId}" button_label="${trimmedLabel}"]`;
-            }
-            return `[mikroplaneta_booking_card room_id="${selectedRoomId}"]`;
+
+        if (trimmedLabel && trimmedLabel !== 'Rezerwuj') {
+            return `[mikroplaneta_room_card room_id="${selectedRoomId}" button_label="${trimmedLabel}"]`;
         }
+        return `[mikroplaneta_room_card room_id="${selectedRoomId}"]`;
     })();
 
     const selectedTemplate = emailTemplates.find(t => t.key === selectedTemplateKey) || emailTemplates[0] || null;
@@ -1076,15 +1066,15 @@ const Settings: React.FC = () => {
                 </div>
 
                 <div className="mt-6 pt-6 border-t border-gray-200">
-                    <h4 className="text-sm font-bold text-gray-900 mb-3">Generator krótkiego kodu dla karty pokoju (wizytówki)</h4>
-                    <p className="text-xs text-gray-500 mb-3">1. Wybierz domek/pokój. 2. Zmień tekst przycisku (opcjonalnie). 3. Skopiuj i wklej na swojej stronie.</p>
+                    <h4 className="text-sm font-bold text-gray-900 mb-3">Generator karty pokoju</h4>
+                    <p className="text-xs text-gray-500 mb-3">Wybierz pokój/domek i wygeneruj shortcode z przyciskiem "Rezerwuj" otwierającym modal.</p>
 
                     {roomsLoading ? (
                         <p className="text-xs text-gray-500">Ładowanie pokoi...</p>
                     ) : (
                         <div className="space-y-3">
                             <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">Domek / Pokój</label>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Pokój / Domek</label>
                                 <select
                                     value={selectedRoomId}
                                     onChange={(e) => setSelectedRoomId(parseInt(e.target.value, 10) || 0)}
@@ -1099,30 +1089,13 @@ const Settings: React.FC = () => {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">Typ wizytówki</label>
-                                <select
-                                    value={shortcodeType}
-                                    onChange={(e) => setShortcodeType(e.target.value as 'card' | 'room_card')}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                                >
-                                    <option value="room_card">Z modalem rezerwacji (nowa)</option>
-                                    <option value="card">Z formularzem dat (stara)</option>
-                                </select>
-                                <p className="text-xs text-gray-500 mt-1">
-                                    {shortcodeType === 'room_card'
-                                        ? 'Prosta karta z przyciskiem → po kliknięciu otwiera modal z formularzem'
-                                        : 'Karta z widocznym formularzem dat i liczby osób na stronie'}
-                                </p>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-600 mb-1">Tekst przycisku rezerwacji (opcjonalnie)</label>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Tekst przycisku (opcjonalnie)</label>
                                 <input
                                     type="text"
                                     value={shortcodeButtonLabel}
                                     onChange={(e) => setShortcodeButtonLabel(e.target.value)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                                     placeholder="Rezerwuj"
-                                    disabled={shortcodeType === 'room_card' && shortcodeButtonLabel === 'Rezerwuj'}
                                 />
                             </div>
 
