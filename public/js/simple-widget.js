@@ -837,6 +837,102 @@
                 const data = await response.json();
 
                 if (response.ok && data.success) {
+                    // Extract payment info from response
+                    const {
+                        deposit_required,
+                        deposit_amount,
+                        deposit_percent,
+                        payment_deadline,
+                        payment_info,
+                        total_price
+                    } = data.data || {};
+
+                    // Format deadline date
+                    const formatDeadline = (dateString) => {
+                        if (!dateString) return '';
+                        const date = new Date(dateString);
+                        return date.toLocaleString('pl-PL', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    };
+
+                    // Calculate hours until deadline
+                    const getHoursUntilDeadline = (dateString) => {
+                        if (!dateString) return 48;
+                        const deadline = new Date(dateString);
+                        const now = new Date();
+                        const diffMs = deadline - now;
+                        const diffHours = Math.ceil(diffMs / (1000 * 60 * 60));
+                        return Math.max(1, diffHours);
+                    };
+
+                    // Build payment info HTML
+                    let paymentHtml = '';
+                    if (deposit_required && payment_info) {
+                        const hours = getHoursUntilDeadline(payment_deadline);
+                        paymentHtml = `
+                            <div class="mp-booking-form__payment-info">
+                                <h4 class="mp-booking-form__payment-title">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="5" width="20" height="14" rx="2"/>
+                                        <line x1="2" y1="10" x2="22" y2="10"/>
+                                    </svg>
+                                    Wymagana zaliczka
+                                </h4>
+                                
+                                <div class="mp-booking-form__deposit-amount">
+                                    ${deposit_amount.toFixed(2)} zł (${deposit_percent}%)
+                                </div>
+                                
+                                ${payment_info.account_number ? `
+                                    <div class="mp-booking-form__payment-details">
+                                        <div class="mp-booking-form__payment-detail-row">
+                                            <span class="mp-booking-form__payment-detail-label">Nr konta:</span>
+                                            <span class="mp-booking-form__payment-detail-value">${escapeHtml(payment_info.account_number)}</span>
+                                        </div>
+                                        ${payment_info.bank_name ? `
+                                        <div class="mp-booking-form__payment-detail-row">
+                                            <span class="mp-booking-form__payment-detail-label">Bank:</span>
+                                            <span class="mp-booking-form__payment-detail-value">${escapeHtml(payment_info.bank_name)}</span>
+                                        </div>
+                                        ` : ''}
+                                        <div class="mp-booking-form__payment-detail-row">
+                                            <span class="mp-booking-form__payment-detail-label">Tytuł:</span>
+                                            <span class="mp-booking-form__payment-detail-value">${escapeHtml(payment_info.title)}</span>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                
+                                <div class="mp-booking-form__payment-deadline">
+                                    <div class="mp-booking-form__payment-deadline-title">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <polyline points="12 6 12 12 16 14"/>
+                                        </svg>
+                                        Czas na płatność: ${hours} godzin
+                                    </div>
+                                    <div class="mp-booking-form__payment-deadline-time">
+                                        do ${formatDeadline(payment_deadline)}
+                                    </div>
+                                </div>
+                                
+                                ${payment_info.additional_info ? `
+                                    <p class="mp-booking-form__payment-note">
+                                        ${escapeHtml(payment_info.additional_info)}
+                                    </p>
+                                ` : ''}
+                                
+                                <p class="mp-booking-form__payment-note">
+                                    <strong>Po zaksięgowaniu wpłaty</strong> otrzymasz ostateczne potwierdzenie rezerwacji.
+                                </p>
+                            </div>
+                        `;
+                    }
+
                     // SUCCESS: Lock form and show clear success message
                     results.innerHTML = `
                         <div class="mp-booking-form__message mp-booking-form__message--success" style="background: #ecfdf5; border: 2px solid #10b981; color: #065f46; padding: 20px; border-radius: 12px; text-align: center; margin-top: 20px;">
@@ -845,28 +941,31 @@
                                 <polyline points="22 4 12 14.01 9 11.01"/>
                             </svg>
                             <h3 style="margin: 0 0 10px; font-size: 18px; font-weight: 700;">Rezerwacja wysłana!</h3>
-                            <p style="margin: 0; font-size: 14px;">Sprawdź email z potwierdzeniem.</p>
+                            <p style="margin: 0 0 15px; font-size: 14px;">
+                                Na adres <strong>${escapeHtml(email)}</strong> wysłaliśmy potwierdzenie.
+                            </p>
+                            ${paymentHtml}
                         </div>
                     `;
-                    
+
                     // LOCK FORM: Disable all inputs and buttons
                     submitBtn.disabled = true;
                     step2Back.disabled = true;
-                    
+
                     const allInputs = container.querySelectorAll('input, textarea, button');
                     allInputs.forEach(input => {
                         if (input !== submitBtn && input !== step2Back) {
                             input.disabled = true;
                         }
                     });
-                    
+
                     // Visual feedback - gray out form
                     const wrapper = container.querySelector('.mp-booking-form-wrapper');
                     if (wrapper) {
                         wrapper.style.opacity = '0.6';
                         wrapper.style.pointerEvents = 'none';
                     }
-                    
+
                     isSubmitting = false; // Reset flag
                 } else {
                     throw new Error(data.message || 'Błąd wysyłania');

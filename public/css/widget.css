@@ -1070,3 +1070,102 @@
         gap: 8px;
     }
 }
+
+/* ============================================
+   Payment/Deposit Info Styles
+   ============================================ */
+.mp-booking-form__payment-info {
+    margin-top: 20px;
+    padding: 20px;
+    background: #fff;
+    border: 2px solid #10b981;
+    border-radius: 12px;
+}
+
+.mp-booking-form__payment-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 15px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #059669;
+}
+
+.mp-booking-form__payment-title svg {
+    color: #10b981;
+}
+
+.mp-booking-form__deposit-amount {
+    font-size: 28px;
+    font-weight: 700;
+    color: #059669;
+    text-align: center;
+    margin: 15px 0;
+    padding: 15px;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border-radius: 8px;
+}
+
+.mp-booking-form__payment-details {
+    background: #f9fafb;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+}
+
+.mp-booking-form__payment-detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 14px;
+}
+
+.mp-booking-form__payment-detail-row:last-child {
+    border-bottom: none;
+}
+
+.mp-booking-form__payment-detail-label {
+    font-weight: 600;
+    color: #6b7280;
+}
+
+.mp-booking-form__payment-detail-value {
+    color: #111827;
+    font-weight: 500;
+}
+
+.mp-booking-form__payment-deadline {
+    background: #fef3c7;
+    padding: 12px 15px;
+    border-radius: 8px;
+    border-left: 4px solid #f59e0b;
+    margin: 15px 0;
+}
+
+.mp-booking-form__payment-deadline-title {
+    font-weight: 700;
+    color: #92400e;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mp-booking-form__payment-deadline-time {
+    font-size: 14px;
+    color: #78350f;
+}
+
+.mp-booking-form__payment-note {
+    font-size: 13px;
+    color: #6b7280;
+    text-align: center;
+    margin-top: 15px;
+    line-height: 1.5;
+}
+
+.mp-booking-form__payment-note strong {
+    color: #111827;
+}
