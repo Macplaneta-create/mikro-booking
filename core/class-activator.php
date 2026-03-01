@@ -79,6 +79,14 @@ class Activator {
             'mikroplaneta_booking_pending_timeout_hours' => 48,
             'mikroplaneta_booking_auto_expire_pending' => true,
             'mikroplaneta_booking_require_payment_confirmation' => true,
+            
+            // Payment settings
+            'mikroplaneta_booking_deposit_enabled' => false,
+            'mikroplaneta_booking_deposit_percent' => 30,
+            'mikroplaneta_booking_payment_account' => '',
+            'mikroplaneta_booking_payment_bank_name' => '',
+            'mikroplaneta_booking_payment_additional_info' => '',
+            
             'mikroplaneta_booking_captcha_provider' => 'recaptcha_v3',
             'mikroplaneta_booking_recaptcha_site_key' => '',
             'mikroplaneta_booking_recaptcha_secret_key' => '',

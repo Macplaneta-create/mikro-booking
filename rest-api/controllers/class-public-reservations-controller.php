@@ -151,15 +151,42 @@ class PublicReservationsController extends RestController {
             }
 
             $reservation = $this->reservation_service->createReservation($data);
-            
+
             // Log consents after reservation is created
             if (!empty($data['consents'])) {
                 do_action('mikroplaneta_booking_consents_given', $reservation->id, $data['consents'], $guest->email);
             }
 
+            // Calculate deposit information
+            $deposit_enabled = (bool) get_option('mikroplaneta_booking_deposit_enabled', false);
+            $deposit_percent = (int) get_option('mikroplaneta_booking_deposit_percent', 30);
+            $timeout_hours = (int) get_option('mikroplaneta_booking_pending_timeout_hours', 48);
+            
+            // Get total price from reservation
+            $total_price = (float) $reservation->total_price;
+            $deposit_amount = $deposit_enabled ? ($total_price * $deposit_percent / 100) : 0;
+            $payment_deadline = date('Y-m-d H:i:s', strtotime("+{$timeout_hours} hours"));
+
+            // Prepare payment info
+            $payment_info = null;
+            if ($deposit_enabled) {
+                $payment_info = [
+                    'account_number' => (string) get_option('mikroplaneta_booking_payment_account', ''),
+                    'bank_name' => (string) get_option('mikroplaneta_booking_payment_bank_name', ''),
+                    'additional_info' => (string) get_option('mikroplaneta_booking_payment_additional_info', ''),
+                    'title' => 'Rezerwacja #' . $reservation->id,
+                ];
+            }
+
             return $this->success([
                 'reservation_id' => $reservation->id,
                 'status' => $reservation->status,
+                'total_price' => $total_price,
+                'deposit_required' => $deposit_enabled,
+                'deposit_amount' => $deposit_amount,
+                'deposit_percent' => $deposit_percent,
+                'payment_deadline' => $payment_deadline,
+                'payment_info' => $payment_info,
                 'message' => 'Rezerwacja została utworzona pomyślnie.',
             ], 201);
         } catch (\Exception $e) {

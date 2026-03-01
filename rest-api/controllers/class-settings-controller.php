@@ -47,6 +47,14 @@ class SettingsController extends RestController {
                     'pending_timeout_hours' => ['type' => 'integer', 'minimum' => 1],
                     'auto_expire_pending' => ['type' => 'boolean'],
                     'require_payment_confirmation' => ['type' => 'boolean'],
+                    
+                    // Payment settings
+                    'deposit_enabled' => ['type' => 'boolean'],
+                    'deposit_percent' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 100],
+                    'payment_account' => ['type' => 'string'],
+                    'payment_bank_name' => ['type' => 'string'],
+                    'payment_additional_info' => ['type' => 'string'],
+                    
                     'multiplier_single' => ['type' => 'number'],
                     'multiplier_double' => ['type' => 'number'],
                     'multiplier_bunk' => ['type' => 'number'],
@@ -162,6 +170,14 @@ class SettingsController extends RestController {
                 'mikroplaneta_booking_require_payment_confirmation',
                 true
             ),
+            
+            // Payment settings
+            'deposit_enabled' => (bool) get_option('mikroplaneta_booking_deposit_enabled', false),
+            'deposit_percent' => (int) get_option('mikroplaneta_booking_deposit_percent', 30),
+            'payment_account' => (string) get_option('mikroplaneta_booking_payment_account', ''),
+            'payment_bank_name' => (string) get_option('mikroplaneta_booking_payment_bank_name', ''),
+            'payment_additional_info' => (string) get_option('mikroplaneta_booking_payment_additional_info', ''),
+            
             'multiplier_single' => (float) get_option('mikroplaneta_booking_multiplier_single', 1.0),
             'multiplier_double' => (float) get_option('mikroplaneta_booking_multiplier_double', 1.8),
             'multiplier_bunk' => (float) get_option('mikroplaneta_booking_multiplier_bunk', 1.0),
@@ -216,6 +232,28 @@ class SettingsController extends RestController {
         if (isset($params['pending_timeout_hours'])) {
             $timeout = max(1, (int) $params['pending_timeout_hours']);
             update_option('mikroplaneta_booking_pending_timeout_hours', $timeout);
+        }
+
+        // Payment settings
+        if (isset($params['deposit_enabled'])) {
+            update_option('mikroplaneta_booking_deposit_enabled', (bool) $params['deposit_enabled']);
+        }
+
+        if (isset($params['deposit_percent'])) {
+            $percent = max(0, min(100, (int) $params['deposit_percent']));
+            update_option('mikroplaneta_booking_deposit_percent', $percent);
+        }
+
+        if (isset($params['payment_account'])) {
+            update_option('mikroplaneta_booking_payment_account', sanitize_text_field($params['payment_account']));
+        }
+
+        if (isset($params['payment_bank_name'])) {
+            update_option('mikroplaneta_booking_payment_bank_name', sanitize_text_field($params['payment_bank_name']));
+        }
+
+        if (isset($params['payment_additional_info'])) {
+            update_option('mikroplaneta_booking_payment_additional_info', sanitize_textarea_field($params['payment_additional_info']));
         }
         
         if (isset($params['auto_expire_pending'])) {
