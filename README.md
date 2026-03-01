@@ -7,8 +7,19 @@ Advanced hotel booking system with AI-powered bed allocation for WordPress.
 - **[Architecture](ARCHITECTURE.md)** - Complete system architecture and design
 - **[API Documentation](docs/API.md)** - REST API endpoints reference
 - **[Database Schema](docs/DATABASE.md)** - Database structure and relationships
-- **[Development Guide](docs/DEVELOPMENT.md)** - Setup and development workflow
-- **[Sprint Planning](SPRINTS.md)** - Implementation roadmap
+- **[Development Guide](DEVELOPMENT.md)** - Setup and development workflow
+- **[Quick Start (PL)](SZYBKI_START.md)** - Quick start guide in Polish
+
+## ✨ Features
+
+- 🏨 **Room & Bed Management** - Flexible room types and bed configurations
+- 💰 **Dynamic Pricing** - Per-room and per-bed pricing modes
+- 📅 **Real-time Availability** - Live calendar and availability checking
+- 💳 **Deposit Payments** - Configurable deposit system with payment info
+- 🛏️ **AI Bed Allocation** - Smart bed assignment for group bookings
+- 📧 **Email Notifications** - Automated reservation confirmations
+- 🔒 **GDPR Compliant** - Built-in consent management
+- 🌐 **Multi-language** - WordPress i18n ready
 
 ## 🚀 Quick Start
 
