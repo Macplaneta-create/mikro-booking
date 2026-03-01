@@ -292,6 +292,36 @@
                         <textarea id="mp-notes" rows="3" class="mp-booking-form__textarea" placeholder="Dodatkowe uwagi..."></textarea>
                     </div>
 
+                    <div class="mp-booking-form__consent">
+                        <label class="mp-booking-form__consent-label">
+                            <input type="checkbox" id="mp-consent-data" class="mp-booking-form__checkbox" />
+                            <span>
+                                <strong>Wyrażam zgodę na przetwarzanie moich danych osobowych</strong> w celu realizacji rezerwacji.
+                                Administratorem danych jest <strong>${escapeHtml(settings.hotelName || 'Hotel')}</strong>.
+                                Więcej informacji w <a href="${escapeHtml(settings.privacyPolicyUrl || '#')}" target="_blank">Polityce prywatności</a>.
+                            </span>
+                        </label>
+
+                        <label class="mp-booking-form__consent-label">
+                            <input type="checkbox" id="mp-consent-terms" class="mp-booking-form__checkbox" />
+                            <span>
+                                <strong>Zapoznałem się i akceptuję Regulamin</strong> świadczenia usług rezerwacji.
+                                <a href="${escapeHtml(settings.termsUrl || '#')}" target="_blank">Przeczytaj regulamin</a>.
+                            </span>
+                        </label>
+
+                        <label class="mp-booking-form__consent-label mp-booking-form__consent-label--optional">
+                            <input type="checkbox" id="mp-consent-marketing" class="mp-booking-form__checkbox" />
+                            <span>
+                                Chcę otrzymywać newsletter z ofertami specjalnymi i informacjami o hotelu.
+                            </span>
+                        </label>
+                    </div>
+
+                    <div id="mp-consent-error" class="mp-booking-form__message mp-booking-form__message--error mp-hidden" style="display: none;">
+                        Musisz wyrazić wymagane zgody przed wysłaniem rezerwacji.
+                    </div>
+
                     <div id="mp-hcaptcha-wrap" class="mp-booking-form__hcaptcha" ${isHcaptcha ? '' : 'style="display:none;"'}>
                         <div class="h-captcha" data-sitekey="${escapeHtml(settings.captcha.hcaptchaSiteKey || '')}" data-callback="mpHcaptchaDone" data-expired-callback="mpHcaptchaExpired"></div>
                     </div>
@@ -448,6 +478,27 @@
                 return;
             }
 
+            // Validate consent checkboxes
+            const consentData = container.querySelector('#mp-consent-data');
+            const consentTerms = container.querySelector('#mp-consent-terms');
+            const consentError = container.querySelector('#mp-consent-error');
+
+            if (!consentData || !consentTerms || !consentData.checked || !consentTerms.checked) {
+                consentError.style.display = 'block';
+                consentError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                isSubmitting = false;
+                return;
+            }
+            consentError.style.display = 'none';
+
+            // Get consent values
+            const consents = {
+                data_processing: consentData.checked,
+                terms_accepted: consentTerms.checked,
+                marketing: container.querySelector('#mp-consent-marketing')?.checked || false,
+                timestamp: new Date().toISOString(),
+            };
+
             submitBtn.disabled = true;
             results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">Wysyłanie...</div>`;
 
@@ -498,6 +549,7 @@
                         adults: adults,
                         children: children,
                         notes: notes,
+                        consents: consents,
                         captcha_token: 'disabled',
                     }),
                 });
