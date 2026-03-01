@@ -90,6 +90,9 @@ class ReservationService {
         $reservation = $this->withBedLocks($bed_ids, function() use ($bed_ids, $data): Reservation {
             // Validate all beds and check availability under lock
             $total_price = 0;
+            
+            // Group beds by room_id for proper pricing
+            $beds_by_room = [];
             foreach ($bed_ids as $bed_id) {
                 $bed = $this->bed_repository->find($bed_id);
                 if (!$bed || !$bed->is_active) {
@@ -104,11 +107,33 @@ class ReservationService {
                     throw new \Exception("Bed #{$bed_id} is not available for selected dates");
                 }
 
-                $total_price += $this->calculatePrice(
-                    $bed_id,
-                    $data['check_in'],
-                    $data['check_out']
-                );
+                $beds_by_room[$bed->room_id][] = $bed;
+            }
+
+            // Calculate price per room (not per bed) for per_room pricing mode
+            foreach ($beds_by_room as $room_id => $beds) {
+                $room = $this->room_repository->find($room_id);
+                if (!$room) {
+                    throw new \Exception("Room #{$room_id} not found");
+                }
+
+                if ($room->pricing_mode === 'per_room') {
+                    // For per_room: calculate price ONCE per room (use first bed)
+                    $total_price += $this->calculatePrice(
+                        $beds[0]->id,
+                        $data['check_in'],
+                        $data['check_out']
+                    );
+                } else {
+                    // For per_bed: calculate price for each bed
+                    foreach ($beds as $bed) {
+                        $total_price += $this->calculatePrice(
+                            $bed->id,
+                            $data['check_in'],
+                            $data['check_out']
+                        );
+                    }
+                }
             }
 
             $reservation_data = $data;
