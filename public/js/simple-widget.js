@@ -168,6 +168,238 @@
     }
 
     /**
+     * Get bed capacity
+     */
+    function bedCapacity(bed) {
+        return bed && (bed.bed_type === 'bunk') ? 2 : 1;
+    }
+
+    /**
+     * Get selected bed IDs
+     */
+    function getSelectedBedIds(container) {
+        return Array.from(container.querySelectorAll('input[name="mp-bed-checkbox"]:checked'))
+            .map((el) => parseInt(el.value, 10))
+            .filter((id) => Number.isInteger(id) && id > 0);
+    }
+
+    /**
+     * Compute selected capacity
+     */
+    function computeSelectedCapacity(container, beds) {
+        const selectedIds = getSelectedBedIds(container);
+        if (selectedIds.length === 0 || !Array.isArray(beds) || beds.length === 0) {
+            return 0;
+        }
+        return beds
+            .filter((bed) => selectedIds.includes(bed.id))
+            .reduce((sum, bed) => sum + bedCapacity(bed), 0);
+    }
+
+    /**
+     * Choose optimal beds using dynamic programming
+     */
+    function chooseOptimalBeds(beds, targetGuests) {
+        if (!Array.isArray(beds) || beds.length === 0 || targetGuests <= 0) {
+            return [];
+        }
+
+        const totalCapacity = beds.reduce((sum, bed) => sum + bedCapacity(bed), 0);
+        if (totalCapacity < targetGuests) {
+            return [];
+        }
+
+        // Sort by capacity (larger first), then by id
+        const sorted = [...beds].sort((a, b) => {
+            const diff = bedCapacity(b) - bedCapacity(a);
+            if (diff !== 0) return diff;
+            return (a.id || 0) - (b.id || 0);
+        });
+
+        // Dynamic programming to find minimum beds for exact capacity
+        const dp = new Map();
+        dp.set(0, []);
+
+        sorted.forEach((bed) => {
+            const cap = bedCapacity(bed);
+            const entries = Array.from(dp.entries());
+            entries.forEach(([used, picked]) => {
+                const next = used + cap;
+                const candidate = [...picked, bed.id];
+                const existing = dp.get(next);
+                if (!existing || existing.length > candidate.length) {
+                    dp.set(next, candidate);
+                }
+            });
+        });
+
+        // Find best fit (minimum overfill, minimum beds)
+        let bestIds = [];
+        let bestOverfill = Number.POSITIVE_INFINITY;
+        let bestCount = Number.POSITIVE_INFINITY;
+
+        dp.forEach((ids, cap) => {
+            if (cap < targetGuests) return;
+            const overfill = cap - targetGuests;
+            if (overfill < bestOverfill || (overfill === bestOverfill && ids.length < bestCount)) {
+                bestIds = ids;
+                bestOverfill = overfill;
+                bestCount = ids.length;
+            }
+        });
+
+        return bestIds;
+    }
+
+    /**
+     * Suggest beds selection - prefers single room, then minimum overfill
+     */
+    function suggestBedsSelection(container, beds) {
+        const targetGuests = getGuestCount(container);
+        if (!Array.isArray(beds) || beds.length === 0 || targetGuests <= 0) {
+            return [];
+        }
+
+        // Group beds by room
+        const byRoom = beds.reduce((acc, bed) => {
+            const roomId = Number(bed.room_id) || 0;
+            if (!acc[roomId]) acc[roomId] = [];
+            acc[roomId].push(bed);
+            return acc;
+        }, {});
+
+        const candidates = [];
+
+        // Try each room first (prefer single room)
+        Object.values(byRoom).forEach((roomBeds) => {
+            const ids = chooseOptimalBeds(roomBeds, targetGuests);
+            if (ids.length > 0) {
+                const capacity = roomBeds
+                    .filter((bed) => ids.includes(bed.id))
+                    .reduce((sum, bed) => sum + bedCapacity(bed), 0);
+                candidates.push({
+                    ids,
+                    sameRoom: true,
+                    overfill: capacity - targetGuests,
+                    count: ids.length,
+                });
+            }
+        });
+
+        // Global selection (may span multiple rooms)
+        const globalIds = chooseOptimalBeds(beds, targetGuests);
+        if (globalIds.length > 0) {
+            const capacity = beds
+                .filter((bed) => globalIds.includes(bed.id))
+                .reduce((sum, bed) => sum + bedCapacity(bed), 0);
+            candidates.push({
+                ids: globalIds,
+                sameRoom: false,
+                overfill: capacity - targetGuests,
+                count: globalIds.length,
+            });
+        }
+
+        if (candidates.length === 0) {
+            return [];
+        }
+
+        // Sort: same room first, then minimum overfill, then minimum beds
+        candidates.sort((a, b) => {
+            if (a.sameRoom !== b.sameRoom) return a.sameRoom ? -1 : 1;
+            if (a.overfill !== b.overfill) return a.overfill - b.overfill;
+            return a.count - b.count;
+        });
+
+        const selected = candidates[0].ids;
+
+        // Check the checkboxes
+        const checks = container.querySelectorAll('input[name="mp-bed-checkbox"]');
+        checks.forEach((input) => {
+            input.checked = selected.includes(parseInt(input.value, 10));
+        });
+
+        return selected;
+    }
+
+    /**
+     * Render beds list
+     */
+    function renderBedsList(container, settings, beds) {
+        const bedsContainer = container.querySelector('#mp-beds-list');
+        if (!bedsContainer) return;
+
+        if (!Array.isArray(beds) || beds.length === 0) {
+            bedsContainer.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">Brak dostępnych łóżek.</div>`;
+            return;
+        }
+
+        // Group beds by room for better display
+        const byRoom = beds.reduce((acc, bed) => {
+            const roomId = Number(bed.room_id) || 0;
+            if (!acc[roomId]) acc[roomId] = [];
+            acc[roomId].push(bed);
+            return acc;
+        }, {});
+
+        let html = '';
+        Object.entries(byRoom).forEach(([roomId, roomBeds]) => {
+            const roomCapacity = roomBeds.reduce((sum, bed) => sum + bedCapacity(bed), 0);
+            html += `<div class="mp-booking-form__room-group">`;
+            html += `<div class="mp-booking-form__room-title">Pokój #${roomId} (${roomCapacity} miejsc)</div>`;
+            html += `<div class="mp-booking-form__beds-list">`;
+
+            roomBeds.forEach((bed) => {
+                const cap = bedCapacity(bed);
+                const bedType = bed.bed_type || 'single';
+                const bedNumber = bed.bed_number || '?';
+                const label = `Łóżko ${bedNumber} (${bedType === 'bunk' ? 'piętrowe' : bedType === 'double' ? 'podwójne' : 'pojedyncze'}, ${cap} miejsc${cap > 1 ? 'a' : 'e'})`;
+
+                html += `
+                    <label class="mp-booking-form__bed-item">
+                        <input type="checkbox" name="mp-bed-checkbox" value="${bed.id}" />
+                        <span>${escapeHtml(label)}</span>
+                    </label>
+                `;
+            });
+
+            html += `</div></div>`;
+        });
+
+        bedsContainer.innerHTML = html;
+    }
+
+    /**
+     * Update selection summary
+     */
+    function updateSelectionSummary(container, settings, beds) {
+        const summary = container.querySelector('#mp-beds-summary');
+        if (!summary) return;
+
+        const guests = getGuestCount(container);
+        const capacity = computeSelectedCapacity(container, beds);
+        const diff = capacity - guests;
+
+        let tone = '#374151';
+        let extra = '';
+        if (capacity === 0) {
+            extra = 'Wybierz łóżka z listy.';
+        } else if (diff < 0) {
+            tone = '#991b1b';
+            extra = ` Brakuje miejsc: ${Math.abs(diff)}.`;
+        } else if (diff > 0) {
+            tone = '#92400e';
+            extra = ` Nadmiar miejsc: ${diff}.`;
+        } else {
+            tone = '#065f46';
+            extra = ' Dobór idealny.';
+        }
+
+        summary.style.color = tone;
+        summary.textContent = `Wybrano ${capacity} miejsc dla ${guests} gości.${extra}`;
+    }
+
+    /**
      * Setup widget
      */
     function setupWidget(container) {
@@ -240,6 +472,20 @@
 
                     <!-- Availability check message (hidden by default) -->
                     <div id="mp-availability-message" class="mp-booking-form__message mp-hidden" style="display: none;"></div>
+
+                    <!-- Beds selection section -->
+                    <div class="mp-booking-form__beds-section">
+                        <div class="mp-booking-form__beds-header">
+                            <label class="mp-booking-form__beds-title">
+                                Dostępne łóżka
+                            </label>
+                            <button type="button" id="mp-suggest-beds-btn" class="mp-booking-form__btn mp-booking-form__btn--suggest">
+                                🔮 Auto-wybór
+                            </button>
+                        </div>
+                        <div id="mp-beds-list" class="mp-booking-form__beds-list"></div>
+                        <div id="mp-beds-summary" class="mp-booking-form__beds-summary"></div>
+                    </div>
 
                     <div class="mp-booking-form__footer">
                         <button type="button" id="mp-step-1-next" class="mp-booking-form__btn mp-booking-form__btn--primary mp-booking-form__btn--full">
@@ -408,7 +654,7 @@
             }
         };
 
-        // Step 1: Check availability
+        // Step 1: Check availability and load beds
         step1Next.addEventListener('click', async function() {
             const checkIn = container.querySelector('#mp-check-in').value;
             const checkOut = container.querySelector('#mp-check-out').value;
@@ -439,6 +685,30 @@
                 return;
             }
 
+            // Load beds and auto-suggest
+            availableBeds = result.beds;
+            renderBedsList(container, settings, availableBeds);
+
+            // Auto-suggest beds
+            const selected = suggestBedsSelection(container, availableBeds);
+            updateSelectionSummary(container, settings, availableBeds);
+
+            if (selected.length > 0) {
+                availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--success';
+                availabilityMsg.textContent = `✅ System wybrał ${selected.length} łóżek dla ${guests} osób. Możesz zmienić wybór.`;
+            } else {
+                availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--info';
+                availabilityMsg.textContent = 'Wybierz łóżka z listy poniżej.';
+            }
+
+            // Validate beds selection before proceeding
+            const selectedCapacity = computeSelectedCapacity(container, availableBeds);
+            if (selectedCapacity < guests) {
+                availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--error';
+                availabilityMsg.textContent = `Wybierz więcej łóżek. Obecnie: ${selectedCapacity} miejsc, potrzeba: ${guests}.`;
+                return;
+            }
+
             availabilityMsg.style.display = 'none';
             goToStep(2);
         });
@@ -446,6 +716,81 @@
         // Step 2: Back
         step2Back.addEventListener('click', function() {
             goToStep(1);
+        });
+
+        // Auto-suggest button
+        const suggestBtn = container.querySelector('#mp-suggest-beds-btn');
+        if (suggestBtn) {
+            suggestBtn.addEventListener('click', function() {
+                if (availableBeds.length === 0) {
+                    availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--info';
+                    availabilityMsg.textContent = 'Najpierw wybierz daty.';
+                    availabilityMsg.style.display = 'block';
+                    return;
+                }
+                const selected = suggestBedsSelection(container, availableBeds);
+                updateSelectionSummary(container, settings, availableBeds);
+                if (selected.length > 0) {
+                    availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--success';
+                    availabilityMsg.textContent = `✅ Auto-wybór: ${selected.length} łóżek.`;
+                    availabilityMsg.style.display = 'block';
+                }
+            });
+        }
+
+        // Auto-load beds when dates change
+        const checkInInput = container.querySelector('#mp-check-in');
+        const checkOutInput = container.querySelector('#mp-check-out');
+
+        const autoLoadBeds = async function() {
+            const checkIn = checkInInput?.value;
+            const checkOut = checkOutInput?.value;
+            const guests = getGuestCount(container);
+
+            if (!checkIn || !checkOut) return;
+
+            availabilityMsg.style.display = 'block';
+            availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--loading';
+            availabilityMsg.textContent = 'Ładowanie dostępności...';
+
+            try {
+                const result = await checkAvailability(settings, checkIn, checkOut, guests);
+                if (result.success !== false && result.beds && result.beds.length > 0) {
+                    availableBeds = result.beds;
+                    renderBedsList(container, settings, availableBeds);
+                    const selected = suggestBedsSelection(container, availableBeds);
+                    updateSelectionSummary(container, settings, availableBeds);
+                    availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--info';
+                    availabilityMsg.textContent = `✅ Załadowano ${availableBeds.length} łóżek. Auto-wybór: ${selected.length} łóżek.`;
+                } else {
+                    availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--error';
+                    availabilityMsg.textContent = 'Brak dostępnych łóżek na wybrane daty.';
+                }
+            } catch (err) {
+                availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--error';
+                availabilityMsg.textContent = 'Błąd ładowania dostępności.';
+            }
+        };
+
+        if (checkInInput) checkInInput.addEventListener('change', autoLoadBeds);
+        if (checkOutInput) checkOutInput.addEventListener('change', autoLoadBeds);
+
+        // Update summary when beds selection changes
+        container.addEventListener('change', function(e) {
+            if (e.target && e.target.name === 'mp-bed-checkbox') {
+                updateSelectionSummary(container, settings, availableBeds);
+            }
+        });
+
+        // Auto-suggest when guests change
+        const adultsInput = container.querySelector('#mp-adults');
+        const childrenInput = container.querySelector('#mp-children');
+        [adultsInput, childrenInput].forEach((input) => {
+            input.addEventListener('change', function() {
+                if (availableBeds.length === 0) return;
+                suggestBedsSelection(container, availableBeds);
+                updateSelectionSummary(container, settings, availableBeds);
+            });
         });
 
         // Submit
@@ -503,30 +848,18 @@
             results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">Wysyłanie...</div>`;
 
             try {
-                // First check availability and get all bed_ids
-                const checkIn = container.querySelector('#mp-check-in').value;
-                const checkOut = container.querySelector('#mp-check-out').value;
+                // Get selected bed IDs from checkboxes
+                const bedIds = getSelectedBedIds(container);
                 const guests = getGuestCount(container);
-                
-                const availabilityResult = await checkAvailability(settings, checkIn, checkOut, guests);
-                
-                if (!availabilityResult.available) {
-                    throw new Error('Brak dostępnych miejsc na wybrane daty.');
-                }
-                
-                // Collect enough bed_ids for all guests
-                const bedIds = [];
-                let capacitySum = 0;
 
-                for (const bed of availabilityResult.beds) {
-                    if (capacitySum >= guests) break;
-                    bedIds.push(bed.id);
-                    const bedType = bed.bed_type || 'single';
-                    capacitySum += (bedType === 'bunk' ? 2 : 1);
-                }
-                
+                // Validate beds selection
                 if (bedIds.length === 0) {
-                    throw new Error('Brak dostępnych łóżek.');
+                    throw new Error('Wybierz łóżka z listy.');
+                }
+
+                const selectedCapacity = computeSelectedCapacity(container, availableBeds);
+                if (selectedCapacity < guests) {
+                    throw new Error(`Za mało miejsc. Wybrano: ${selectedCapacity}, potrzeba: ${guests}.`);
                 }
 
                 const response = await fetch(`${settings.apiUrl}/public/reservations`, {
