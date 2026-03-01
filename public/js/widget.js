@@ -210,11 +210,9 @@
     }
 
     async function fetchAvailableBeds(settings, checkIn, checkOut) {
-        console.log('[MP Booking] fetchAvailableBeds called with roomId:', settings.roomId);
         let url = `${settings.apiUrl}/public/availability/beds?check_in=${encodeURIComponent(checkIn)}&check_out=${encodeURIComponent(checkOut)}`;
         if (settings.roomId && Number(settings.roomId) > 0) {
             url += `&room_id=${encodeURIComponent(String(settings.roomId))}`;
-            console.log('[MP Booking] Adding room_id filter to URL:', url);
         }
         const response = await fetch(url, {
             method: 'GET',
@@ -224,7 +222,6 @@
         });
 
         const data = await response.json();
-        console.log('[MP Booking] Fetched beds:', data);
         if (!response.ok || !data || !data.success || !Array.isArray(data.data)) {
             throw new Error(settings.i18n.error);
         }
@@ -361,20 +358,13 @@
                     roomPricingMode = data.data.pricing_mode || 'per_bed';
                     roomName = data.data.name || '';
 
-                    // Calculate room capacity from beds
                     if (data.data.beds && Array.isArray(data.data.beds)) {
                         roomCapacity = data.data.beds.reduce((sum, bed) => {
                             const bedType = bed.bed_type || 'single';
                             return sum + ((bedType === 'bunk') ? 2 : 1);
                         }, 0);
                     }
-                    
-                    console.log('[MP Booking] Room info:', { 
-                        pricing_mode: roomPricingMode, 
-                        capacity: roomCapacity,
-                        name: roomName 
-                    });
-                    
+
                     if (roomPricingMode === 'per_room' && roomCapacity > 0) {
                         // Hide beds section for per_room mode
                         const bedsSection = container.querySelector('.mp-booking-form__beds-section');
@@ -737,7 +727,6 @@
                     const price = data.data.total || data.data.price || data.data.total_price || 0;
                     priceEl.textContent = `${price.toFixed(2)} zł`;
                 } else {
-                    console.warn('[Price Calc] No price data:', data);
                     priceEl.textContent = '-- zł';
                 }
             } catch (err) {

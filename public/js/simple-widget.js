@@ -7,8 +7,6 @@
     'use strict';
 
     let availableBeds = [];
-    let roomPricingMode = 'per_bed';
-    let roomCapacity = 0;
 
     /**
      * Escape HTML
@@ -40,36 +38,26 @@
             if (settings.roomId) {
                 url += `&room_id=${settings.roomId}`;
             }
-            
-            console.log('[Availability] Fetching:', url);
-            
+
             const response = await fetch(url, {
                 headers: { 'X-WP-Nonce': settings.nonce || '' }
             });
-            
-            console.log('[Availability] Response status:', response.status);
-            
+
             const data = await response.json();
-            
-            console.log('[Availability] Response data:', data);
-            
+
             if (data.success && Array.isArray(data.data)) {
-                // Count available capacity
                 const availableCapacity = data.data.reduce((sum, bed) => {
                     const bedType = bed.bed_type || 'single';
                     return sum + ((bedType === 'bunk') ? 2 : 1);
                 }, 0);
-                
-                console.log('[Availability] Capacity:', availableCapacity, 'Guests:', guests);
-                
+
                 return {
                     available: availableCapacity >= guests,
                     availableCapacity: availableCapacity,
                     beds: data.data
                 };
             }
-            
-            console.log('[Availability] No success or not array');
+
             return { available: false, availableCapacity: 0, beds: [] };
         } catch (err) {
             console.error('[Availability Check Error]', err);
@@ -82,13 +70,9 @@
      */
     async function calculatePrice(settings, checkIn, checkOut, guests, container) {
         try {
-            // Get adults and children separately for proper pricing with multipliers
             const adults = parseInt(container.querySelector('#mp-adults')?.value || '1', 10);
             const children = parseInt(container.querySelector('#mp-children')?.value || '0', 10);
 
-            console.log('[Price] Calculating for:', { checkIn, checkOut, adults, children, roomId: settings.roomId });
-
-            // First, get available beds
             const availabilityUrl = `${settings.apiUrl}/public/availability/beds?check_in=${checkIn}&check_out=${checkOut}` +
                 (settings.roomId ? `&room_id=${settings.roomId}` : '');
 
@@ -97,14 +81,10 @@
             });
             const availData = await availResponse.json();
 
-            console.log('[Price] Availability:', availData);
-
             if (!availData.success || !availData.data || availData.data.length === 0) {
-                console.log('[Price] No beds available');
                 return 0;
             }
 
-            // Select enough beds for the guests
             const bedIds = [];
             let capacitySum = 0;
             for (const bed of availData.data) {
@@ -115,14 +95,10 @@
                 capacitySum += bedCapacity;
             }
 
-            console.log('[Price] Selected bed_ids:', bedIds, 'Capacity:', capacitySum);
-
             if (bedIds.length === 0) {
-                console.log('[Price] No beds needed');
                 return 0;
             }
 
-            // Use calculate-group endpoint (POST method)
             const url = `${settings.apiUrl}/pricing/calculate-group`;
 
             const body = {
@@ -133,12 +109,9 @@
                 bed_ids: bedIds,
             };
 
-            // Add room_id if specified (for room card widget)
             if (settings.roomId) {
                 body.room_id = settings.roomId;
             }
-
-            console.log('[Price] Request body:', body);
 
             const response = await fetch(url, {
                 method: 'POST',
@@ -151,15 +124,11 @@
 
             const data = await response.json();
 
-            console.log('[Price] Response:', data);
-
             if (data.success && data.data) {
                 const totalPrice = data.data.total || data.data.price || 0;
-                console.log('[Price] Total price:', totalPrice);
                 return totalPrice;
             }
 
-            console.log('[Price] No price data in response');
             return 0;
         } catch (err) {
             console.error('[Price Calc Error]', err);
@@ -405,10 +374,9 @@
     function setupWidget(container) {
         const globalSettings = typeof mpBookingData !== 'undefined' ? mpBookingData : {};
         let localSettings = {};
-        
+
         try {
             const raw = container.getAttribute('data-mp-settings');
-            // Decode URL encoding first, then parse JSON
             localSettings = raw ? JSON.parse(decodeURIComponent(raw)) : {};
         } catch (e) {
             console.error('[SimpleWidget] Failed to parse settings:', e);
@@ -421,11 +389,6 @@
             captcha: { ...(globalSettings.captcha || {}), ...(localSettings.captcha || {}) },
             i18n: { ...(globalSettings.i18n || {}), ...(localSettings.i18n || {}) },
         };
-
-        console.log('[SimpleWidget] Settings:', settings);
-        console.log('[SimpleWidget] LocalSettings:', localSettings);
-        console.log('[SimpleWidget] RoomId:', settings.roomId);
-        console.log('[SimpleWidget] Raw data-mp-settings:', container.getAttribute('data-mp-settings'));
 
         const prefill = settings.prefill || {};
         const isHcaptcha = settings.captcha && settings.captcha.provider === 'hcaptcha';
@@ -610,15 +573,11 @@
         };
 
         const updateSummary = () => {
-            console.log('[Summary] Updating summary...');
-            
             const checkIn = container.querySelector('#mp-check-in').value;
             const checkOut = container.querySelector('#mp-check-out').value;
             const adults = parseInt(container.querySelector('#mp-adults').value || '1', 10);
             const children = parseInt(container.querySelector('#mp-children').value || '0', 10);
             const guests = adults + children;
-            
-            console.log('[Summary] Data:', { checkIn, checkOut, adults, children, guests, roomId: settings.roomId });
 
             if (checkIn && checkOut) {
                 const checkInDate = new Date(checkIn);
@@ -629,15 +588,12 @@
 
             document.getElementById('mp-summary-guests').textContent = `${adults} dorosłych${children > 0 ? ', ' + children + ' dzieci' : ''}`;
 
-            // Calculate price
             if (checkIn && checkOut) {
-                console.log('[Summary] Calling calculatePrice...');
                 const priceEl = document.getElementById('mp-summary-price');
                 if (priceEl) {
                     priceEl.textContent = 'Obliczanie...';
                 }
                 calculatePrice(settings, checkIn, checkOut, guests, container).then(price => {
-                    console.log('[Summary] Price result:', price);
                     const priceEl = document.getElementById('mp-summary-price');
                     if (priceEl) {
                         priceEl.textContent = price > 0 ? `${price.toFixed(2)} zł` : '-- zł';
@@ -649,8 +605,6 @@
                         priceEl.textContent = '-- zł';
                     }
                 });
-            } else {
-                console.log('[Summary] Missing data:', { hasCheckIn: !!checkIn, hasCheckOut: !!checkOut });
             }
         };
 
@@ -795,11 +749,7 @@
 
         // Submit
         submitBtn.addEventListener('click', async function() {
-            console.log('[Submit] Button clicked!');
-            
-            // Prevent duplicate submissions
             if (isSubmitting) {
-                console.log('[Submit] Already submitting, skipping');
                 return;
             }
             isSubmitting = true;
@@ -813,11 +763,8 @@
             const adults = parseInt(container.querySelector('#mp-adults').value || '1', 10);
             const children = parseInt(container.querySelector('#mp-children').value || '0', 10);
             const notes = container.querySelector('#mp-notes').value.trim();
-            
-            console.log('[Submit] Form data:', { firstName, lastName, email, checkIn, checkOut, adults, children });
 
             if (!firstName || !lastName || !email || !checkIn || !checkOut) {
-                console.log('[Submit] Validation failed - missing fields');
                 results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">Wypełnij wszystkie wymagane pola.</div>`;
                 isSubmitting = false;
                 return;
@@ -948,10 +895,8 @@
     // Auto-initialize global widgets (shortcode: [mikroplaneta_booking])
     document.addEventListener('DOMContentLoaded', function() {
         const containers = document.querySelectorAll('.mp-booking-widget-container');
-        console.log('[SimpleWidget] Found containers:', containers.length);
-        
+
         containers.forEach((container) => {
-            console.log('[SimpleWidget] Initializing container:', container);
             setupWidget(container);
         });
     });
