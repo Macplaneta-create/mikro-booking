@@ -194,7 +194,12 @@
         }
 
         bedsContainer.innerHTML = beds.map((bed) => {
-            const label = `#${bed.id} • Pokój ${bed.room_id} • Łóżko ${bed.bed_number} (${bed.bed_type})`;
+            const bedType = bed.bed_type || 'single';
+            const bedCapacity = (bedType === 'bunk') ? 2 : 1;
+            const placesLabel = bedCapacity > 1 ? `${bedCapacity} miejsca` : `${bedCapacity} miejsce`;
+            const bedNumber = bed.bed_number || '?';
+            const roomId = bed.room_id || '?';
+            const label = `#${bed.id} • Pokój ${roomId} • Łóżko ${bedNumber} (${bedType}) • ${placesLabel}`;
             return `
                 <label class="mp-booking-form__bed-item">
                     <input type="checkbox" name="mp-bed-checkbox" value="${bed.id}" />
@@ -328,28 +333,115 @@
 
         // Check for prefill data (from modal)
         const prefill = settings.prefill || {};
-        
+
         // Check if room is per_room or per_bed
         const isPerRoom = settings.roomId && Number(settings.roomId) > 0;
         let roomPricingMode = 'per_bed'; // default
+        let roomCapacity = 0; // Store room capacity
+        let roomName = ''; // Store room name
+        let roomInfoLoaded = false; // Track if room info is loaded
 
-        // Fetch room info to determine pricing mode
+        // Fetch room info to determine pricing mode and capacity
         if (isPerRoom) {
+            // Set defaults immediately
+            const adultsInput = container.querySelector('#mp-adults');
+            const childrenInput = container.querySelector('#mp-children');
+            
+            // Show loading state
+            if (adultsInput) adultsInput.disabled = true;
+            if (childrenInput) childrenInput.disabled = true;
+            
+            // Fetch room data
             fetch(`${settings.apiUrl}/rooms/${settings.roomId}`, {
                 headers: { 'X-WP-Nonce': settings.nonce || '' }
             })
             .then(r => r.json())
             .then(data => {
-                if (data && data.data && data.data.pricing_mode) {
-                    roomPricingMode = data.data.pricing_mode;
-                    if (roomPricingMode === 'per_room') {
+                if (data && data.data) {
+                    roomPricingMode = data.data.pricing_mode || 'per_bed';
+                    roomName = data.data.name || '';
+
+                    // Calculate room capacity from beds
+                    if (data.data.beds && Array.isArray(data.data.beds)) {
+                        roomCapacity = data.data.beds.reduce((sum, bed) => {
+                            const bedType = bed.bed_type || 'single';
+                            return sum + ((bedType === 'bunk') ? 2 : 1);
+                        }, 0);
+                    }
+                    
+                    console.log('[MP Booking] Room info:', { 
+                        pricing_mode: roomPricingMode, 
+                        capacity: roomCapacity,
+                        name: roomName 
+                    });
+                    
+                    if (roomPricingMode === 'per_room' && roomCapacity > 0) {
                         // Hide beds section for per_room mode
                         const bedsSection = container.querySelector('.mp-booking-form__beds-section');
                         if (bedsSection) bedsSection.style.display = 'none';
+                        
+                        // Limit adults to room capacity
+                        if (adultsInput) {
+                            adultsInput.max = roomCapacity;
+                            adultsInput.disabled = false;
+                            // Set default to min(2, roomCapacity)
+                            const currentAdults = parseInt(adultsInput.value || '1', 10);
+                            if (currentAdults > roomCapacity) {
+                                adultsInput.value = Math.min(2, roomCapacity);
+                            }
+                            
+                            // Update when adults change
+                            adultsInput.addEventListener('change', function() {
+                                const adultCount = parseInt(this.value, 10) || 1;
+                                if (adultCount > roomCapacity) {
+                                    this.value = roomCapacity;
+                                }
+                                if (childrenInput) {
+                                    childrenInput.max = Math.max(0, roomCapacity - adultCount);
+                                    if (parseInt(childrenInput.value, 10) > childrenInput.max) {
+                                        childrenInput.value = childrenInput.max;
+                                    }
+                                }
+                            });
+                        }
+                        
+                        // Limit children to room capacity minus adults
+                        if (childrenInput && adultsInput) {
+                            const currentAdults = parseInt(adultsInput.value || '1', 10);
+                            childrenInput.max = Math.max(0, roomCapacity - currentAdults);
+                            childrenInput.value = 0;
+                            childrenInput.disabled = false;
+                            
+                            childrenInput.addEventListener('change', function() {
+                                const childCount = parseInt(this.value, 10) || 0;
+                                const adultCount = parseInt(adultsInput.value || '1', 10);
+                                if (childCount + adultCount > roomCapacity) {
+                                    this.value = Math.max(0, roomCapacity - adultCount);
+                                }
+                            });
+                        }
+                        
+                        // Mark room info as loaded
+                        roomInfoLoaded = true;
+                        console.log('[MP Booking] Room info loaded, capacity:', roomCapacity);
+                    } else {
+                        // Not per_room mode, enable inputs
+                        if (adultsInput) adultsInput.disabled = false;
+                        if (childrenInput) childrenInput.disabled = false;
+                        roomInfoLoaded = true;
                     }
                 }
             })
-            .catch(console.error);
+            .catch(err => {
+                console.error('[MP Booking] Failed to load room info:', err);
+                // Enable inputs even on error
+                if (adultsInput) adultsInput.disabled = false;
+                if (childrenInput) childrenInput.disabled = false;
+                roomInfoLoaded = true;
+            });
+        } else {
+            // Not a room-specific widget, mark as loaded
+            roomInfoLoaded = true;
         }
 
         container.innerHTML = `
@@ -570,6 +662,7 @@
             const checkOut = container.querySelector('#mp-check-out').value;
             const adults = parseInt(container.querySelector('#mp-adults').value, 10) || 1;
             const children = parseInt(container.querySelector('#mp-children').value, 10) || 0;
+            const totalGuests = adults + children;
             
             // Format dates
             if (checkIn && checkOut) {
@@ -580,9 +673,12 @@
                     `${checkIn} → ${checkOut} (${nights} ${nights === 1 ? 'noc' : 'noce'})`;
             }
             
-            // Format guests
-            document.getElementById('mp-summary-guests').textContent = 
-                `${adults} dorosłych${children > 0 ? `, ${children} dzieci` : ''}`;
+            // Format guests with room capacity info
+            let guestsText = `${adults} dorosłych${children > 0 ? `, ${children} dzieci` : ''}`;
+            if (roomPricingMode === 'per_room' && roomCapacity > 0) {
+                guestsText += ` (max ${roomCapacity} os.)`;
+            }
+            document.getElementById('mp-summary-guests').textContent = guestsText;
             
             // Format beds (for per_bed mode)
             if (roomPricingMode === 'per_bed') {
@@ -653,9 +749,43 @@
         step1Next.addEventListener('click', async function() {
             const checkIn = container.querySelector('#mp-check-in').value;
             const checkOut = container.querySelector('#mp-check-out').value;
+            const adults = parseInt(container.querySelector('#mp-adults').value, 10) || 1;
+            const children = parseInt(container.querySelector('#mp-children').value, 10) || 0;
+            const totalGuests = adults + children;
+            
             if (!checkIn || !checkOut) {
                 results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(settings.i18n.formInvalid)}</div>`;
                 return;
+            }
+            
+            // Wait for room info to load (for per_room mode)
+            if (isPerRoom && !roomInfoLoaded) {
+                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">Ładowanie informacji o pokoju...</div>`;
+                // Wait a bit and retry
+                setTimeout(() => {
+                    if (roomInfoLoaded) {
+                        // Trigger validation again
+                        step1Next.click();
+                    }
+                }, 500);
+                return;
+            }
+            
+            // Validate guests against room capacity (for per_room mode)
+            if (roomPricingMode === 'per_room' && roomCapacity > 0) {
+                if (totalGuests > roomCapacity) {
+                    results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">
+                        <strong>Nieprawidłowa liczba osób!</strong><br>
+                        Pokój "${escapeHtml(roomName)}" mieści maksymalnie <strong>${roomCapacity} osoby</strong>.<br>
+                        Wybrano: ${totalGuests} osób (${adults} dorosłych + ${children} dzieci).
+                    </div>`;
+                    return;
+                }
+                
+                if (totalGuests < 1) {
+                    results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">Podaj liczbę gości (minimum 1 osoba).</div>`;
+                    return;
+                }
             }
             
             // For per_bed mode, require bed selection
@@ -680,6 +810,17 @@
                     } finally {
                         findBedsBtn.disabled = false;
                     }
+                }
+                
+                // Check if enough beds available
+                const selectedCapacity = computeSelectedCapacity(container, availableBeds);
+                if (selectedCapacity < totalGuests) {
+                    results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">
+                        <strong>Za mało miejsc!</strong><br>
+                        Wybrano łóżka o łącznej pojemności <strong>${selectedCapacity} miejsc</strong>.<br>
+                        Liczba gości: ${totalGuests} osób.
+                    </div>`;
+                    return;
                 }
             }
             
@@ -910,10 +1051,10 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         console.log('[MP Booking] DOMContentLoaded fired');
-        
+
         const containers = document.querySelectorAll('.mp-booking-widget-container');
         console.log('[MP Booking] Found widget containers:', containers.length);
-        
+
         // Initialize widget containers if present
         if (containers && containers.length > 0) {
             containers.forEach((container) => {
@@ -927,12 +1068,20 @@
         const modalOpenButtons = document.querySelectorAll('.mp-booking-open-modal');
         console.log('[MP Booking] Found modal open buttons:', modalOpenButtons.length);
         modalOpenButtons.forEach((btn) => {
+            // Skip if already has handler
+            if (btn.hasAttribute('data-mp-handler-attached')) {
+                console.log('[MP Booking] Button already has handler, skipping:', btn);
+                return;
+            }
+            
             console.log('[MP Booking] Attaching click handler to button:', btn);
+            btn.setAttribute('data-mp-handler-attached', 'true');
+            
             btn.addEventListener('click', function (e) {
                 console.log('[MP Booking] Button clicked!', e);
                 const roomId = parseInt(btn.getAttribute('data-room-id') || '0', 10);
                 const roomName = btn.getAttribute('data-room-name') || '';
-                
+
                 console.log('[MP Booking] Room ID:', roomId, 'Room Name:', roomName);
 
                 // Get dates and guest count from the card's mini form
@@ -942,52 +1091,134 @@
                 const checkOutInput = cardWrapper ? cardWrapper.querySelector('.mp-card-check-out[data-room-id="' + roomId + '"]') : null;
                 const adultsInput = cardWrapper ? cardWrapper.querySelector('.mp-card-adults[data-room-id="' + roomId + '"]') : null;
                 const childrenInput = cardWrapper ? cardWrapper.querySelector('.mp-card-children[data-room-id="' + roomId + '"]') : null;
-                
+
                 const checkIn = checkInInput ? checkInInput.value : '';
                 const checkOut = checkOutInput ? checkOutInput.value : '';
                 const adults = adultsInput ? parseInt(adultsInput.value, 10) || 1 : 1;
                 const children = childrenInput ? parseInt(childrenInput.value, 10) || 0 : 0;
-                
+                const totalGuests = adults + children;
+
                 console.log('[MP Booking] Check-in:', checkIn, 'Check-out:', checkOut, 'Adults:', adults, 'Children:', children);
+                console.log('[MP Booking] Inputs:', { checkInInput, checkOutInput, adultsInput, childrenInput });
 
                 if (!checkIn || !checkOut) {
+                    console.log('[MP Booking] Missing dates, showing alert');
                     alert('Proszę wybrać daty przyjazdu i wyjazdu.');
                     return;
                 }
+                
+                console.log('[MP Booking] Dates OK, validating capacity...');
+                
+                // Validate room capacity BEFORE opening modal
+                if (roomId > 0) {
+                    // Fetch room info to check capacity
+                    fetch(`${mpBookingData?.apiUrl || '/wp-json/mikroplaneta/v1'}/rooms/${roomId}`, {
+                        headers: { 'X-WP-Nonce': mpBookingData?.nonce || '' }
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data && data.data) {
+                            const pricingMode = data.data.pricing_mode || 'per_bed';
+                            let capacity = 0;
 
-                // Open modal and pre-fill data
-                console.log('[MP Booking] Opening modal...');
-                openBookingModal(roomId, roomName, {
-                    roomId: roomId,
-                    roomName: roomName,
-                    checkIn: checkIn,
-                    checkOut: checkOut,
-                    adults: adults,
-                    children: children
-                });
+                            if (data.data.beds && Array.isArray(data.data.beds)) {
+                                capacity = data.data.beds.reduce((sum, bed) => {
+                                    const bedType = bed.bed_type || 'single';
+                                    return sum + ((bedType === 'bunk') ? 2 : 1);
+                                }, 0);
+                            }
+
+                            console.log('[MP Booking] Room capacity check:', { capacity, pricingMode, totalGuests });
+                            
+                            if (pricingMode === 'per_room' && capacity > 0 && totalGuests > capacity) {
+                                alert(`Nieprawidłowa liczba osób!\n\nPokój "${data.data.name || ''}" mieści maksymalnie ${capacity} osoby.\n\nWybrano: ${totalGuests} osób (${adults} dorosłych + ${children} dzieci).`);
+                                return;
+                            }
+                            
+                            // Open modal if validation passes
+                            console.log('[MP Booking] Opening modal...');
+                            openModal(roomId, roomName, {
+                                checkIn: checkIn,
+                                checkOut: checkOut,
+                                adults: adults,
+                                children: children
+                            });
+                        }
+                    })
+                    .catch(err => {
+                        console.error('[MP Booking] Failed to load room info:', err);
+                        // Still open modal on error
+                        openModal(roomId, roomName, {
+                            checkIn: checkIn,
+                            checkOut: checkOut,
+                            adults: adults,
+                            children: children
+                        });
+                    });
+                } else {
+                    // No room ID, just open modal
+                    console.log('[MP Booking] Opening modal...');
+                    openModal(roomId, roomName, {
+                        checkIn: checkIn,
+                        checkOut: checkOut,
+                        adults: adults,
+                        children: children
+                    });
+                }
+            });
+        });
+        
+        // Add validation to card inputs (adults/children)
+        const cardAdultsInputs = document.querySelectorAll('.mp-card-adults');
+        const cardChildrenInputs = document.querySelectorAll('.mp-card-children');
+        
+        cardAdultsInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                const max = parseInt(this.getAttribute('max') || '99', 10);
+                const value = parseInt(this.value || '1', 10);
+                if (value > max) {
+                    this.value = max;
+                    alert(`Maksymalna liczba dorosłych to ${max}.`);
+                }
+            });
+        });
+        
+        cardChildrenInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                const max = parseInt(this.getAttribute('max') || '99', 10);
+                const value = parseInt(this.value || '0', 10);
+                const cardWrapper = this.closest('.mp-booking-room-card');
+                const adultsInput = cardWrapper ? cardWrapper.querySelector('.mp-card-adults') : null;
+                const adults = adultsInput ? parseInt(adultsInput.value || '1', 10) : 1;
+                
+                if (value + adults > max) {
+                    this.value = Math.max(0, max - adults);
+                    alert(`Maksymalna łączna liczba osób to ${max}.`);
+                }
             });
         });
     });
     
     /**
-     * Open booking modal with pre-filled data
+     * Global modal instance (singleton)
      */
-    function openBookingModal(roomId, roomName, data) {
-        // Check if modal already exists
-        let modalContainer = document.querySelector('.mp-booking-modal[data-room-id="' + roomId + '"]');
-        
-        if (!modalContainer) {
-            // Create new modal
-            modalContainer = document.createElement('div');
-            modalContainer.className = 'mp-booking-modal';
-            modalContainer.setAttribute('data-room-id', roomId);
-            modalContainer.setAttribute('data-room-name', roomName);
-            modalContainer.innerHTML = `
+    let modalElement = null;
+    let modalBody = null;
+
+    /**
+     * Get or create global modal
+     */
+    function getModal() {
+        if (!modalElement) {
+            // Create modal
+            modalElement = document.createElement('div');
+            modalElement.className = 'mp-booking-modal';
+            modalElement.innerHTML = `
                 <div class="mp-modal-backdrop"></div>
                 <div class="mp-modal-content">
                     <div class="mp-modal-header">
                         <h3 class="mp-modal-title">
-                            <span class="mp-modal-room-name">${escapeHtml(roomName)}</span>
+                            <span class="mp-modal-room-name">Rezerwacja</span>
                         </h3>
                         <button type="button" class="mp-modal-close" aria-label="Zamknij">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -999,71 +1230,71 @@
                     <div class="mp-modal-body"></div>
                 </div>
             `;
-            
-            // Close on backdrop click
-            const backdrop = modalContainer.querySelector('.mp-modal-backdrop');
-            backdrop.addEventListener('click', function () {
-                closeBookingModal(modalContainer);
-            });
-            
-            // Close on X button
-            const closeBtn = modalContainer.querySelector('.mp-modal-close');
-            closeBtn.addEventListener('click', function () {
-                closeBookingModal(modalContainer);
-            });
-            
-            // Close on ESC
-            const handleEsc = function(e) {
-                if (e.key === 'Escape' && modalContainer.parentElement) {
-                    closeBookingModal(modalContainer);
+
+            // Close handlers
+            modalElement.querySelector('.mp-modal-backdrop').addEventListener('click', closeModal);
+            modalElement.querySelector('.mp-modal-close').addEventListener('click', closeModal);
+            document.addEventListener('keydown', function handleEsc(e) {
+                if (e.key === 'Escape' && modalElement && modalElement.style.display === 'flex') {
+                    closeModal();
                     document.removeEventListener('keydown', handleEsc);
                 }
-            };
-            document.addEventListener('keydown', handleEsc);
-            
-            document.body.appendChild(modalContainer);
+            });
+
+            document.body.appendChild(modalElement);
+            modalBody = modalElement.querySelector('.mp-modal-body');
         }
-        
-        const body = modalContainer.querySelector('.mp-modal-body');
-        const roomNameEl = modalContainer.querySelector('.mp-modal-room-name');
-        
-        if (roomNameEl) {
-            roomNameEl.textContent = data.roomName || 'Rezerwacja';
-        }
-        
-        // Create widget container inside modal with prefill data
+
+        return { element: modalElement, body: modalBody };
+    }
+
+    /**
+     * Open modal with widget
+     */
+    function openModal(roomId, roomName, prefillData) {
+        const { element, body } = getModal();
+
+        // Update room name
+        element.querySelector('.mp-modal-room-name').textContent = roomName || 'Rezerwacja';
+
+        // Create widget with prefill
         body.innerHTML = '<div class="mp-booking-widget-container mp-modal-widget" data-mp-settings="' + escapeHtml(JSON.stringify({
-            roomId: data.roomId,
+            roomId: roomId,
+            roomName: roomName,
             title: '',
-            prefill: {
-                checkIn: data.checkIn,
-                checkOut: data.checkOut,
-                adults: data.adults,
-                children: data.children
-            }
+            prefill: prefillData
         })) + '"></div>';
-        
+
         // Show modal
-        modalContainer.style.display = 'flex';
+        element.style.display = 'flex';
+        element.classList.add('mp-modal-open');
         document.body.style.overflow = 'hidden';
-        
-        // Initialize widget inside modal
+
+        // Initialize widget
         const widgetContainer = body.querySelector('.mp-booking-widget-container');
         if (widgetContainer) {
             setupWidget(widgetContainer);
         }
     }
-    
+
     /**
-     * Close booking modal
+     * Close modal
      */
-    function closeBookingModal(modalContainer) {
-        modalContainer.style.display = 'none';
-        document.body.style.overflow = '';
-        // Clear content to free memory
-        const body = modalContainer.querySelector('.mp-modal-body');
-        if (body) {
-            body.innerHTML = '';
+    function closeModal() {
+        if (modalElement) {
+            modalElement.style.display = 'none';
+            modalElement.classList.remove('mp-modal-open');
+            document.body.style.overflow = '';
+            modalElement.querySelector('.mp-modal-body').innerHTML = '';
         }
+    }
+
+    // Export setupWidget for use in room-card-modal.js
+    window.setupWidget = setupWidget;
+    
+    // Only initialize if this is the main widget (not loaded as dependency)
+    // Check if simple-widget is present - if so, don't auto-initialize
+    if (typeof window.setupSimpleWidget === 'undefined') {
+        // Old widget initialization code here if needed
     }
 })();
