@@ -1,172 +1,194 @@
 # 🎯 Następna Sesja - MikroPlaneta Booking
 
-**Data ostatniej aktualizacji:** 2026-03-01
-**Status:** ✅ **GOTOWY DO TESTÓW PRODUKCYJNYCH**
+**Data ostatniej aktualizacji:** 2026-03-03
+**Status:** ✅ **PRODUKCYJNY - v1.3.0**
+**Ostatnie zmiany:** Powiadomienia Real-Time na Dashboardie
 
 ---
 
-## ✅ Co zostało zrobione (ostatnia sesja)
+## ✅ Co zostało zrobione (ostatnia sesja - 2026-03-03)
 
-### 1. **System Płatności i Zaliczek**
-- [x] Backend: Ustawienia płatności w bazie danych
-- [x] API: Endpoint zwraca informacje o zaliczce
-- [x] Frontend: Wyświetlanie informacji o płatności po rezerwacji
-- [x] Admin: Formularz ustawień płatności (Settings → Płatności i Zaliczka)
-- [x] Naprawa: Cena dla per_room liczona raz za pokój (nie za każde łóżko)
+### 1. **Powiadomienia Real-Time - Dashboard** ⭐
+- [x] Backend: `/dashboard/stats` zwraca `pending_reservations` count
+- [x] Backend: `/dashboard/stats` zwraca `recent_reservations` (5 ostatnich)
+- [x] Frontend: Polling co 30 sekund (auto-refresh)
+- [x] Frontend: Badge "Oczekujące" z licznikiem pending (czerwony gdy > 0)
+- [x] Frontend: Tabela "Ostatnie Rezerwacje" z pełnymi danymi
+- [x] Frontend: Timestamp ostatniej aktualizacji
+- [x] Fix: Usunięto unused variable w ReservationModal.tsx
 
-### 2. **Widgety Rezerwacji**
-- [x] Globalny widget `[mikroplaneta_booking]` z wyborem łóżek
-- [x] Auto-suggest łóżek (algorytm preferuje jeden pokój)
-- [x] Podgląd pokojów i łóżek z checkboxami
-- [x] Karta pokoju `[mikroplaneta_room_card room_id="X"]` z modalem
-- [x] Checkboxy RODO/regulamin w obu widgetach
-- [x] Blokada formularza po wysyłce
-- [x] Komunikat sukcesu z danymi do przelewu
+**Pliki zmienione:**
+- `rest-api/controllers/class-dashboard-controller.php` - nowe pole w API
+- `admin/src/components/DashboardContent.tsx` - polling + UI
+- `admin/src/components/ReservationModal.tsx` - fix TypeScript error
 
-### 3. **Czyszczenie Projektu**
-- [x] Usunięto 17 niepotrzebnych plików (3663 linie)
-- [x] Zaktualizowano README.md i PRODUCTION_READY.md
-- [x] Usunięto stare narzędzia migracyjne
+**Testy:**
+1. Otwórz dashboard
+2. Wyślij rezerwację z widgeta
+3. Poczekaj 30 sekund
+4. ✅ Dashboard pokazuje nową rezerwację w tabeli "Ostatnie Rezerwacje"
+5. ✅ Licznik "Oczekujące" aktualizuje się na czerwono
 
 ---
 
-## 🚀 Od czego zacząć następną sesję
+## 🚀 Priorytety na NASTĘPNĄ sesję
 
-### Opcja 1: Testy Produkcji
-```bash
-# 1. Sprawdź czy wszystko działa
-cd c:\laragon\www\gorytajemnic\wp-content\plugins\mikro-booking
+### **OPCJA B: Google Calendar + iCalendar** 📅 (ZALECANE)
 
-# 2. Przetestuj rezerwację z zaliczką
-- Włącz zaliczkę w Settings → Płatności
-- Wyślij rezerwację
-- Sprawdź komunikat z danymi do przelewu
+**Dlaczego:** Bezpieczeństwo danych + wygoda dla klienta.
 
-# 3. Sprawdź ceny
-- per_room: cena za pokój (nie za łóżko)
-- per_bed: cena za osobę/miejsce
+**Zakres prac (8-10h):**
+
+#### 1. iCalendar (.ics) dla klienta
+```php
+// core/services/class-ical-service.php
+public function generateIcs(Reservation $reservation): string {
+    $ics = "BEGIN:VCALENDAR\r\n";
+    $ics .= "VERSION:2.0\r\n";
+    $ics .= "BEGIN:VEVENT\r\n";
+    $ics .= "UID:reservation-{$reservation->id}@mikroplaneta.pl\r\n";
+    $ics .= "DTSTART:" . date('Ymd', strtotime($reservation->check_in)) . "\r\n";
+    $ics .= "DTEND:" . date('Ymd', strtotime($reservation->check_out)) . "\r\n";
+    $ics .= "SUMMARY:Rezerwacja #{$reservation->id}\r\n";
+    $ics .= "DESCRIPTION:Gość: {$guest->first_name} {$guest->last_name}\r\n";
+    $ics .= "LOCATION:{$hotel_name}\r\n";
+    $ics .= "END:VEVENT\r\n";
+    $ics .= "END:VCALENDAR\r\n";
+    return $ics;
+}
 ```
 
-### Opcja 2: Dalszy Rozwój
-```bash
-# Co można dodać:
-- [ ] Płatności online (Przelewy24, Stripe)
-- [ ] Integracja z kalendarzem Google
-- [ ] Powiadomienia SMS
-- [ ] Export rezerwacji do CSV/PDF
-- [ ] Statystyki i raporty
+#### 2. Załącznik w emailu
+- [ ] Dodaj `.ics` jako załącznik
+- [ ] Link "Dodaj do kalendarza" w emailu
+
+#### 3. Google Calendar - OAuth
+- [ ] Rejestracja w Google Cloud Console
+- [ ] OAuth 2.0 flow
+- [ ] Zapisz token w options
+
+**Pliki do zmiany:**
+- `core/services/class-email-service.php`
+- Nowy: `core/services/class-ical-service.php`
+- `admin/src/components/Settings.tsx` (konfiguracja Google)
+
+---
+
+### **OPCJA C: Licznik Pending w Menu** 🔴
+
+**Dlaczego:** Szybki podgląd ile rezerwacji czeka na akcję.
+
+**Zakres prac (2-3h):**
+
+```php
+// core/class-admin.php
+add_filter('plugin_action_links', function($links) {
+    $pending = $this->db->get_var("SELECT COUNT(*) FROM wp_mikroplaneta_reservations WHERE status = 'pending'");
+    if ($pending > 0) {
+        $links[] = "<span class='update-plugins count-{$pending}'><span class='plugin-count'>{$pending}</span></span>";
+    }
+    return $links;
+});
 ```
 
-### Opcja 3: Wdrożenie na Produkcję
-```bash
-# 1. Przygotuj build
-cd admin
-npm run build
+**Pliki do zmiany:**
+- `core/class-admin.php`
+- `admin/src/App.tsx` (jeśli chcemy też w React)
 
-# 2. Wgraj na serwer
-scp -r . user@server:/path/to/wp-content/plugins/mikro-booking/
+---
 
-# 3. Na serwerze
-composer install --no-dev
+## 📋 Checklista - Przed Wdrożeniem
 
-# 4. W WordPress
-- Aktywuj plugin
-- Skonfiguruj Settings
-- Dodaj pokoje i ceny
-- Przetestuj rezerwację
-```
+### Testy funkcjonalne:
+- [ ] Rezerwacja z widgeta → email → .ics
+- [ ] Rezerwacja z admina → Google Calendar
+- [ ] Powiadomienie na dashboardzie (✅ zrobione)
+- [ ] Licznik pending w menu
+- [ ] Ceny łóżek piętrowych (18 miejsc = 1800 zł)
+
+### Testy wydajnościowe:
+- [ ] Dashboard z 100+ rezerwacjami
+- [ ] Kalendarz z 50+ pokojami
+- [ ] Widget przy 1000+ odwiedzających/mc
+
+### Bezpieczeństwo:
+- [ ] Sanityzacja danych z widgeta
+- [ ] Rate limiting na /public/reservations
+- [ ] Backup bazy przed wdrożeniem
+
+---
+
+## 🎯 Długoterminowe Cele (z ROADMAP.md)
+
+### Q2 2026:
+- 💳 Płatności online (Przelewy24, BLIK)
+- 📄 Faktury VAT PDF
+- 📱 Powiadomienia SMS
+
+### Q3 2026:
+- 📊 Dashboard z wykresami
+- 📈 Export CSV/Excel
+- 🤖 AI Chatbot
+
+### Q4 2026:
+- 🏨 Channel Manager (Booking.com, Airbnb)
+- 💹 Dynamic Pricing
+- 📱 Mobile App (React Native)
 
 ---
 
 ## 📁 Ważne Pliki
 
-### Frontend Widgety
-- `public/js/simple-widget.js` - Globalny widget z wyborem łóżek
-- `public/js/widget.js` - Pełny widget (używany w modalu)
-- `public/css/widget.css` - Style widgetów
+### Dokumentacja:
+- `ROADMAP.md` - Pełny plan rozwoju
+- `NEXT_SESSION.md` - Konkretne zadania na następną sesję
+- `ARCHITECTURE.md` - Struktura systemu
+- `DEVELOPMENT.md` - Setup środowiska
 
-### Backend
-- `core/services/class-reservation-service.php` - Tworzenie rezerwacji (naprawione per_room pricing)
-- `core/services/class-pricing-service.php` - Liczenie cen
-- `rest-api/controllers/class-public-reservations-controller.php` - API rezerwacji
-
-### Admin
-- `admin/src/components/Settings.tsx` - Ustawienia (sekcja Płatności)
-- `assets/admin/index.js` - Zbudowany admin (WAŻNE: rebuild po zmianach!)
+### Kod:
+- `core/services/class-pricing-service.php` - Naprawione ceny (per-place)
+- `admin/src/components/DashboardContent.tsx` - **NOWY** Real-time polling + recent reservations
+- `rest-api/controllers/class-dashboard-controller.php` - **NOWY** Pending count + recent reservations
 
 ---
 
-## 🔧 Najczęstsze Problemy i Rozwiązania
+## 🔧 Szybki Start - Następna Sesja
 
-### Problem: Widget nie pokazuje informacji o zaliczce
-**Rozwiązanie:**
-1. Sprawdź czy opcje są w bazie:
-   ```sql
-   SELECT * FROM wp_options WHERE option_name LIKE '%mikroplaneta_booking_payment%';
-   ```
-2. Włącz zaliczkę w Settings → Płatności
-3. Wypełnij dane do przelewu (konto, bank)
-
-### Problem: Cena za pokój jest 2× wyższa
-**Rozwiązanie:**
-- To był błąd z per_room pricing - **JUŻ NAPRAWIONE**
-- Sprawdź czy `pricing_mode = 'per_room'` w tabeli rooms
-- Cena jest liczona raz za pokój, nie za każde łóżko
-
-### Problem: Build admina nie działa
-**Rozwiązanie:**
 ```bash
+# 1. Otwórz projekt
+cd c:\laragon\www\gorytajemnic\wp-content\plugins\mikro-booking
+
+# 2. Sprawdź status
+git status
+
+# 3. Wybierz zadanie z listy powyżej
+# np. Google Calendar (Opcja B)
+
+# 4. Stwórz branch
+git checkout -b feature/google-calendar
+
+# 5. Koduj, testuj, commituj
+git add .
+git commit -m "feat: iCalendar (.ics) export for reservations"
+
+# 6. Zbuduj React (jeśli zmiany w admin)
 cd admin
-rm -rf node_modules
-npm install
 npm run build
+
+# 7. Testuj w WordPress
 ```
 
 ---
 
-## 📊 Status Funkcjonalności
+## 📞 Support
 
-| Funkcja | Status | Uwagi |
-|---------|--------|-------|
-| Room Management | ✅ Gotowe | Dodawanie/edycja pokoi |
-| Bed Management | ✅ Gotowe | Łóżka z pojemnością |
-| Pricing (per_room) | ✅ Gotowe | Cena za pokój |
-| Pricing (per_bed) | ✅ Gotowe | Cena za osobę |
-| Global Widget | ✅ Gotowe | Z wyborem łóżek |
-| Room Card Widget | ✅ Gotowe | Z modalem |
-| Deposit System | ✅ Gotowe | Konfigurowalny % |
-| Email Notifications | ✅ Gotowe | Confirmations |
-| GDPR Consents | ✅ Gotowe | Checkboxy |
-| AI Allocation | ✅ Gotowe | Group bookings |
-
----
-
-## 🎯 Priorytety na Następną Sesję
-
-1. **Testy End-to-End**
-   - Rezerwacja z zaliczką
-   - Rezerwacja bez zaliczki
-   - per_room vs per_bed pricing
-   - Group booking (więcej niż 1 pokój)
-
-2. **Optymalizacja**
-   - Sprawdzenie wydajności z dużą liczbą pokoi
-   - Cache zapytań do bazy
-   - Minifikacja assets
-
-3. **Dokumentacja**
-   - Instrukcja dla użytkowników końcowych
-   - Video tutorial z konfiguracji
-
----
-
-## 📞 Kontakt i Wsparcie
-
-W przypadku problemów:
+**W razie problemów:**
 1. Sprawdź `wp-content/debug.log`
-2. Sprawdź konsolę przeglądarki (F12)
-3. Zobacz dokumentację w `/docs`
+2. Konsola przeglądarki (F12)
+3. ROADMAP.md sekcja "Dług Techniczny"
 
 ---
 
 **Gotowy do działania! 🚀**
+
+*Następna sesja: Google Calendar + iCalendar (Opcja B) lub Licznik Pending w Menu (Opcja C)*

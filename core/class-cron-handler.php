@@ -111,6 +111,38 @@ class CronHandler {
             error_log('[MikroPlaneta Booking] Cron Error (Reminders): ' . $e->getMessage());
         }
     }
+
+    /**
+     * Send daily backup email
+     */
+    public static function send_daily_backup(): void {
+        // Check if enabled
+        if (!get_option('mikroplaneta_backup_email_enabled', false)) {
+            return;
+        }
+
+        try {
+            require_once MIKROPLANETA_BOOKING_PLUGIN_DIR . 'core/services/class-backup-service.php';
+
+            $settings = [
+                'email' => get_option('mikroplaneta_backup_email', get_option('admin_email')),
+                'enabled' => true
+            ];
+
+            $backup_service = new \MikroPlaneta\Booking\Core\Services\BackupService();
+            $sent = $backup_service->sendDailyBackupEmail($settings);
+
+            if ($sent && defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroPlaneta Booking] Cron: Daily backup email sent');
+            }
+        } catch (\Exception $e) {
+            error_log('[MikroPlaneta Booking] Cron Error (Daily Backup): ' . wp_json_encode([
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]));
+        }
+    }
 }
 
 // Initialize cron handlers

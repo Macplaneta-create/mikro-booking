@@ -86,6 +86,8 @@ class Plugin {
         require_once $dir . 'core/services/class-reservation-expiry-service.php';
         require_once $dir . 'core/services/class-logger-service.php';
         require_once $dir . 'core/services/class-extra-service-service.php';
+        require_once $dir . 'core/services/class-ical-service.php';
+        require_once $dir . 'core/services/class-backup-service.php';
         
         // 5. REST API Controllers
         require_once $dir . 'rest-api/controllers/class-rooms-controller.php';
@@ -98,6 +100,7 @@ class Plugin {
         require_once $dir . 'rest-api/controllers/class-settings-controller.php';
         require_once $dir . 'rest-api/controllers/class-logs-controller.php';
         require_once $dir . 'rest-api/controllers/class-extras-controller.php';
+        require_once $dir . 'rest-api/controllers/class-backup-controller.php';
         
         // 6. Routes
         require_once $dir . 'rest-api/routes.php';
@@ -137,6 +140,163 @@ class Plugin {
 
         // Global REST API throttling
         (new \MikroPlaneta\Booking\Core\RestRateLimiter())->register();
+
+        // AJAX handlers for iCalendar download
+        add_action('wp_ajax_mikroplaneta_download_ical', [$this, 'handle_ical_download']);
+        add_action('wp_ajax_nopriv_mikroplaneta_download_ical', [$this, 'handle_ical_download']);
+
+        // AJAX handlers for Backup & Export
+        add_action('wp_ajax_mikroplaneta_export_csv', [$this, 'handle_export_csv']);
+        add_action('wp_ajax_mikroplaneta_export_sql', [$this, 'handle_export_sql']);
+        add_action('wp_ajax_mikroplaneta_send_daily_backup', [$this, 'handle_send_daily_backup']);
+    }
+
+    /**
+     * Handle CSV export
+     */
+    public function handle_export_csv(): void {
+        check_admin_referer('mikroplaneta_export_csv');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die('Access denied', 'Error', ['response' => 403]);
+        }
+
+        $filters = [
+            'date_from' => isset($_GET['date_from']) ? sanitize_text_field($_GET['date_from']) : '',
+            'date_to' => isset($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : '',
+            'status' => isset($_GET['status']) ? sanitize_text_field($_GET['status']) : 'all'
+        ];
+
+        $backup_service = new \MikroPlaneta\Booking\Core\Services\BackupService();
+        $csv = $backup_service->exportReservationsToCsv($filters);
+        
+        $filename = 'rezerwacje-' . date('Y-m-d') . '.csv';
+        
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . strlen($csv));
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        echo $csv;
+        exit;
+    }
+
+    /**
+     * Handle SQL database export
+     */
+    public function handle_export_sql(): void {
+        check_admin_referer('mikroplaneta_export_sql');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die('Access denied', 'Error', ['response' => 403]);
+        }
+
+        $only_hotel = isset($_GET['only_hotel']) ? (bool) $_GET['only_hotel'] : true;
+        
+        $backup_service = new \MikroPlaneta\Booking\Core\Services\BackupService();
+        $sql = $backup_service->exportDatabaseToSql($only_hotel);
+        
+        $filename = 'backup-bazy-' . date('Y-m-d-H-i') . '.sql';
+        
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        header('Content-Type: text/plain; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . strlen($sql));
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        echo $sql;
+        exit;
+    }
+
+    /**
+     * Handle manual daily backup email send
+     */
+    public function handle_send_daily_backup(): void {
+        check_admin_referer('mikroplaneta_send_daily_backup');
+        
+        if (!current_user_can('manage_options')) {
+            wp_die('Access denied', 'Error', ['response' => 403]);
+        }
+
+        $settings = [
+            'email' => get_option('mikroplaneta_backup_email', get_option('admin_email')),
+            'enabled' => get_option('mikroplaneta_backup_email_enabled', false)
+        ];
+
+        $backup_service = new \MikroPlaneta\Booking\Core\Services\BackupService();
+        $sent = $backup_service->sendDailyBackupEmail($settings);
+
+        if ($sent) {
+            wp_send_json_success(['message' => 'Email wysłany pomyślnie']);
+        } else {
+            wp_send_json_error(['message' => 'Nie udało się wysłać emaila']);
+        }
+    }
+
+    /**
+     * Handle iCalendar file download
+     */
+    public function handle_ical_download(): void {
+        $reservation_id = isset($_GET['reservation_id']) ? intval($_GET['reservation_id']) : 0;
+        
+        if (!$reservation_id) {
+            wp_die('Invalid reservation ID', 'Error', ['response' => 400]);
+        }
+        
+        // Verify nonce
+        check_admin_referer('download_ical_' . $reservation_id);
+        
+        $ical_service = new \MikroPlaneta\Booking\Core\Services\IcalService();
+        
+        // Generate iCalendar content
+        global $wpdb;
+        $reservations_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('reservations');
+        $guests_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('guests');
+        
+        $reservation_data = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$reservations_table} WHERE id = %d",
+            $reservation_id
+        ), ARRAY_A);
+        
+        if (!$reservation_data) {
+            wp_die('Reservation not found', 'Error', ['response' => 404]);
+        }
+        
+        $guest_data = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$guests_table} WHERE id = %d",
+            $reservation_data['guest_id']
+        ), ARRAY_A);
+        
+        if (!$guest_data) {
+            wp_die('Guest not found', 'Error', ['response' => 404]);
+        }
+        
+        // Create model objects
+        $reservation = new \MikroPlaneta\Booking\Core\Models\Reservation($reservation_data);
+        $guest = new \MikroPlaneta\Booking\Core\Models\Guest($guest_data);
+        
+        // Generate and send file
+        $ics_content = $ical_service->generateIcs($reservation, $guest);
+        $filename = 'rezerwacja-' . $reservation_id . '.ics';
+        
+        // Save to temp and send
+        $filepath = $ical_service->saveIcsFile($ics_content, $reservation_id);
+        if ($filepath) {
+            $ical_service->sendDownload($filepath, $filename);
+        } else {
+            wp_die('Failed to generate iCalendar file', 'Error', ['response' => 500]);
+        }
     }
     
     /**

@@ -68,7 +68,9 @@ class DashboardController extends RestController {
             'arrivals_today' => 0,
             'departures_today' => 0,
             'active_bookings' => 0,
-            'checked_in_guests' => 0
+            'checked_in_guests' => 0,
+            'pending_reservations' => 0,
+            'recent_reservations' => []
         ];
 
         // 1. Total Rooms & Beds
@@ -126,6 +128,42 @@ class DashboardController extends RestController {
         if ($stats['total_beds'] > 0) {
             $stats['occupancy_rate'] = round(($occupied_beds / $stats['total_beds']) * 100);
         }
+
+        // 8. Pending Reservations Count
+        $stats['pending_reservations'] = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$reservations_table} WHERE status = %s",
+            \MikroPlaneta\Booking\Core\Models\Reservation::STATUS_PENDING
+        ));
+
+        // 9. Recent Reservations (last 5, any status) - OPTIMIZED
+        // Using indexed query with proper JOIN
+        $recent = $wpdb->get_results(
+            "SELECT r.id, r.first_name, r.last_name, r.check_in, r.check_out, 
+                    r.adults, r.children, r.status, r.total_price, r.created_at,
+                    GROUP_CONCAT(rb.bed_id ORDER BY rb.bed_id SEPARATOR ',') as bed_ids
+             FROM {$reservations_table} r
+             LEFT JOIN {$reservation_beds_table} rb ON r.id = rb.reservation_id
+             GROUP BY r.id
+             ORDER BY r.created_at DESC
+             LIMIT 5",
+            ARRAY_A
+        );
+
+        $stats['recent_reservations'] = array_map(function($res) {
+            return [
+                'id' => (int) $res['id'],
+                'first_name' => $res['first_name'],
+                'last_name' => $res['last_name'],
+                'check_in' => $res['check_in'],
+                'check_out' => $res['check_out'],
+                'adults' => (int) $res['adults'],
+                'children' => (int) $res['children'],
+                'status' => $res['status'],
+                'bed_ids' => $res['bed_ids'] ? array_map('intval', explode(',', $res['bed_ids'])) : [],
+                'total_price' => (float) $res['total_price'],
+                'created_at' => $res['created_at']
+            ];
+        }, $recent ?: []);
 
         return $this->success($stats);
     }

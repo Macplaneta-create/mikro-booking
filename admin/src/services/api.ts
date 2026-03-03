@@ -233,7 +233,8 @@ export const AvailabilityAPI = {
         return res.data.data;
     },
     findBeds: async (params: { check_in: string, check_out: string, room_id?: number }) => {
-        const res = await api.get('/availability/beds', { params });
+        // Use public endpoint for consistency with frontend widgets
+        const res = await api.get('/public/availability/beds', { params });
         return res.data.data as Bed[];
     }
 };
@@ -400,6 +401,9 @@ export const SettingsAPI = {
             rate_limit_max_requests: number;
             privacy_policy_page_id: number;
             terms_page_id: number;
+            backup_email: string;
+            backup_email_enabled: boolean;
+            backup_email_time: string;
         };
     },
     update: async (data: {
@@ -425,6 +429,9 @@ export const SettingsAPI = {
         rate_limit_enabled?: boolean;
         rate_limit_window_seconds?: number;
         rate_limit_max_requests?: number;
+        backup_email?: string;
+        backup_email_enabled?: boolean;
+        backup_email_time?: string;
     }) => {
         const res = await api.post('/settings', data);
         return res.data.data;

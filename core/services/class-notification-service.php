@@ -13,6 +13,7 @@ namespace MikroPlaneta\Booking\Core\Services;
 use MikroPlaneta\Booking\Core\Models\Reservation;
 use MikroPlaneta\Booking\Core\Models\Guest;
 use MikroPlaneta\Booking\Core\Database\Schema;
+use MikroPlaneta\Booking\Core\Services\IcalService;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -28,23 +29,45 @@ class NotificationService {
     ];
 
     private ?bool $notifications_table_available = null;
-    
+    private ?IcalService $ical_service = null;
+
+    /**
+     * Get iCalendar service
+     */
+    private function getIcalService(): IcalService {
+        if ($this->ical_service === null) {
+            $this->ical_service = new IcalService();
+        }
+        return $this->ical_service;
+    }
+
     /**
      * Send reservation confirmation email
      */
     public function sendReservationConfirmation(Reservation $reservation, Guest $guest, array $context = []): bool {
         // Use different template based on reservation status
-        $template = ($reservation->status === 'pending') 
-            ? 'reservation_pending' 
+        $template = ($reservation->status === 'pending')
+            ? 'reservation_pending'
             : 'reservation_confirmation';
-        
+
         [$subject, $message] = $this->resolveTemplate($template, $reservation, $guest, $context);
+
+        // Generate iCalendar attachment
+        $attachments = [];
+        $ical_service = $this->getIcalService();
+        $ics_content = $ical_service->generateIcs($reservation, $guest);
+        $ics_filepath = $ical_service->saveIcsFile($ics_content, $reservation->id);
+        
+        if ($ics_filepath) {
+            $attachments[] = $ics_filepath;
+        }
 
         $sent = wp_mail(
             $guest->email,
             $subject,
             $message,
-            $this->getEmailHeaders()
+            $this->getEmailHeaders(),
+            $attachments
         );
 
         $this->logNotification(

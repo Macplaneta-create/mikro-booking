@@ -22,10 +22,39 @@ class Admin {
     public function __construct() {
         add_action('admin_menu', [$this, 'register_menu']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
+        add_action('admin_head', [$this, 'add_pending_count_badge']);
     }
 
+    /**
+     * Get pending reservations count
+     */
+    private function get_pending_count(): int {
+        global $wpdb;
+        $table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('reservations');
+        return (int) $wpdb->get_var(
+            "SELECT COUNT(*) FROM {$table} WHERE status = 'pending'"
+        );
+    }
 
-    
+    /**
+     * Add pending count badge to menu
+     */
+    public function add_pending_count_badge(): void {
+        global $menu;
+        
+        $pending_count = $this->get_pending_count();
+        
+        if ($pending_count > 0) {
+            // Find the main Booking menu item and add badge
+            foreach ($menu as $key => $item) {
+                if ($item[2] === 'mikroplaneta-booking') {
+                    $menu[$key][0] .= ' <span class="update-plugins count-' . esc_attr($pending_count) . '"><span class="plugin-count">' . esc_html($pending_count) . '</span></span>';
+                    break;
+                }
+            }
+        }
+    }
+
     /**
      * Register admin menu
      */

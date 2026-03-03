@@ -199,33 +199,23 @@ class PricingService {
         }
 
         // Handle Per-Bed pricing with child discount
-        // Price is PER PLACE (per guest), not per bed
-        // Beds are just for capacity tracking
+        // Price in database is PER PLACE (per person)
+        // Each place in a bed costs the base price
+        // Bunk bed has 2 places, single bed has 1 place
         if (!empty($individual_prices) && $adults > 0) {
             $child_multiplier = (float) get_option('mikroplaneta_booking_multiplier_children', 0.5);
 
-            // For dormitory rooms: price from API is already PER PLACE
-            // We don't divide by bed capacity - each place costs the same
-            $first_bed = $beds_objects[0];
-            $first_bed_total = $individual_prices[0]['total'];
+            // Calculate price per place from the first bed
+            // The price from calculateTotalPrice is already per place (per person)
+            $first_bed_price = $individual_prices[0]['total'];
             
-            // Check if this is a dormitory room
-            $first_room = $this->room_repository->find((int) $first_bed->room_id);
-            $is_dormitory = $first_room && (string) $first_room->room_type === 'dormitory';
-            
-            if ($is_dormitory) {
-                // Dormitory: price is per place (100 zł per person regardless of bed type)
-                $price_per_place = $first_bed_total;
-            } else {
-                // Other rooms: divide by bed capacity to get price per place
-                $first_bed_capacity = ($first_bed->bed_type === 'bunk') ? 2 : 1;
-                $price_per_place = $first_bed_total / $first_bed_capacity;
-            }
+            // For dormitory rooms: price is per place (each place costs the same)
+            // For other rooms: we still charge per place, not per bed
+            $price_per_place = $first_bed_price;
 
             // Calculate: adults × price_per_place + children × price_per_place × child_multiplier
             $adults_total = $adults * $price_per_place;
             $children_total = $children * $price_per_place * $child_multiplier;
-
             $grand_total = $adults_total + $children_total;
 
             // Create details for each guest

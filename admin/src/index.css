@@ -16,3 +16,28 @@
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
+
+/* Pending Reservations Badge in Menu */
+#adminmenu .update-plugins {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 8px;
+  background: #d63638;
+  color: #fff;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  min-width: 18px;
+  text-align: center;
+}
+
+#adminmenu .plugin-count {
+  color: #fff;
+  font-weight: 600;
+}
+
+#adminmenu .update-plugins:hover {
+  background: #b32d2e;
+  color: #fff;
+}

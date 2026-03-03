@@ -195,9 +195,12 @@ const CalendarView: React.FC = () => {
 
         const bedIds = Array.from(selectedBeds);
 
+        // Fallback: If no beds selected via Ctrl+click, use the primary bed
+        const finalBedIds = bedIds.length > 0 ? bedIds : [selection.bedId];
+
         setModalData({
             bedId: selection.bedId,
-            bedIds: bedIds.length > 0 ? bedIds : undefined,
+            bedIds: finalBedIds,
             roomId: selection.roomId,
             checkIn: format(selection.start, 'yyyy-MM-dd'),
             checkOut: format(selection.end, 'yyyy-MM-dd'),

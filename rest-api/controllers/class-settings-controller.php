@@ -68,6 +68,11 @@ class SettingsController extends RestController {
                     'rate_limit_enabled' => ['type' => 'boolean'],
                     'rate_limit_window_seconds' => ['type' => 'integer', 'minimum' => 10],
                     'rate_limit_max_requests' => ['type' => 'integer', 'minimum' => 1],
+
+                    // Backup settings
+                    'backup_email' => ['type' => 'string', 'format' => 'email'],
+                    'backup_email_enabled' => ['type' => 'boolean'],
+                    'backup_email_time' => ['type' => 'string', 'pattern' => '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'],
                 ],
             ],
         ]);
@@ -200,6 +205,11 @@ class SettingsController extends RestController {
             'rate_limit_enabled' => (bool) get_option('mikroplaneta_booking_rate_limit_enabled', true),
             'rate_limit_window_seconds' => (int) get_option('mikroplaneta_booking_rate_limit_window_seconds', 60),
             'rate_limit_max_requests' => (int) get_option('mikroplaneta_booking_rate_limit_max_requests', 120),
+
+            // Backup settings
+            'backup_email' => (string) get_option('mikroplaneta_backup_email', get_option('admin_email')),
+            'backup_email_enabled' => (bool) get_option('mikroplaneta_backup_email_enabled', false),
+            'backup_email_time' => (string) get_option('mikroplaneta_backup_email_time', '08:00'),
         ];
         
         return $this->success($settings);
@@ -325,7 +335,18 @@ class SettingsController extends RestController {
             $max_requests = max(1, (int) $params['rate_limit_max_requests']);
             update_option('mikroplaneta_booking_rate_limit_max_requests', $max_requests);
         }
-        
+
+        // Backup settings
+        if (isset($params['backup_email'])) {
+            update_option('mikroplaneta_backup_email', sanitize_email($params['backup_email']));
+        }
+        if (isset($params['backup_email_enabled'])) {
+            update_option('mikroplaneta_backup_email_enabled', (bool) $params['backup_email_enabled']);
+        }
+        if (isset($params['backup_email_time'])) {
+            update_option('mikroplaneta_backup_email_time', sanitize_text_field($params['backup_email_time']));
+        }
+
         return $this->get_settings($request);
     }
     

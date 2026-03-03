@@ -133,6 +133,10 @@ function register_routes(): void {
     // Extras Controller
     $extras_controller = new ExtrasController($extra_service_repo, $extra_service_service);
     $extras_controller->register_routes();
+
+    // Backup Controller
+    $backup_controller = new \MikroPlaneta\Booking\RestApi\Controllers\BackupController();
+    $backup_controller->register_routes();
 }
 
 add_action('rest_api_init', __NAMESPACE__ . '\\register_routes');
