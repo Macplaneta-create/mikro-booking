@@ -28,8 +28,6 @@ const App: React.FC = () => {
             page = (window as any).mikroplanetaBooking.currentPage;
         }
 
-        console.log('Current Page Slug:', page);
-
         if (page.includes('rooms')) {
             setCurrentView('rooms');
         } else if (page.includes('reservations')) {
@@ -81,7 +79,7 @@ const App: React.FC = () => {
                     {currentView === 'extras' && <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><Coins className="text-brand-600" /> Usługi Dodatkowe</h1>}
                     {currentView === 'settings' && <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><SettingsIcon className="text-brand-600" /> Ustawienia</h1>}
 
-                    <p className="text-gray-500 mt-2 ml-1">MikroPlaneta Booking System v{window.mikroplanetaBooking?.version || '1.1.2'}</p>
+                    <p className="text-gray-500 mt-2 ml-1">MikroPlaneta Booking System v{window.mikroplanetaBooking?.version || 'dev'}</p>
                 </div>
             </header>
 

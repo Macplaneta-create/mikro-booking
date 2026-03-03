@@ -455,7 +455,8 @@ const DashboardContent: React.FC = () => {
                     <button
                         onClick={() => {
                             const nonce = (window as any).mikroplanetaBooking?.nonce || '';
-                            const url = `${(window as any).mikroplanetaBooking?.apiUrl || '/wp-json/mikroplaneta/v1'}/export/csv?_wpnonce=${encodeURIComponent(nonce)}`;
+                            const apiBase = ((window as any).mikroplanetaBooking?.apiUrl || '/wp-json/mikroplaneta/v1').replace(/\/+$/, '');
+                            const url = `${apiBase}/backup/export/csv?_wpnonce=${encodeURIComponent(nonce)}`;
                             window.open(url, '_blank');
                         }}
                         className="p-4 rounded-xl bg-brand-50 border border-brand-100 text-left hover:border-brand-300 hover:bg-brand-100 transition-all group"
@@ -470,7 +471,8 @@ const DashboardContent: React.FC = () => {
                     <button
                         onClick={() => {
                             const nonce = (window as any).mikroplanetaBooking?.nonce || '';
-                            const url = `${(window as any).mikroplanetaBooking?.apiUrl || '/wp-json/mikroplaneta/v1'}/export/sql?_wpnonce=${encodeURIComponent(nonce)}&only_hotel=1`;
+                            const apiBase = ((window as any).mikroplanetaBooking?.apiUrl || '/wp-json/mikroplaneta/v1').replace(/\/+$/, '');
+                            const url = `${apiBase}/backup/export/sql?_wpnonce=${encodeURIComponent(nonce)}&only_hotel=1`;
                             window.open(url, '_blank');
                         }}
                         className="p-4 rounded-xl bg-emerald-50 border border-emerald-100 text-left hover:border-emerald-300 hover:bg-emerald-100 transition-all group"
@@ -487,15 +489,19 @@ const DashboardContent: React.FC = () => {
                             if (!confirm('Czy na pewno chcesz wysłać podsumowanie rezerwacji na email?')) return;
                             
                             const nonce = (window as any).mikroplanetaBooking?.nonce || '';
-                            const url = `${(window as any).mikroplanetaBooking?.apiUrl || '/wp-json/mikroplaneta/v1'}/backup/send-daily?_wpnonce=${encodeURIComponent(nonce)}`;
+                            const apiBase = ((window as any).mikroplanetaBooking?.apiUrl || '/wp-json/mikroplaneta/v1').replace(/\/+$/, '');
+                            const url = `${apiBase}/backup/send-daily?_wpnonce=${encodeURIComponent(nonce)}`;
                             
                             try {
                                 const response = await fetch(url, { method: 'POST' });
                                 const data = await response.json();
-                                if (data.success) {
-                                    alert('✅ ' + data.message);
+                                const successMessage = data?.data?.message || data?.message || 'Email wysłany pomyślnie';
+                                const errorMessage = data?.message || data?.data?.message || 'Wystąpił błąd';
+
+                                if (response.ok && data?.success) {
+                                    alert('✅ ' + successMessage);
                                 } else {
-                                    alert('❌ ' + (data.message || 'Wystąpił błąd'));
+                                    alert('❌ ' + errorMessage);
                                 }
                             } catch (error) {
                                 alert('❌ Nie udało się wysłać emaila');

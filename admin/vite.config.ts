@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   resolve: {
     alias: {
@@ -24,6 +24,11 @@ export default defineConfig({
     // Generate manifest for WordPress integration
     manifest: true,
   },
+  esbuild: mode === 'production'
+    ? {
+        drop: ['console', 'debugger'],
+      }
+    : undefined,
   server: {
     port: 3000,
     host: true, // Allow external access (needed for Laragon)
@@ -42,4 +47,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

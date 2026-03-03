@@ -73,6 +73,8 @@ class SettingsController extends RestController {
                     'backup_email' => ['type' => 'string', 'format' => 'email'],
                     'backup_email_enabled' => ['type' => 'boolean'],
                     'backup_email_time' => ['type' => 'string', 'pattern' => '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'],
+                    'backup_retention_hours' => ['type' => 'integer', 'minimum' => 1],
+                    'ical_retention_hours' => ['type' => 'integer', 'minimum' => 1],
 
                     // CSV Export settings
                     'csv_export_email' => ['type' => 'string', 'format' => 'email'],
@@ -215,6 +217,8 @@ class SettingsController extends RestController {
             'backup_email' => (string) get_option('mikroplaneta_backup_email', get_option('admin_email')),
             'backup_email_enabled' => (bool) get_option('mikroplaneta_backup_email_enabled', false),
             'backup_email_time' => (string) get_option('mikroplaneta_backup_email_time', '08:00'),
+            'backup_retention_hours' => (int) get_option('mikroplaneta_booking_backup_retention_hours', 24),
+            'ical_retention_hours' => (int) get_option('mikroplaneta_booking_ical_retention_hours', 24),
 
             // CSV Export settings
             'csv_export_email' => (string) get_option('mikroplaneta_csv_export_email', get_option('admin_email')),
@@ -356,6 +360,12 @@ class SettingsController extends RestController {
         if (isset($params['backup_email_time'])) {
             update_option('mikroplaneta_backup_email_time', sanitize_text_field($params['backup_email_time']));
         }
+        if (isset($params['backup_retention_hours'])) {
+            update_option('mikroplaneta_booking_backup_retention_hours', max(1, (int) $params['backup_retention_hours']));
+        }
+        if (isset($params['ical_retention_hours'])) {
+            update_option('mikroplaneta_booking_ical_retention_hours', max(1, (int) $params['ical_retention_hours']));
+        }
 
         // CSV Export settings
         if (isset($params['csv_export_email'])) {
@@ -366,6 +376,11 @@ class SettingsController extends RestController {
         }
         if (isset($params['csv_export_time'])) {
             update_option('mikroplaneta_csv_export_time', sanitize_text_field($params['csv_export_time']));
+        }
+
+        // Reschedule related cron events when delivery settings change
+        if (class_exists('\\MikroPlaneta\\Booking\\Core\\CronHandler')) {
+            \MikroPlaneta\Booking\Core\CronHandler::rescheduleScheduledEvents();
         }
 
         return $this->get_settings($request);

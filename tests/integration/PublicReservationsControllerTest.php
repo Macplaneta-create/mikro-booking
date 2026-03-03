@@ -45,6 +45,56 @@ class PublicReservationsControllerTest extends TestCase {
         $this->assertSame('Captcha verification failed', $response->get_data()['message']);
     }
 
+    public function testCreatesReservationWhenCaptchaProviderIsNone(): void {
+        $GLOBALS['__mb_options']['mikroplaneta_booking_captcha_provider'] = 'none';
+
+        $guest = Guest::fromArray([
+            'id' => 101,
+            'first_name' => 'Anna',
+            'last_name' => 'Nowak',
+            'email' => 'anna@example.com',
+        ]);
+
+        $createdReservation = Reservation::fromArray([
+            'id' => 1001,
+            'guest_id' => 101,
+            'bed_ids' => [3],
+            'check_in' => '2026-04-10',
+            'check_out' => '2026-04-12',
+            'status' => Reservation::STATUS_PENDING,
+        ]);
+
+        $reservationService = $this->createMock(ReservationService::class);
+        $guestService = $this->createMock(GuestService::class);
+
+        $guestService
+            ->expects($this->once())
+            ->method('createGuest')
+            ->willReturn($guest);
+
+        $reservationService
+            ->expects($this->once())
+            ->method('createReservation')
+            ->willReturn($createdReservation);
+
+        $controller = new PublicReservationsController($reservationService, $guestService);
+
+        $request = new FakeRestRequest([
+            'guest' => ['first_name' => 'Anna', 'last_name' => 'Nowak', 'email' => 'anna@example.com'],
+            'bed_ids' => [3],
+            'check_in' => '2026-04-10',
+            'check_out' => '2026-04-12',
+            'captcha_token' => '',
+        ]);
+
+        $response = $controller->create_request($request);
+        $data = $response->get_data();
+
+        $this->assertSame(201, $response->get_status());
+        $this->assertTrue($data['success']);
+        $this->assertSame(1001, $data['data']['reservation_id']);
+    }
+
     public function testCreatesPendingReservationWhenCaptchaSimulationIsEnabled(): void {
         add_filter('mikroplaneta_booking_recaptcha_simulate', static function() {
             return true;
@@ -135,6 +185,61 @@ class PublicReservationsControllerTest extends TestCase {
 
         $this->assertSame(400, $response->get_status());
         $this->assertSame('Captcha verification failed', $response->get_data()['message']);
+    }
+
+    public function testCreatesReservationWhenHcaptchaIsEnabledAndValid(): void {
+        $GLOBALS['__mb_options']['mikroplaneta_booking_captcha_provider'] = 'hcaptcha';
+        $GLOBALS['__mb_options']['mikroplaneta_booking_hcaptcha_secret_key'] = 'hcaptcha-secret';
+        $GLOBALS['__mb_remote_post_response'] = [
+            'response' => ['code' => 200],
+            'body' => '{"success":true}',
+        ];
+
+        $guest = Guest::fromArray([
+            'id' => 202,
+            'first_name' => 'Piotr',
+            'last_name' => 'Kowal',
+            'email' => 'piotr@example.com',
+        ]);
+
+        $createdReservation = Reservation::fromArray([
+            'id' => 2002,
+            'guest_id' => 202,
+            'bed_ids' => [4],
+            'check_in' => '2026-06-10',
+            'check_out' => '2026-06-12',
+            'status' => Reservation::STATUS_PENDING,
+        ]);
+
+        $reservationService = $this->createMock(ReservationService::class);
+        $guestService = $this->createMock(GuestService::class);
+
+        $guestService
+            ->expects($this->once())
+            ->method('createGuest')
+            ->willReturn($guest);
+
+        $reservationService
+            ->expects($this->once())
+            ->method('createReservation')
+            ->willReturn($createdReservation);
+
+        $controller = new PublicReservationsController($reservationService, $guestService);
+
+        $request = new FakeRestRequest([
+            'guest' => ['first_name' => 'Piotr', 'last_name' => 'Kowal', 'email' => 'piotr@example.com'],
+            'bed_ids' => [4],
+            'check_in' => '2026-06-10',
+            'check_out' => '2026-06-12',
+            'captcha_token' => 'hcaptcha-token-ok',
+        ]);
+
+        $response = $controller->create_request($request);
+        $data = $response->get_data();
+
+        $this->assertSame(201, $response->get_status());
+        $this->assertTrue($data['success']);
+        $this->assertSame(2002, $data['data']['reservation_id']);
     }
 
     public function testReturnsAvailableBedsForPublicEndpoint(): void {

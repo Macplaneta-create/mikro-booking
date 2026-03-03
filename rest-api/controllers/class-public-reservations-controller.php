@@ -374,7 +374,13 @@ class PublicReservationsController extends RestController {
                 ? $this->availability_service->findAvailableBedsByRoom($room_id, $check_in, $check_out)
                 : $this->availability_service->findAvailableBeds($check_in, $check_out);
             $payload = array_map(static function($bed) {
-                return $bed->toArray();
+                return [
+                    'id' => (int) ($bed->id ?? 0),
+                    'room_id' => (int) ($bed->room_id ?? 0),
+                    'bed_number' => (int) ($bed->bed_number ?? 0),
+                    'bed_type' => (string) ($bed->bed_type ?? 'single'),
+                    'is_active' => (bool) ($bed->is_active ?? true),
+                ];
             }, $beds);
 
             return $this->success($payload);

@@ -45,6 +45,8 @@ interface PluginSettings {
     backup_email: string;
     backup_email_enabled: boolean;
     backup_email_time: string;
+    backup_retention_hours: number;
+    ical_retention_hours: number;
     // CSV Export settings
     csv_export_email: string;
     csv_export_enabled: boolean;
@@ -112,6 +114,8 @@ const Settings: React.FC = () => {
         backup_email: '',
         backup_email_enabled: false,
         backup_email_time: '08:00',
+        backup_retention_hours: 24,
+        ical_retention_hours: 24,
         // CSV Export settings
         csv_export_email: '',
         csv_export_enabled: false,
@@ -173,6 +177,8 @@ const Settings: React.FC = () => {
                 backup_email: data.backup_email ?? '',
                 backup_email_enabled: data.backup_email_enabled ?? false,
                 backup_email_time: data.backup_email_time ?? '08:00',
+                backup_retention_hours: data.backup_retention_hours ?? 24,
+                ical_retention_hours: data.ical_retention_hours ?? 24,
                 csv_export_email: data.csv_export_email ?? '',
                 csv_export_enabled: data.csv_export_enabled ?? false,
                 csv_export_time: data.csv_export_time ?? '08:00',
@@ -1156,6 +1162,41 @@ const Settings: React.FC = () => {
                                     type="time"
                                     value={settings.backup_email_time}
                                     onChange={(e) => setSettings({ ...settings, backup_email_time: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Retencja plików backup (godziny)</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="720"
+                                    value={settings.backup_retention_hours}
+                                    onChange={(e) =>
+                                        setSettings({
+                                            ...settings,
+                                            backup_retention_hours: Math.max(1, parseInt(e.target.value) || 1),
+                                        })
+                                    }
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Retencja plików iCal (godziny)</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="720"
+                                    value={settings.ical_retention_hours}
+                                    onChange={(e) =>
+                                        setSettings({
+                                            ...settings,
+                                            ical_retention_hours: Math.max(1, parseInt(e.target.value) || 1),
+                                        })
+                                    }
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                                 />
                             </div>

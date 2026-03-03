@@ -21,6 +21,65 @@ if (!defined('ABSPATH')) {
 class IcalService {
 
     /**
+     * Directory for temporary iCal files
+     */
+    private function getTempDir(): string {
+        $upload_dir = wp_upload_dir();
+        return trailingslashit($upload_dir['basedir']) . 'mikroplaneta-booking/ical/';
+    }
+
+    /**
+     * Retention period in hours for iCal files
+     */
+    private function getRetentionHours(): int {
+        $hours = (int) get_option('mikroplaneta_booking_ical_retention_hours', 24);
+        return max(1, $hours);
+    }
+
+    /**
+     * Cleanup old iCal files
+     *
+     * @return int Number of deleted files
+     */
+    public function cleanupOldFiles(): int {
+        $temp_dir = $this->getTempDir();
+        if (!is_dir($temp_dir)) {
+            return 0;
+        }
+
+        $cutoff = time() - ($this->getRetentionHours() * HOUR_IN_SECONDS);
+        $deleted = 0;
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($temp_dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::LEAVES_ONLY
+        );
+
+        foreach ($iterator as $file_info) {
+            if (!$file_info->isFile()) {
+                continue;
+            }
+
+            $file = $file_info->getPathname();
+            $basename = basename($file);
+            if (in_array($basename, ['.htaccess', 'index.php', 'web.config', 'nginx.conf'], true)) {
+                continue;
+            }
+
+            $mtime = @filemtime($file);
+            if ($mtime === false || $mtime >= $cutoff) {
+                continue;
+            }
+
+            if (@unlink($file)) {
+                $deleted++;
+            }
+        }
+
+        return $deleted;
+    }
+
+    /**
      * Generate iCalendar content for a reservation
      *
      * @param Reservation $reservation Reservation model
@@ -100,8 +159,10 @@ class IcalService {
      * @return string|false Path to saved file or false on failure
      */
     public function saveIcsFile(string $icsContent, int $reservationId) {
-        $upload_dir = wp_upload_dir();
-        $temp_dir = $upload_dir['basedir'] . '/mikroplaneta-booking/ical/';
+        // Opportunistic cleanup for environments where WP-Cron may be disabled
+        $this->cleanupOldFiles();
+
+        $temp_dir = $this->getTempDir();
         
         // Create directory if it doesn't exist
         if (!file_exists($temp_dir)) {
@@ -109,6 +170,21 @@ class IcalService {
             
             // Add .htaccess to prevent direct access
             file_put_contents($temp_dir . '.htaccess', 'deny from all');
+
+            // Add index.php to prevent directory listing
+            file_put_contents($temp_dir . 'index.php', "<?php\n// Silence is golden.\n");
+
+            // Add web.config for IIS
+            file_put_contents(
+                $temp_dir . 'web.config',
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<configuration>\n  <system.webServer>\n    <security>\n      <authorization>\n        <remove users=\"*\" roles=\"\" verbs=\"\" />\n        <add accessType=\"Deny\" users=\"*\" />\n      </authorization>\n    </security>\n  </system.webServer>\n</configuration>\n"
+            );
+
+            // Add Nginx hint file
+            file_put_contents(
+                $temp_dir . 'nginx.conf',
+                "location ^~ / {\n    deny all;\n    return 403;\n}\n"
+            );
         }
         
         $filename = 'reservation-' . $reservationId . '-' . time() . '.ics';

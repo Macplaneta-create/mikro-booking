@@ -9,6 +9,16 @@
  * 2. Or run from CLI: php wp-content/plugins/mikro-booking/optimize-dashboard.php
  */
 
+if (
+    !defined('MIKROPLANETA_BOOKING_ENABLE_MAINTENANCE_TOOLS')
+    || MIKROPLANETA_BOOKING_ENABLE_MAINTENANCE_TOOLS !== true
+) {
+    if (php_sapi_name() !== 'cli') {
+        http_response_code(403);
+        exit('Maintenance tool disabled.');
+    }
+}
+
 // Load WordPress
 require_once dirname(dirname(dirname(dirname(__FILE__)))) . '/wp-load.php';
 
@@ -16,6 +26,14 @@ if (!current_user_can('manage_options')) {
     // For CLI execution
     if (php_sapi_name() !== 'cli') {
         die('Access denied');
+    }
+}
+
+if (php_sapi_name() !== 'cli') {
+    $nonce = isset($_REQUEST['_wpnonce']) ? sanitize_text_field(wp_unslash($_REQUEST['_wpnonce'])) : '';
+    if (!wp_verify_nonce($nonce, 'mikroplaneta_optimize_dashboard')) {
+        status_header(403);
+        exit('Invalid security token.');
     }
 }
 

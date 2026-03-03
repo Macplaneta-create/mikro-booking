@@ -404,6 +404,8 @@ export const SettingsAPI = {
             backup_email: string;
             backup_email_enabled: boolean;
             backup_email_time: string;
+            backup_retention_hours: number;
+            ical_retention_hours: number;
             csv_export_email: string;
             csv_export_enabled: boolean;
             csv_export_time: string;
@@ -435,6 +437,8 @@ export const SettingsAPI = {
         backup_email?: string;
         backup_email_enabled?: boolean;
         backup_email_time?: string;
+        backup_retention_hours?: number;
+        ical_retention_hours?: number;
         csv_export_email?: string;
         csv_export_enabled?: boolean;
         csv_export_time?: string;

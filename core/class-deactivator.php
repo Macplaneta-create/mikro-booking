@@ -23,8 +23,18 @@ class Deactivator {
      * Run on plugin deactivation
      */
     public static function deactivate(): void {
-        // Clear scheduled cron events (if any)
-        wp_clear_scheduled_hook('mikroplaneta_booking_daily_cleanup');
+        // Clear scheduled cron events
+        $cron_hooks = [
+            'mikroplaneta_booking_expire_reservations',
+            'mikroplaneta_booking_send_reminders',
+            'mikroplaneta_booking_daily_backup',
+            'mikroplaneta_booking_daily_csv_export',
+            'mikroplaneta_booking_cleanup_temp_files',
+        ];
+
+        foreach ($cron_hooks as $hook) {
+            wp_clear_scheduled_hook($hook);
+        }
         
         // Flush rewrite rules
         flush_rewrite_rules();

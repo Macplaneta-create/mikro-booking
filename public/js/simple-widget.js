@@ -6,7 +6,25 @@
 (function() {
     'use strict';
 
+    const nativeConsole = window.console || {};
+    const debugEnabled = Boolean(window.mpBookingData && window.mpBookingData.debug);
+    const console = {
+        log: debugEnabled && typeof nativeConsole.log === 'function' ? nativeConsole.log.bind(nativeConsole) : function () {},
+        warn: typeof nativeConsole.warn === 'function' ? nativeConsole.warn.bind(nativeConsole) : function () {},
+        error: typeof nativeConsole.error === 'function' ? nativeConsole.error.bind(nativeConsole) : function () {},
+        info: typeof nativeConsole.info === 'function' ? nativeConsole.info.bind(nativeConsole) : function () {},
+    };
+
     let availableBeds = [];
+    let hcaptchaToken = '';
+
+    window.mpHcaptchaDone = function (token) {
+        hcaptchaToken = token || '';
+    };
+
+    window.mpHcaptchaExpired = function () {
+        hcaptchaToken = '';
+    };
 
     /**
      * Escape HTML
@@ -34,9 +52,9 @@
      */
     async function checkAvailability(settings, checkIn, checkOut, guests) {
         try {
-            let url = `${settings.apiUrl}/public/availability/beds?check_in=${checkIn}&check_out=${checkOut}`;
+            let url = `${settings.apiUrl}/public/availability/beds?check_in=${encodeURIComponent(checkIn)}&check_out=${encodeURIComponent(checkOut)}`;
             if (settings.roomId) {
-                url += `&room_id=${settings.roomId}`;
+                url += `&room_id=${encodeURIComponent(String(settings.roomId))}`;
             }
 
             const response = await fetch(url, {
@@ -73,8 +91,8 @@
             const adults = parseInt(container.querySelector('#mp-adults')?.value || '1', 10);
             const children = parseInt(container.querySelector('#mp-children')?.value || '0', 10);
 
-            const availabilityUrl = `${settings.apiUrl}/public/availability/beds?check_in=${checkIn}&check_out=${checkOut}` +
-                (settings.roomId ? `&room_id=${settings.roomId}` : '');
+            const availabilityUrl = `${settings.apiUrl}/public/availability/beds?check_in=${encodeURIComponent(checkIn)}&check_out=${encodeURIComponent(checkOut)}` +
+                (settings.roomId ? `&room_id=${encodeURIComponent(String(settings.roomId))}` : '');
 
             const availResponse = await fetch(availabilityUrl, {
                 headers: { 'X-WP-Nonce': settings.nonce || '' }
@@ -141,6 +159,58 @@
      */
     function bedCapacity(bed) {
         return bed && (bed.bed_type === 'bunk') ? 2 : 1;
+    }
+
+    function isValidDateRange(checkIn, checkOut) {
+        if (!checkIn || !checkOut) {
+            return false;
+        }
+
+        const checkInDate = new Date(checkIn);
+        const checkOutDate = new Date(checkOut);
+
+        if (Number.isNaN(checkInDate.getTime()) || Number.isNaN(checkOutDate.getTime())) {
+            return false;
+        }
+
+        return checkOutDate > checkInDate;
+    }
+
+    async function getCaptchaToken(settings) {
+        const provider = settings.captcha && settings.captcha.provider ? settings.captcha.provider : 'recaptcha_v3';
+
+        if (provider === 'none') {
+            return 'disabled';
+        }
+
+        if (provider === 'hcaptcha') {
+            if (!settings.captcha.hcaptchaSiteKey) {
+                throw new Error(settings.i18n.captchaMissing || 'Captcha is not configured.');
+            }
+            if (!hcaptchaToken) {
+                throw new Error(settings.i18n.captchaMissing || 'Captcha is not configured.');
+            }
+            return hcaptchaToken;
+        }
+
+        if (!settings.captcha.recaptchaSiteKey) {
+            throw new Error(settings.i18n.captchaMissing || 'Captcha is not configured.');
+        }
+
+        if (typeof grecaptcha === 'undefined') {
+            throw new Error(settings.i18n.captchaMissing || 'Captcha is not configured.');
+        }
+
+        return new Promise((resolve, reject) => {
+            grecaptcha.ready(function () {
+                grecaptcha
+                    .execute(settings.captcha.recaptchaSiteKey, {
+                        action: settings.captcha.recaptchaAction || 'booking_submit',
+                    })
+                    .then(resolve)
+                    .catch(() => reject(new Error(settings.i18n.captchaMissing || 'Captcha is not configured.')));
+            });
+        });
     }
 
     /**
@@ -299,7 +369,7 @@
         if (!bedsContainer) return;
 
         if (!Array.isArray(beds) || beds.length === 0) {
-            bedsContainer.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">Brak dostępnych łóżek.</div>`;
+            bedsContainer.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">${escapeHtml(settings.i18n.noBeds || 'Brak dostępnych łóżek.')}</div>`;
             return;
         }
 
@@ -352,20 +422,20 @@
         let tone = '#374151';
         let extra = '';
         if (capacity === 0) {
-            extra = 'Wybierz łóżka z listy.';
+            extra = settings.i18n.summaryNone || 'Wybierz łóżka z listy.';
         } else if (diff < 0) {
             tone = '#991b1b';
-            extra = ` Brakuje miejsc: ${Math.abs(diff)}.`;
+            extra = ` ${settings.i18n.summaryMissing || 'Brakuje miejsc:'} ${Math.abs(diff)}.`;
         } else if (diff > 0) {
             tone = '#92400e';
-            extra = ` Nadmiar miejsc: ${diff}.`;
+            extra = ` ${settings.i18n.summaryExtra || 'Nadmiar miejsc:'} ${diff}.`;
         } else {
             tone = '#065f46';
-            extra = ' Dobór idealny.';
+            extra = ` ${settings.i18n.summaryPerfect || 'Dobór idealny.'}`;
         }
 
         summary.style.color = tone;
-        summary.textContent = `Wybrano ${capacity} miejsc dla ${guests} gości.${extra}`;
+        summary.textContent = `${settings.i18n.summaryBase || 'Wybrano'} ${capacity} ${settings.i18n.summaryPlaces || 'miejsc'} ${settings.i18n.summaryFor || 'dla'} ${guests} ${settings.i18n.summaryGuests || 'gości'}.${extra}`;
     }
 
     /**
@@ -555,6 +625,64 @@
         
         let isSubmitting = false; // Prevent duplicate submissions
 
+        const lockSubmittedForm = () => {
+            submitBtn.disabled = true;
+            step2Back.disabled = true;
+
+            const allInputs = container.querySelectorAll('input, textarea, button');
+            allInputs.forEach(input => {
+                if (input !== submitBtn && input !== step2Back) {
+                    input.disabled = true;
+                }
+            });
+
+            const wrapper = container.querySelector('.mp-booking-form-wrapper');
+            if (wrapper) {
+                wrapper.style.opacity = '0.6';
+                wrapper.style.pointerEvents = 'none';
+            }
+        };
+
+        const renderSubmitSuccess = (emailValue, paymentHtml) => {
+            results.innerHTML = `
+                <div class="mp-booking-form__message mp-booking-form__message--success" style="background: #ecfdf5; border: 2px solid #10b981; color: #065f46; padding: 20px; border-radius: 12px; text-align: center; margin-top: 20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 10px;">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                    <h3 style="margin: 0 0 10px; font-size: 18px; font-weight: 700;">${escapeHtml(settings.i18n.success || 'Rezerwacja została wysłana pomyślnie.')}</h3>
+                    <p style="margin: 0 0 15px; font-size: 14px;">
+                        Na adres <strong>${escapeHtml(emailValue || 'brak email')}</strong> wysłaliśmy potwierdzenie.
+                    </p>
+                    ${paymentHtml}
+                </div>
+            `;
+        };
+
+        const renderSubmitError = (message) => {
+            results.innerHTML = `
+                <div class="mp-booking-form__message mp-booking-form__message--error" style="background: #fef2f2; border: 2px solid #ef4444; color: #991b1b; padding: 20px; border-radius: 12px; text-align: center; margin-top: 20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 10px;">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    <h3 style="margin: 0 0 10px; font-size: 18px; font-weight: 700;">Błąd</h3>
+                    <p style="margin: 0; font-size: 14px;">${escapeHtml(message)}</p>
+                </div>
+            `;
+        };
+
+        const renderResultMessage = (variant, message) => {
+            results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--${variant}">${escapeHtml(message)}</div>`;
+        };
+
+        const renderAvailabilityMessage = (variant, message, visible = true) => {
+            availabilityMsg.className = `mp-booking-form__message mp-booking-form__message--${variant}`;
+            availabilityMsg.style.display = visible ? 'block' : 'none';
+            availabilityMsg.textContent = message;
+        };
+
         const goToStep = (step) => {
             const stepIndicators = container.querySelectorAll('.mp-booking-form__step');
             
@@ -615,27 +743,26 @@
             const guests = getGuestCount(container);
 
             if (!checkIn || !checkOut) {
-                availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--error';
-                availabilityMsg.style.display = 'block';
-                availabilityMsg.textContent = 'Wybierz daty przyjazdu i wyjazdu.';
+                renderAvailabilityMessage('error', 'Wybierz daty przyjazdu i wyjazdu.');
                 return;
             }
 
-            availabilityMsg.style.display = 'block';
-            availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--loading';
-            availabilityMsg.textContent = 'Sprawdzam dostępność...';
+            if (!isValidDateRange(checkIn, checkOut)) {
+                renderAvailabilityMessage('error', settings.i18n.invalidDateRange || 'Data wyjazdu musi być późniejsza niż data przyjazdu.');
+                return;
+            }
+
+            renderAvailabilityMessage('loading', 'Sprawdzam dostępność...');
 
             const result = await checkAvailability(settings, checkIn, checkOut, guests);
 
             if (result.error) {
-                availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--error';
-                availabilityMsg.textContent = 'Błąd sprawdzania dostępności.';
+                renderAvailabilityMessage('error', 'Błąd sprawdzania dostępności.');
                 return;
             }
 
             if (!result.available) {
-                availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--error';
-                availabilityMsg.textContent = `Brak miejsc dla ${guests} osób. Dostępnych: ${result.availableCapacity} miejsc.`;
+                renderAvailabilityMessage('error', `Brak miejsc dla ${guests} osób. Dostępnych: ${result.availableCapacity} miejsc.`);
                 return;
             }
 
@@ -648,22 +775,19 @@
             updateSelectionSummary(container, settings, availableBeds);
 
             if (selected.length > 0) {
-                availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--success';
-                availabilityMsg.textContent = `✅ System wybrał ${selected.length} łóżek dla ${guests} osób. Możesz zmienić wybór.`;
+                renderAvailabilityMessage('info', `✅ System wybrał ${selected.length} łóżek dla ${guests} osób. Możesz zmienić wybór.`);
             } else {
-                availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--info';
-                availabilityMsg.textContent = 'Wybierz łóżka z listy poniżej.';
+                renderAvailabilityMessage('info', settings.i18n.bedRequired || 'Wybierz łóżka z listy.');
             }
 
             // Validate beds selection before proceeding
             const selectedCapacity = computeSelectedCapacity(container, availableBeds);
             if (selectedCapacity < guests) {
-                availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--error';
-                availabilityMsg.textContent = `Wybierz więcej łóżek. Obecnie: ${selectedCapacity} miejsc, potrzeba: ${guests}.`;
+                renderAvailabilityMessage('error', `Za mało miejsc. Wybrano: ${selectedCapacity}, potrzeba: ${guests}.`);
                 return;
             }
 
-            availabilityMsg.style.display = 'none';
+            renderAvailabilityMessage('info', '', false);
             goToStep(2);
         });
 
@@ -677,17 +801,13 @@
         if (suggestBtn) {
             suggestBtn.addEventListener('click', function() {
                 if (availableBeds.length === 0) {
-                    availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--info';
-                    availabilityMsg.textContent = 'Najpierw wybierz daty.';
-                    availabilityMsg.style.display = 'block';
+                    renderAvailabilityMessage('info', 'Najpierw wybierz daty.');
                     return;
                 }
                 const selected = suggestBedsSelection(container, availableBeds);
                 updateSelectionSummary(container, settings, availableBeds);
                 if (selected.length > 0) {
-                    availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--success';
-                    availabilityMsg.textContent = `✅ Auto-wybór: ${selected.length} łóżek.`;
-                    availabilityMsg.style.display = 'block';
+                    renderAvailabilityMessage('info', `✅ Auto-wybór: ${selected.length} łóżek.`);
                 }
             });
         }
@@ -702,10 +822,12 @@
             const guests = getGuestCount(container);
 
             if (!checkIn || !checkOut) return;
+            if (!isValidDateRange(checkIn, checkOut)) {
+                renderAvailabilityMessage('error', settings.i18n.invalidDateRange || 'Data wyjazdu musi być późniejsza niż data przyjazdu.');
+                return;
+            }
 
-            availabilityMsg.style.display = 'block';
-            availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--loading';
-            availabilityMsg.textContent = 'Ładowanie dostępności...';
+            renderAvailabilityMessage('loading', 'Ładowanie dostępności...');
 
             try {
                 const result = await checkAvailability(settings, checkIn, checkOut, guests);
@@ -714,15 +836,12 @@
                     renderBedsList(container, settings, availableBeds);
                     const selected = suggestBedsSelection(container, availableBeds);
                     updateSelectionSummary(container, settings, availableBeds);
-                    availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--info';
-                    availabilityMsg.textContent = `✅ Załadowano ${availableBeds.length} łóżek. Auto-wybór: ${selected.length} łóżek.`;
+                    renderAvailabilityMessage('info', `✅ Załadowano ${availableBeds.length} łóżek. Auto-wybór: ${selected.length} łóżek.`);
                 } else {
-                    availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--error';
-                    availabilityMsg.textContent = 'Brak dostępnych łóżek na wybrane daty.';
+                    renderAvailabilityMessage('error', settings.i18n.noBeds || 'Brak dostępnych łóżek.');
                 }
             } catch (err) {
-                availabilityMsg.className = 'mp-booking-form__message mp-booking-form__message--error';
-                availabilityMsg.textContent = 'Błąd ładowania dostępności.';
+                renderAvailabilityMessage('error', 'Błąd ładowania dostępności.');
             }
         };
 
@@ -765,7 +884,13 @@
             const notes = container.querySelector('#mp-notes').value.trim();
 
             if (!firstName || !lastName || !email || !checkIn || !checkOut) {
-                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">Wypełnij wszystkie wymagane pola.</div>`;
+                renderResultMessage('error', 'Wypełnij wszystkie wymagane pola.');
+                isSubmitting = false;
+                return;
+            }
+
+            if (!isValidDateRange(checkIn, checkOut)) {
+                renderResultMessage('error', settings.i18n.invalidDateRange || 'Data wyjazdu musi być późniejsza niż data przyjazdu.');
                 isSubmitting = false;
                 return;
             }
@@ -792,16 +917,18 @@
             };
 
             submitBtn.disabled = true;
-            results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">Wysyłanie...</div>`;
+            renderResultMessage('loading', 'Wysyłanie...');
 
             try {
+                const captchaToken = await getCaptchaToken(settings);
+
                 // Get selected bed IDs from checkboxes
                 const bedIds = getSelectedBedIds(container);
                 const guests = getGuestCount(container);
 
                 // Validate beds selection
                 if (bedIds.length === 0) {
-                    throw new Error('Wybierz łóżka z listy.');
+                    throw new Error(settings.i18n.bedRequired || 'Wybierz łóżka z listy.');
                 }
 
                 const selectedCapacity = computeSelectedCapacity(container, availableBeds);
@@ -830,7 +957,7 @@
                         children: children,
                         notes: notes,
                         consents: consents,
-                        captcha_token: 'disabled',
+                        captcha_token: captchaToken,
                     }),
                 });
 
@@ -941,56 +1068,21 @@
                     console.log('[Submit] Rendering success message, email:', email);
 
                     // SUCCESS: Lock form and show clear success message
-                    results.innerHTML = `
-                        <div class="mp-booking-form__message mp-booking-form__message--success" style="background: #ecfdf5; border: 2px solid #10b981; color: #065f46; padding: 20px; border-radius: 12px; text-align: center; margin-top: 20px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 10px;">
-                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                                <polyline points="22 4 12 14.01 9 11.01"/>
-                            </svg>
-                            <h3 style="margin: 0 0 10px; font-size: 18px; font-weight: 700;">Rezerwacja wysłana!</h3>
-                            <p style="margin: 0 0 15px; font-size: 14px;">
-                                Na adres <strong>${escapeHtml(email || 'brak email')}</strong> wysłaliśmy potwierdzenie.
-                            </p>
-                            ${paymentHtml}
-                        </div>
-                    `;
+                    renderSubmitSuccess(email, paymentHtml);
                     
                     console.log('[Submit] Success message rendered, results.innerHTML length:', results.innerHTML.length);
 
                     // LOCK FORM: Disable all inputs and buttons
-                    submitBtn.disabled = true;
-                    step2Back.disabled = true;
-
-                    const allInputs = container.querySelectorAll('input, textarea, button');
-                    allInputs.forEach(input => {
-                        if (input !== submitBtn && input !== step2Back) {
-                            input.disabled = true;
-                        }
-                    });
-
-                    // Visual feedback - gray out form
-                    const wrapper = container.querySelector('.mp-booking-form-wrapper');
-                    if (wrapper) {
-                        wrapper.style.opacity = '0.6';
-                        wrapper.style.pointerEvents = 'none';
-                    }
+                    lockSubmittedForm();
 
                     isSubmitting = false; // Reset flag
                 } else {
-                    throw new Error(data.message || 'Błąd wysyłania');
+                    const msg = (data && data.message) ? data.message : (settings.i18n.error || 'Wystąpił błąd. Spróbuj ponownie.');
+                    throw new Error(msg);
                 }
             } catch (err) {
-                results.innerHTML = `
-                    <div class="mp-booking-form__message mp-booking-form__message--error" style="background: #fef2f2; border: 2px solid #ef4444; color: #991b1b; padding: 20px; border-radius: 12px; text-align: center; margin-top: 20px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 10px;">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="8" x2="12" y2="12"/>
-                            <line x1="12" y1="16" x2="12.01" y2="16"/>
-                        </svg>
-                        <h3 style="margin: 0 0 10px; font-size: 18px; font-weight: 700;">Błąd</h3>
-                        <p style="margin: 0; font-size: 14px;">${escapeHtml(err.message)}</p>
-                    </div>
-                `;
+                const msg = err && err.message ? err.message : (settings.i18n.error || 'Wystąpił błąd. Spróbuj ponownie.');
+                renderSubmitError(msg);
                 submitBtn.disabled = false;
                 isSubmitting = false; // Allow retry
             }

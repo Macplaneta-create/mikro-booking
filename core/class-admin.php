@@ -167,15 +167,6 @@ class Admin {
             return;
         }
 
-        ?>
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('[MikroPlaneta] DOMContentLoaded - wp.media:', typeof window.wp?.media);
-            console.log('[MikroPlaneta] DOMContentLoaded - wp.media.view:', typeof window.wp?.media?.view);
-        });
-        </script>
-        <?php
-        
         echo '<div id="mikroplaneta-booking-root"></div>';
     }
     
@@ -334,9 +325,5 @@ class Admin {
             'version' => MIKROPLANETA_BOOKING_VERSION,
         ]);
         
-        // Debug: Check wp.media availability
-        wp_add_inline_script('mikroplaneta-booking-admin', '
-            console.log("[MikroPlaneta Admin Boot] Original window.wp:", typeof window.wp);
-        ', 'before');
     }
 }

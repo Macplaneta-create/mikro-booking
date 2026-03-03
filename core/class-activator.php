@@ -96,6 +96,10 @@ class Activator {
             'mikroplaneta_booking_rate_limit_enabled' => true,
             'mikroplaneta_booking_rate_limit_window_seconds' => 60,
             'mikroplaneta_booking_rate_limit_max_requests' => 120,
+
+            // File retention settings (hours)
+            'mikroplaneta_booking_backup_retention_hours' => 24,
+            'mikroplaneta_booking_ical_retention_hours' => 24,
         ];
         
         foreach ($defaults as $key => $value) {
@@ -112,6 +116,11 @@ class Activator {
         // Schedule hourly cron for expiring pending reservations
         if (!wp_next_scheduled('mikroplaneta_booking_expire_reservations')) {
             wp_schedule_event(time(), 'hourly', 'mikroplaneta_booking_expire_reservations');
+        }
+
+        // Schedule daily cleanup for temporary export and iCal files
+        if (!wp_next_scheduled('mikroplaneta_booking_cleanup_temp_files')) {
+            wp_schedule_event(time(), 'daily', 'mikroplaneta_booking_cleanup_temp_files');
         }
     }
 }

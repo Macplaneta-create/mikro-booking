@@ -108,6 +108,7 @@ class Frontend {
         wp_localize_script('mikroplaneta-booking-widget', 'mpBookingData', [
             'apiUrl' => esc_url_raw(rest_url('mikroplaneta/v1')),
             'nonce' => wp_create_nonce('wp_rest'),
+            'debug' => (bool) (defined('WP_DEBUG') && WP_DEBUG),
             'captcha' => [
                 'provider' => (string) get_option('mikroplaneta_booking_captcha_provider', 'recaptcha_v3'),
                 'recaptchaSiteKey' => (string) get_option('mikroplaneta_booking_recaptcha_site_key', ''),
@@ -120,6 +121,18 @@ class Frontend {
                 'checkOut' => __('Wyjazd', 'mikroplaneta-booking'),
                 'adults' => __('Dorośli', 'mikroplaneta-booking'),
                 'children' => __('Dzieci', 'mikroplaneta-booking'),
+                'suggestedBeds' => __('Łóżka zostały automatycznie dobrane do liczby gości.', 'mikroplaneta-booking'),
+                'bedRequired' => __('Wybierz łóżka z listy.', 'mikroplaneta-booking'),
+                'noBeds' => __('Brak dostępnych łóżek.', 'mikroplaneta-booking'),
+                'summaryBase' => __('Wybrano', 'mikroplaneta-booking'),
+                'summaryPlaces' => __('miejsc', 'mikroplaneta-booking'),
+                'summaryFor' => __('dla', 'mikroplaneta-booking'),
+                'summaryGuests' => __('gości', 'mikroplaneta-booking'),
+                'summaryNone' => __('Wybierz łóżka z listy.', 'mikroplaneta-booking'),
+                'summaryMissing' => __('Brakuje miejsc:', 'mikroplaneta-booking'),
+                'summaryExtra' => __('Nadmiar miejsc:', 'mikroplaneta-booking'),
+                'summaryPerfect' => __('Dobór idealny.', 'mikroplaneta-booking'),
+                'invalidDateRange' => __('Data wyjazdu musi być późniejsza niż data przyjazdu.', 'mikroplaneta-booking'),
                 'submit' => __('Wyślij', 'mikroplaneta-booking'),
             ]
         ]);

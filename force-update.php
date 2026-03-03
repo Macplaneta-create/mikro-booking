@@ -6,6 +6,14 @@
  * Access this via browser: /wp-admin/admin-post.php?action=mikroplaneta_force_update
  */
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+if (!defined('MIKROPLANETA_BOOKING_ENABLE_MAINTENANCE_TOOLS') || MIKROPLANETA_BOOKING_ENABLE_MAINTENANCE_TOOLS !== true) {
+    return;
+}
+
 add_action('admin_post_mikroplaneta_force_update', function() {
     global $wpdb;
 

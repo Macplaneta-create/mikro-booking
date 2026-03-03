@@ -18,6 +18,11 @@ if (!defined('ABSPATH')) {
 }
 
 class CronHandler {
+
+    private const HOOK_SEND_REMINDERS = 'mikroplaneta_booking_send_reminders';
+    private const HOOK_DAILY_BACKUP = 'mikroplaneta_booking_daily_backup';
+    private const HOOK_DAILY_CSV_EXPORT = 'mikroplaneta_booking_daily_csv_export';
+    private const HOOK_CLEANUP_TEMP_FILES = 'mikroplaneta_booking_cleanup_temp_files';
     
     /**
      * Initialize cron handlers
@@ -25,32 +30,67 @@ class CronHandler {
     public static function init(): void {
         // Hook the cron callback
         add_action('mikroplaneta_booking_expire_reservations', [self::class, 'expire_reservations']);
-        add_action('mikroplaneta_booking_send_reminders', [self::class, 'send_reminders']);
-        add_action('mikroplaneta_booking_daily_backup', [self::class, 'send_daily_backup']);
-        add_action('mikroplaneta_booking_daily_csv_export', [self::class, 'send_daily_csv_export']);
+        add_action(self::HOOK_SEND_REMINDERS, [self::class, 'send_reminders']);
+        add_action(self::HOOK_DAILY_BACKUP, [self::class, 'send_daily_backup']);
+        add_action(self::HOOK_DAILY_CSV_EXPORT, [self::class, 'send_daily_csv_export']);
+        add_action(self::HOOK_CLEANUP_TEMP_FILES, [self::class, 'cleanup_temp_files']);
         
         // Schedule daily reminders event if not scheduled
-        if (!wp_next_scheduled('mikroplaneta_booking_send_reminders')) {
-            wp_schedule_event(time(), 'daily', 'mikroplaneta_booking_send_reminders');
+        if (!wp_next_scheduled(self::HOOK_SEND_REMINDERS)) {
+            wp_schedule_event(time(), 'daily', self::HOOK_SEND_REMINDERS);
         }
 
         // Schedule daily backup email if enabled
+        self::rescheduleScheduledEvents();
+    }
+
+    /**
+     * Reschedule daily backup and CSV cron events according to current settings
+     */
+    public static function rescheduleScheduledEvents(): void {
+        // Daily backup email
+        wp_clear_scheduled_hook(self::HOOK_DAILY_BACKUP);
         if (get_option('mikroplaneta_backup_email_enabled', false)) {
-            if (!wp_next_scheduled('mikroplaneta_booking_daily_backup')) {
-                $backup_time = get_option('mikroplaneta_backup_email_time', '08:00');
-                $timestamp = self::get_timestamp_for_time($backup_time);
-                wp_schedule_event($timestamp, 'daily', 'mikroplaneta_booking_daily_backup');
-            }
+            $backup_time = (string) get_option('mikroplaneta_backup_email_time', '08:00');
+            $timestamp = self::get_timestamp_for_time($backup_time);
+            wp_schedule_event($timestamp, 'daily', self::HOOK_DAILY_BACKUP);
         }
 
-        // Schedule daily CSV export if enabled
+        // Daily CSV export
+        wp_clear_scheduled_hook(self::HOOK_DAILY_CSV_EXPORT);
         if (get_option('mikroplaneta_csv_export_enabled', false)) {
-            if (!wp_next_scheduled('mikroplaneta_booking_daily_csv_export')) {
-                $csv_time = get_option('mikroplaneta_csv_export_time', '08:00');
-                $timestamp = self::get_timestamp_for_time($csv_time);
-                wp_schedule_event($timestamp, 'daily', 'mikroplaneta_booking_daily_csv_export');
-            }
+            $csv_time = (string) get_option('mikroplaneta_csv_export_time', '08:00');
+            $timestamp = self::get_timestamp_for_time($csv_time);
+            wp_schedule_event($timestamp, 'daily', self::HOOK_DAILY_CSV_EXPORT);
         }
+
+        // Daily cleanup of temp files
+        if (!wp_next_scheduled(self::HOOK_CLEANUP_TEMP_FILES)) {
+            wp_schedule_event(time(), 'daily', self::HOOK_CLEANUP_TEMP_FILES);
+        }
+    }
+
+    /**
+     * Calculate next timestamp for HH:MM daily schedule
+     */
+    public static function get_timestamp_for_time(string $time): int {
+        $time = trim($time);
+        if (!preg_match('/^([0-1]?\d|2[0-3]):([0-5]\d)$/', $time, $matches)) {
+            $time = '08:00';
+            preg_match('/^([0-1]?\d|2[0-3]):([0-5]\d)$/', $time, $matches);
+        }
+
+        $hour = (int) $matches[1];
+        $minute = (int) $matches[2];
+
+        $now = current_time('timestamp');
+        $target = mktime($hour, $minute, 0, (int) date('n', $now), (int) date('j', $now), (int) date('Y', $now));
+
+        if ($target <= $now) {
+            $target = strtotime('+1 day', $target);
+        }
+
+        return (int) $target;
     }
     
     /**
@@ -189,6 +229,36 @@ class CronHandler {
             }
         } catch (\Exception $e) {
             error_log('[MikroPlaneta Booking] Cron Error (CSV Export): ' . wp_json_encode([
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]));
+        }
+    }
+
+    /**
+     * Cleanup temporary files (backup exports and iCal files)
+     */
+    public static function cleanup_temp_files(): void {
+        try {
+            require_once MIKROPLANETA_BOOKING_PLUGIN_DIR . 'core/services/class-backup-service.php';
+            require_once MIKROPLANETA_BOOKING_PLUGIN_DIR . 'core/services/class-ical-service.php';
+
+            $backup_service = new \MikroPlaneta\Booking\Core\Services\BackupService();
+            $ical_service = new \MikroPlaneta\Booking\Core\Services\IcalService();
+
+            $deleted_backup = $backup_service->cleanupOldFiles();
+            $deleted_ical = $ical_service->cleanupOldFiles();
+
+            if (($deleted_backup > 0 || $deleted_ical > 0) && defined('WP_DEBUG') && WP_DEBUG) {
+                error_log(sprintf(
+                    '[MikroPlaneta Booking] Cron: Cleaned temp files (backup: %d, ical: %d)',
+                    intval($deleted_backup),
+                    intval($deleted_ical)
+                ));
+            }
+        } catch (\Exception $e) {
+            error_log('[MikroPlaneta Booking] Cron Error (Cleanup): ' . wp_json_encode([
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),

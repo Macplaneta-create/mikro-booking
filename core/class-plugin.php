@@ -114,10 +114,7 @@ class Plugin {
         require_once $dir . 'core/class-logging-handler.php';
         require_once $dir . 'core/class-consent-handler.php';
 
-        // 8. Utilities
-        if (file_exists($dir . 'force-update.php')) {
-            require_once $dir . 'force-update.php';
-        }
+        // 8. Utilities intentionally not auto-loaded in production runtime
     }
     
     /**
@@ -141,9 +138,8 @@ class Plugin {
         // Global REST API throttling
         (new \MikroPlaneta\Booking\Core\RestRateLimiter())->register();
 
-        // AJAX handlers for iCalendar download
+        // AJAX handlers for iCalendar download (admin only)
         add_action('wp_ajax_mikroplaneta_download_ical', [$this, 'handle_ical_download']);
-        add_action('wp_ajax_nopriv_mikroplaneta_download_ical', [$this, 'handle_ical_download']);
 
         // AJAX handlers for Backup & Export
         add_action('wp_ajax_mikroplaneta_export_csv', [$this, 'handle_export_csv']);
@@ -192,7 +188,7 @@ class Plugin {
      */
     public function handle_export_sql(): void {
         check_admin_referer('mikroplaneta_export_sql');
-        
+
         if (!current_user_can('manage_options')) {
             wp_die('Access denied', 'Error', ['response' => 403]);
         }

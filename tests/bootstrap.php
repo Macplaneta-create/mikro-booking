@@ -8,6 +8,9 @@ if (!defined('ABSPATH')) {
 if (!defined('MINUTE_IN_SECONDS')) {
     define('MINUTE_IN_SECONDS', 60);
 }
+if (!defined('HOUR_IN_SECONDS')) {
+    define('HOUR_IN_SECONDS', 3600);
+}
 
 $GLOBALS['__mb_filters'] = [];
 $GLOBALS['__mb_actions'] = [];
@@ -83,6 +86,18 @@ if (!function_exists('apply_filters')) {
 if (!function_exists('do_action')) {
     function do_action(string $hook, ...$args): void {
         $GLOBALS['__mb_actions'][] = [$hook, $args];
+    }
+}
+
+if (!function_exists('add_action')) {
+    function add_action(string $hook, callable $callback, int $priority = 10, int $accepted_args = 1): bool {
+        $GLOBALS['__mb_actions_registered'][] = [
+            'hook' => $hook,
+            'callback' => $callback,
+            'priority' => $priority,
+            'accepted_args' => $accepted_args,
+        ];
+        return true;
     }
 }
 
@@ -169,6 +184,44 @@ if (!function_exists('register_rest_route')) {
     }
 }
 
+if (!function_exists('wp_clear_scheduled_hook')) {
+    function wp_clear_scheduled_hook(string $hook): bool {
+        $GLOBALS['__mb_cleared_hooks'][] = $hook;
+        return true;
+    }
+}
+
+if (!function_exists('wp_next_scheduled')) {
+    function wp_next_scheduled(string $hook) {
+        return $GLOBALS['__mb_next_scheduled'][$hook] ?? false;
+    }
+}
+
+if (!function_exists('wp_schedule_event')) {
+    function wp_schedule_event(int $timestamp, string $recurrence, string $hook): bool {
+        $GLOBALS['__mb_scheduled_events'][] = [
+            'timestamp' => $timestamp,
+            'recurrence' => $recurrence,
+            'hook' => $hook,
+        ];
+        $GLOBALS['__mb_next_scheduled'][$hook] = $timestamp;
+        return true;
+    }
+}
+
+if (!function_exists('current_time')) {
+    function current_time($type, $gmt = 0) {
+        if ($type === 'timestamp') {
+            return $GLOBALS['__mb_current_timestamp'] ?? time();
+        }
+        if ($type === 'mysql') {
+            return date('Y-m-d H:i:s', $GLOBALS['__mb_current_timestamp'] ?? time());
+        }
+
+        return time();
+    }
+}
+
 require_once __DIR__ . '/../core/repositories/interface-repository.php';
 require_once __DIR__ . '/../core/models/class-reservation.php';
 require_once __DIR__ . '/../core/models/class-guest.php';
@@ -185,5 +238,7 @@ require_once __DIR__ . '/../core/services/class-pricing-service.php';
 require_once __DIR__ . '/../core/services/class-notification-service.php';
 require_once __DIR__ . '/../core/services/class-reservation-service.php';
 require_once __DIR__ . '/../core/services/class-guest-service.php';
+require_once __DIR__ . '/../core/class-cron-handler.php';
 require_once __DIR__ . '/../rest-api/controllers/class-public-reservations-controller.php';
 require_once __DIR__ . '/../rest-api/controllers/class-reservations-controller.php';
+require_once __DIR__ . '/../rest-api/controllers/class-settings-controller.php';

@@ -19,6 +19,66 @@ if (!defined('ABSPATH')) {
 class BackupService {
 
     /**
+     * Base directory for plugin temporary files
+     */
+    private function getBaseTempDir(): string {
+        $upload_dir = wp_upload_dir();
+        return trailingslashit($upload_dir['basedir']) . 'mikroplaneta-booking/';
+    }
+
+    /**
+     * Retention period in hours for backup/export files
+     */
+    private function getRetentionHours(): int {
+        $hours = (int) get_option('mikroplaneta_booking_backup_retention_hours', 24);
+        return max(1, $hours);
+    }
+
+    /**
+     * Cleanup old backup/export files
+     *
+     * @return int Number of deleted files
+     */
+    public function cleanupOldFiles(): int {
+        $base_dir = $this->getBaseTempDir();
+        if (!is_dir($base_dir)) {
+            return 0;
+        }
+
+        $cutoff = time() - ($this->getRetentionHours() * HOUR_IN_SECONDS);
+        $deleted = 0;
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($base_dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::LEAVES_ONLY
+        );
+
+        foreach ($iterator as $file_info) {
+            if (!$file_info->isFile()) {
+                continue;
+            }
+
+            $file = $file_info->getPathname();
+
+            $basename = basename($file);
+            if (in_array($basename, ['.htaccess', 'index.php', 'web.config', 'nginx.conf'], true)) {
+                continue;
+            }
+
+            $mtime = @filemtime($file);
+            if ($mtime === false || $mtime >= $cutoff) {
+                continue;
+            }
+
+            if (@unlink($file)) {
+                $deleted++;
+            }
+        }
+
+        return $deleted;
+    }
+
+    /**
      * Export reservations to CSV
      *
      * @param array $filters Date range, status, etc.
@@ -464,6 +524,9 @@ class BackupService {
      * @return string|false File path or false
      */
     public function saveFile(string $content, string $filename, string $subdir = 'backup') {
+        // Opportunistic cleanup for environments where WP-Cron may be disabled
+        $this->cleanupOldFiles();
+
         $upload_dir = wp_upload_dir();
         $target_dir = $upload_dir['basedir'] . '/mikroplaneta-booking/' . $subdir . '/';
         
@@ -473,6 +536,21 @@ class BackupService {
             
             // Add .htaccess to prevent direct access
             file_put_contents($target_dir . '.htaccess', 'deny from all');
+
+            // Add index.php to prevent directory listing
+            file_put_contents($target_dir . 'index.php', "<?php\n// Silence is golden.\n");
+
+            // Add web.config for IIS
+            file_put_contents(
+                $target_dir . 'web.config',
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<configuration>\n  <system.webServer>\n    <security>\n      <authorization>\n        <remove users=\"*\" roles=\"\" verbs=\"\" />\n        <add accessType=\"Deny\" users=\"*\" />\n      </authorization>\n    </security>\n  </system.webServer>\n</configuration>\n"
+            );
+
+            // Add Nginx hint file
+            file_put_contents(
+                $target_dir . 'nginx.conf',
+                "location ^~ / {\n    deny all;\n    return 403;\n}\n"
+            );
         }
         
         $filepath = $target_dir . $filename;

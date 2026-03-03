@@ -233,6 +233,45 @@ jobs:
         uses: some-deploy-action@v1
 ```
 
+### Release package w CI (JSON output)
+
+Do budowania paczki WP.org z wynikiem łatwym do parsowania w pipeline użyj:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-wporg-release.ps1 -SkipAdminBuild -EmitJson
+```
+
+Skrypt wypisze marker:
+
+```text
+RELEASE_JSON=C:\...\releases\mikro-booking-<version>-<timestamp>.json
+```
+
+oraz zakończy się `RELEASE_OK` lub `RELEASE_DRYRUN_OK`.
+
+Przykład kroku GitHub Actions (Windows runner):
+
+```yaml
+- name: Build release package
+  shell: powershell
+  run: |
+    $output = powershell -ExecutionPolicy Bypass -File .\build-wporg-release.ps1 -SkipAdminBuild -EmitJson
+    $output | ForEach-Object { Write-Host $_ }
+
+    $jsonLine = $output | Where-Object { $_ -like 'RELEASE_JSON=*' } | Select-Object -First 1
+    if (-not $jsonLine) { throw 'Missing RELEASE_JSON marker from release script output.' }
+
+    $jsonPath = $jsonLine.Substring('RELEASE_JSON='.Length)
+    $report = Get-Content $jsonPath -Raw | ConvertFrom-Json
+
+    if ($report.marker -ne 'RELEASE_OK') {
+      throw "Release failed. Marker: $($report.marker)"
+    }
+
+    "RELEASE_JSON_PATH=$jsonPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+    "RELEASE_ZIP_PATH=$($report.archivePath)" | Out-File -FilePath $env:GITHUB_ENV -Append
+```
+
 ---
 
 ## 📁 Struktura plików

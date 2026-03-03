@@ -2,6 +2,15 @@
  * MikroPlaneta Booking Frontend Widget
  */
 (function () {
+    const nativeConsole = window.console || {};
+    const debugEnabled = Boolean(window.mpBookingData && window.mpBookingData.debug);
+    const console = {
+        log: debugEnabled && typeof nativeConsole.log === 'function' ? nativeConsole.log.bind(nativeConsole) : function () {},
+        warn: typeof nativeConsole.warn === 'function' ? nativeConsole.warn.bind(nativeConsole) : function () {},
+        error: typeof nativeConsole.error === 'function' ? nativeConsole.error.bind(nativeConsole) : function () {},
+        info: typeof nativeConsole.info === 'function' ? nativeConsole.info.bind(nativeConsole) : function () {},
+    };
+
     let hcaptchaToken = '';
     let availableBeds = [];
 
@@ -32,6 +41,21 @@
         const adults = Math.max(1, parseInt(container.querySelector('#mp-adults').value, 10) || 1);
         const children = Math.max(0, parseInt(container.querySelector('#mp-children').value, 10) || 0);
         return adults + children;
+    }
+
+    function isValidDateRange(checkIn, checkOut) {
+        if (!checkIn || !checkOut) {
+            return false;
+        }
+
+        const checkInDate = new Date(checkIn);
+        const checkOutDate = new Date(checkOut);
+
+        if (Number.isNaN(checkInDate.getTime()) || Number.isNaN(checkOutDate.getTime())) {
+            return false;
+        }
+
+        return checkOutDate > checkInDate;
     }
 
     function bedCapacity(bed) {
@@ -304,6 +328,7 @@
                 submit: 'Send reservation request',
                 captchaMissing: 'Captcha is not configured.',
                 formInvalid: 'Please fill all required fields.',
+                invalidDateRange: 'Check-out date must be later than check-in date.',
                 success: 'Reservation request sent successfully.',
                 error: 'Failed to send reservation request.',
             },
@@ -677,7 +702,7 @@
                 document.getElementById('mp-summary-beds').textContent = 
                     bedIds.length > 0 
                         ? `${bedIds.length} łóżek (${selectedCapacity} miejsc)`
-                        : 'Brak wybranych łóżek';
+                        : (settings.i18n.summaryNone || 'Wybierz łóżka z listy.');
                 
                 // Calculate and show price
                 calculatePrice(checkIn, checkOut, bedIds);
@@ -735,6 +760,37 @@
             }
         };
 
+        const renderResultMessage = (variant, message) => {
+            results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--${variant}">${escapeHtml(message)}</div>`;
+        };
+
+        const renderResultError = (error) => {
+            const msg = error && error.message ? error.message : settings.i18n.error;
+            renderResultMessage('error', msg);
+        };
+
+        const renderSuggestedBedsResult = (selected, fallback) => {
+            renderResultMessage('info', selected.length > 0 ? settings.i18n.suggestedBeds : fallback);
+        };
+
+        const attachBedSelectionListeners = () => {
+            const checks = container.querySelectorAll('input[name="mp-bed-checkbox"]');
+            checks.forEach((input) => {
+                input.addEventListener('change', function () {
+                    updateSelectionSummary(container, settings, availableBeds);
+                });
+            });
+        };
+
+        const loadBedsAndApplySuggestion = async (checkIn, checkOut) => {
+            availableBeds = await fetchAvailableBeds(settings, checkIn, checkOut);
+            renderBedsList(container, settings, availableBeds);
+            attachBedSelectionListeners();
+            const selected = suggestBedsSelection(container, availableBeds);
+            updateSelectionSummary(container, settings, availableBeds);
+            return selected;
+        };
+
         step1Next.addEventListener('click', async function() {
             const checkIn = container.querySelector('#mp-check-in').value;
             const checkOut = container.querySelector('#mp-check-out').value;
@@ -743,13 +799,18 @@
             const totalGuests = adults + children;
             
             if (!checkIn || !checkOut) {
-                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(settings.i18n.formInvalid)}</div>`;
+                renderResultMessage('error', settings.i18n.formInvalid);
+                return;
+            }
+
+            if (!isValidDateRange(checkIn, checkOut)) {
+                renderResultMessage('error', settings.i18n.invalidDateRange || 'Data wyjazdu musi być późniejsza niż data przyjazdu.');
                 return;
             }
             
             // Wait for room info to load (for per_room mode)
             if (isPerRoom && !roomInfoLoaded) {
-                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">Ładowanie informacji o pokoju...</div>`;
+                renderResultMessage('loading', 'Ładowanie informacji o pokoju...');
                 // Wait a bit and retry
                 setTimeout(() => {
                     if (roomInfoLoaded) {
@@ -772,7 +833,7 @@
                 }
                 
                 if (totalGuests < 1) {
-                    results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">Podaj liczbę gości (minimum 1 osoba).</div>`;
+                    renderResultMessage('error', 'Podaj liczbę gości (minimum 1 osoba).');
                     return;
                 }
             }
@@ -783,18 +844,9 @@
                 if (availableBeds.length === 0 && findBedsBtn) {
                     findBedsBtn.disabled = true;
                     try {
-                        availableBeds = await fetchAvailableBeds(settings, checkIn, checkOut);
-                        renderBedsList(container, settings, availableBeds);
-                        const checks = container.querySelectorAll('input[name="mp-bed-checkbox"]');
-                        checks.forEach((input) => {
-                            input.addEventListener('change', function () {
-                                updateSelectionSummary(container, settings, availableBeds);
-                            });
-                        });
-                        const selected = suggestBedsSelection(container, availableBeds);
-                        updateSelectionSummary(container, settings, availableBeds);
+                        await loadBedsAndApplySuggestion(checkIn, checkOut);
                     } catch (err) {
-                        results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(err && err.message ? err.message : settings.i18n.error)}</div>`;
+                        renderResultError(err);
                         return;
                     } finally {
                         findBedsBtn.disabled = false;
@@ -804,11 +856,7 @@
                 // Check if enough beds available
                 const selectedCapacity = computeSelectedCapacity(container, availableBeds);
                 if (selectedCapacity < totalGuests) {
-                    results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">
-                        <strong>Za mało miejsc!</strong><br>
-                        Wybrano łóżka o łącznej pojemności <strong>${selectedCapacity} miejsc</strong>.<br>
-                        Liczba gości: ${totalGuests} osób.
-                    </div>`;
+                    renderResultMessage('error', `Za mało miejsc. Wybrano: ${selectedCapacity}, potrzeba: ${totalGuests}.`);
                     return;
                 }
             }
@@ -824,28 +872,26 @@
             const checkIn = container.querySelector('#mp-check-in').value;
             const checkOut = container.querySelector('#mp-check-out').value;
             if (!checkIn || !checkOut) {
-                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(settings.i18n.formInvalid)}</div>`;
+                renderResultMessage('error', settings.i18n.formInvalid);
+                return;
+            }
+
+            if (!isValidDateRange(checkIn, checkOut)) {
+                renderResultMessage('error', settings.i18n.invalidDateRange || 'Data wyjazdu musi być późniejsza niż data przyjazdu.');
                 return;
             }
 
             findBedsBtn.disabled = true;
-            results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--loading">${escapeHtml(settings.i18n.loading)}</div>`;
+            renderResultMessage('loading', settings.i18n.loading);
             try {
-                availableBeds = await fetchAvailableBeds(settings, checkIn, checkOut);
-                renderBedsList(container, settings, availableBeds);
-                const checks = container.querySelectorAll('input[name="mp-bed-checkbox"]');
-                checks.forEach((input) => {
-                    input.addEventListener('change', function () {
-                        updateSelectionSummary(container, settings, availableBeds);
-                    });
-                });
-                const selected = suggestBedsSelection(container, availableBeds);
-                updateSelectionSummary(container, settings, availableBeds);
-                results.innerHTML = selected.length > 0
-                    ? `<div class="mp-booking-form__message mp-booking-form__message--success">${escapeHtml(settings.i18n.suggestedBeds)}</div>`
-                    : '';
+                const selected = await loadBedsAndApplySuggestion(checkIn, checkOut);
+                if (selected.length > 0) {
+                    renderResultMessage('info', settings.i18n.suggestedBeds);
+                } else {
+                    results.innerHTML = '';
+                }
             } catch (err) {
-                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(err && err.message ? err.message : settings.i18n.error)}</div>`;
+                renderResultError(err);
             } finally {
                 findBedsBtn.disabled = false;
             }
@@ -855,7 +901,7 @@
             const selected = suggestBedsSelection(container, availableBeds);
             updateSelectionSummary(container, settings, availableBeds);
             if (selected.length > 0) {
-                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--info">${escapeHtml(settings.i18n.suggestedBeds)}</div>`;
+                renderResultMessage('info', settings.i18n.suggestedBeds);
             }
         });
 
@@ -885,21 +931,14 @@
                 if (checkIn && checkOut && findBedsBtn) {
                     findBedsBtn.disabled = true;
                     try {
-                        availableBeds = await fetchAvailableBeds(settings, checkIn, checkOut);
-                        renderBedsList(container, settings, availableBeds);
-                        const checks = container.querySelectorAll('input[name="mp-bed-checkbox"]');
-                        checks.forEach((input) => {
-                            input.addEventListener('change', function () {
-                                updateSelectionSummary(container, settings, availableBeds);
-                            });
-                        });
-                        const selected = suggestBedsSelection(container, availableBeds);
-                        updateSelectionSummary(container, settings, availableBeds);
-                        results.innerHTML = selected.length > 0
-                            ? `<div class="mp-booking-form__message mp-booking-form__message--info">${escapeHtml(settings.i18n.suggestedBeds)}</div>`
-                            : '';
+                        const selected = await loadBedsAndApplySuggestion(checkIn, checkOut);
+                        if (selected.length > 0) {
+                            renderResultMessage('info', settings.i18n.suggestedBeds);
+                        } else {
+                            results.innerHTML = '';
+                        }
                     } catch (err) {
-                        results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(err && err.message ? err.message : settings.i18n.error)}</div>`;
+                            renderResultError(err);
                     } finally {
                         findBedsBtn.disabled = false;
                     }
@@ -915,23 +954,17 @@
             const checkIn = container.querySelector('#mp-check-in').value;
             const checkOut = container.querySelector('#mp-check-out').value;
             if (checkIn && checkOut && findBedsBtn && !findBedsBtn.disabled) {
+                if (!isValidDateRange(checkIn, checkOut)) {
+                    renderResultMessage('error', settings.i18n.invalidDateRange || 'Data wyjazdu musi być późniejsza niż data przyjazdu.');
+                    return;
+                }
+
                 findBedsBtn.disabled = true;
                 try {
-                    availableBeds = await fetchAvailableBeds(settings, checkIn, checkOut);
-                    renderBedsList(container, settings, availableBeds);
-                    const checks = container.querySelectorAll('input[name="mp-bed-checkbox"]');
-                    checks.forEach((input) => {
-                        input.addEventListener('change', function () {
-                            updateSelectionSummary(container, settings, availableBeds);
-                        });
-                    });
-                    const selected = suggestBedsSelection(container, availableBeds);
-                    updateSelectionSummary(container, settings, availableBeds);
-                    results.innerHTML = selected.length > 0
-                        ? `<div class="mp-booking-form__message mp-booking-form__message--info">${escapeHtml(settings.i18n.suggestedBeds)}</div>`
-                        : `<div class="mp-booking-form__message mp-booking-form__message--info">Wybierz łóżka z listy powyżej.</div>`;
+                    const selected = await loadBedsAndApplySuggestion(checkIn, checkOut);
+                    renderSuggestedBedsResult(selected, settings.i18n.bedRequired || 'Wybierz łóżka z listy.');
                 } catch (err) {
-                    results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(err && err.message ? err.message : settings.i18n.error)}</div>`;
+                    renderResultError(err);
                 } finally {
                     findBedsBtn.disabled = false;
                 }
@@ -957,14 +990,19 @@
             if (roomPricingMode === 'per_bed') {
                 bedIds = getSelectedBedIds(container);
                 if (bedIds.length === 0) {
-                    results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(settings.i18n.bedRequired)}</div>`;
+                    renderResultMessage('error', settings.i18n.bedRequired);
                     return;
                 }
             }
 
             // Validate required fields
             if (!firstName || !lastName || !email || !checkIn || !checkOut) {
-                results.innerHTML = `<div class="mp-booking-form__message mp-booking-form__message--error">${escapeHtml(settings.i18n.formInvalid)}</div>`;
+                renderResultMessage('error', settings.i18n.formInvalid);
+                return;
+            }
+
+            if (!isValidDateRange(checkIn, checkOut)) {
+                renderResultMessage('error', settings.i18n.invalidDateRange || 'Data wyjazdu musi być późniejsza niż data przyjazdu.');
                 return;
             }
             
@@ -1093,6 +1131,11 @@
                 if (!checkIn || !checkOut) {
                     console.log('[MP Booking] Missing dates, showing alert');
                     alert('Proszę wybrać daty przyjazdu i wyjazdu.');
+                    return;
+                }
+
+                if (!isValidDateRange(checkIn, checkOut)) {
+                    alert(mpBookingData?.i18n?.invalidDateRange || 'Data wyjazdu musi być późniejsza niż data przyjazdu.');
                     return;
                 }
                 
