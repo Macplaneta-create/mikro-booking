@@ -73,6 +73,11 @@ class SettingsController extends RestController {
                     'backup_email' => ['type' => 'string', 'format' => 'email'],
                     'backup_email_enabled' => ['type' => 'boolean'],
                     'backup_email_time' => ['type' => 'string', 'pattern' => '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'],
+
+                    // CSV Export settings
+                    'csv_export_email' => ['type' => 'string', 'format' => 'email'],
+                    'csv_export_enabled' => ['type' => 'boolean'],
+                    'csv_export_time' => ['type' => 'string', 'pattern' => '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'],
                 ],
             ],
         ]);
@@ -210,6 +215,11 @@ class SettingsController extends RestController {
             'backup_email' => (string) get_option('mikroplaneta_backup_email', get_option('admin_email')),
             'backup_email_enabled' => (bool) get_option('mikroplaneta_backup_email_enabled', false),
             'backup_email_time' => (string) get_option('mikroplaneta_backup_email_time', '08:00'),
+
+            // CSV Export settings
+            'csv_export_email' => (string) get_option('mikroplaneta_csv_export_email', get_option('admin_email')),
+            'csv_export_enabled' => (bool) get_option('mikroplaneta_csv_export_enabled', false),
+            'csv_export_time' => (string) get_option('mikroplaneta_csv_export_time', '08:00'),
         ];
         
         return $this->success($settings);
@@ -345,6 +355,17 @@ class SettingsController extends RestController {
         }
         if (isset($params['backup_email_time'])) {
             update_option('mikroplaneta_backup_email_time', sanitize_text_field($params['backup_email_time']));
+        }
+
+        // CSV Export settings
+        if (isset($params['csv_export_email'])) {
+            update_option('mikroplaneta_csv_export_email', sanitize_email($params['csv_export_email']));
+        }
+        if (isset($params['csv_export_enabled'])) {
+            update_option('mikroplaneta_csv_export_enabled', (bool) $params['csv_export_enabled']);
+        }
+        if (isset($params['csv_export_time'])) {
+            update_option('mikroplaneta_csv_export_time', sanitize_text_field($params['csv_export_time']));
         }
 
         return $this->get_settings($request);

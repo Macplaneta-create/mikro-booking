@@ -268,6 +268,126 @@ class BackupService {
     }
 
     /**
+     * Send daily CSV export with reservations
+     *
+     * @param array $settings Email settings
+     * @return bool Success
+     */
+    public function sendDailyCsvExport(array $settings): bool {
+        // Generate CSV
+        $filters = [
+            'date_from' => date('Y-m-d', strtotime('-1 day')),
+            'date_to' => date('Y-m-d'),
+            'status' => 'all'
+        ];
+        
+        $csv = $this->exportReservationsToCsv($filters);
+        
+        if (empty($csv)) {
+            return false;
+        }
+        
+        // Save CSV to temp file
+        $filename = 'rezerwacje-' . date('Y-m-d') . '.csv';
+        $filepath = $this->saveFile($csv, $filename, 'backup/csv');
+        
+        if (!$filepath) {
+            return false;
+        }
+        
+        // Build email
+        $subject = sprintf(
+            '[%s] Eksport rezerwacji CSV - %s',
+            get_bloginfo('name'),
+            date('d.m.Y', strtotime('-1 day'))
+        );
+        
+        $message = $this->generateCsvEmailHtml($filters['date_from']);
+        
+        // Headers
+        $headers = [
+            'Content-Type: text/html; charset=UTF-8',
+            'From: ' . get_bloginfo('name') . ' <' . get_option('admin_email') . '>'
+        ];
+        
+        // Attachments
+        $attachments = [$filepath];
+        
+        // Send to recipients
+        $recipients = is_array($settings['csv_email']) 
+            ? implode(',', $settings['csv_email']) 
+            : $settings['csv_email'];
+        
+        if (empty($recipients)) {
+            $recipients = get_option('admin_email');
+        }
+        
+        $sent = wp_mail($recipients, $subject, $message, $headers, $attachments);
+        
+        // Clean up temp file after sending
+        if (file_exists($filepath)) {
+            @unlink($filepath);
+        }
+        
+        return $sent;
+    }
+
+    /**
+     * Generate CSV email HTML
+     *
+     * @param string $date Date
+     * @return string HTML message
+     */
+    private function generateCsvEmailHtml(string $date): string {
+        $hotel_name = get_bloginfo('name');
+        $hotel_url = home_url();
+        
+        ob_start();
+        ?>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background: #007cba; color: white; padding: 20px; text-align: center; }
+                .content { margin: 20px 0; padding: 20px; background: #f5f5f5; border-radius: 5px; }
+                .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #999; }
+                .button { display: inline-block; padding: 10px 20px; background: #007cba; color: white; text-decoration: none; border-radius: 5px; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1><?php echo esc_html($hotel_name); ?></h1>
+                    <p>Eksport rezerwacji CSV</p>
+                </div>
+                
+                <div class="content">
+                    <p>Dzień dobry,</p>
+                    <p>W załączniku znajdziesz eksport rezerwacji z dnia <strong><?php echo date('d.m.Y', strtotime($date)); ?></strong>.</p>
+                    <p>Plik CSV można otworzyć w programie Excel lub innym arkuszu kalkulacyjnym.</p>
+                    
+                    <p style="margin-top: 20px;">
+                        <a href="<?php echo esc_url($hotel_url); ?>/wp-admin/admin.php?page=mikroplaneta-booking" class="button">
+                            Przejdź do Dashboardu
+                        </a>
+                    </p>
+                </div>
+                
+                <div class="footer">
+                    <p>Automatyczna wiadomość z systemu MikroPlaneta Booking</p>
+                    <p><a href="<?php echo esc_url($hotel_url); ?>"><?php echo esc_html($hotel_url); ?></a></p>
+                </div>
+            </div>
+        </body>
+        </html>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
      * Generate daily email HTML
      *
      * @param array $stats Statistics

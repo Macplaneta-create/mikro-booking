@@ -26,10 +26,30 @@ class CronHandler {
         // Hook the cron callback
         add_action('mikroplaneta_booking_expire_reservations', [self::class, 'expire_reservations']);
         add_action('mikroplaneta_booking_send_reminders', [self::class, 'send_reminders']);
+        add_action('mikroplaneta_booking_daily_backup', [self::class, 'send_daily_backup']);
+        add_action('mikroplaneta_booking_daily_csv_export', [self::class, 'send_daily_csv_export']);
         
         // Schedule daily reminders event if not scheduled
         if (!wp_next_scheduled('mikroplaneta_booking_send_reminders')) {
             wp_schedule_event(time(), 'daily', 'mikroplaneta_booking_send_reminders');
+        }
+
+        // Schedule daily backup email if enabled
+        if (get_option('mikroplaneta_backup_email_enabled', false)) {
+            if (!wp_next_scheduled('mikroplaneta_booking_daily_backup')) {
+                $backup_time = get_option('mikroplaneta_backup_email_time', '08:00');
+                $timestamp = self::get_timestamp_for_time($backup_time);
+                wp_schedule_event($timestamp, 'daily', 'mikroplaneta_booking_daily_backup');
+            }
+        }
+
+        // Schedule daily CSV export if enabled
+        if (get_option('mikroplaneta_csv_export_enabled', false)) {
+            if (!wp_next_scheduled('mikroplaneta_booking_daily_csv_export')) {
+                $csv_time = get_option('mikroplaneta_csv_export_time', '08:00');
+                $timestamp = self::get_timestamp_for_time($csv_time);
+                wp_schedule_event($timestamp, 'daily', 'mikroplaneta_booking_daily_csv_export');
+            }
         }
     }
     
@@ -137,6 +157,38 @@ class CronHandler {
             }
         } catch (\Exception $e) {
             error_log('[MikroPlaneta Booking] Cron Error (Daily Backup): ' . wp_json_encode([
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]));
+        }
+    }
+
+    /**
+     * Send daily CSV export
+     */
+    public static function send_daily_csv_export(): void {
+        // Check if enabled
+        if (!get_option('mikroplaneta_csv_export_enabled', false)) {
+            return;
+        }
+
+        try {
+            require_once MIKROPLANETA_BOOKING_PLUGIN_DIR . 'core/services/class-backup-service.php';
+
+            $settings = [
+                'csv_email' => get_option('mikroplaneta_csv_export_email', get_option('admin_email')),
+                'enabled' => true
+            ];
+
+            $backup_service = new \MikroPlaneta\Booking\Core\Services\BackupService();
+            $sent = $backup_service->sendDailyCsvExport($settings);
+
+            if ($sent && defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroPlaneta Booking] Cron: Daily CSV export sent');
+            }
+        } catch (\Exception $e) {
+            error_log('[MikroPlaneta Booking] Cron Error (CSV Export): ' . wp_json_encode([
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),

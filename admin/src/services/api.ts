@@ -404,6 +404,9 @@ export const SettingsAPI = {
             backup_email: string;
             backup_email_enabled: boolean;
             backup_email_time: string;
+            csv_export_email: string;
+            csv_export_enabled: boolean;
+            csv_export_time: string;
         };
     },
     update: async (data: {
@@ -432,6 +435,9 @@ export const SettingsAPI = {
         backup_email?: string;
         backup_email_enabled?: boolean;
         backup_email_time?: string;
+        csv_export_email?: string;
+        csv_export_enabled?: boolean;
+        csv_export_time?: string;
     }) => {
         const res = await api.post('/settings', data);
         return res.data.data;

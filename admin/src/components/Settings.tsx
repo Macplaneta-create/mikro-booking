@@ -45,6 +45,10 @@ interface PluginSettings {
     backup_email: string;
     backup_email_enabled: boolean;
     backup_email_time: string;
+    // CSV Export settings
+    csv_export_email: string;
+    csv_export_enabled: boolean;
+    csv_export_time: string;
 }
 
 interface EmailTemplate {
@@ -108,6 +112,10 @@ const Settings: React.FC = () => {
         backup_email: '',
         backup_email_enabled: false,
         backup_email_time: '08:00',
+        // CSV Export settings
+        csv_export_email: '',
+        csv_export_enabled: false,
+        csv_export_time: '08:00',
     });
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
@@ -165,6 +173,9 @@ const Settings: React.FC = () => {
                 backup_email: data.backup_email ?? '',
                 backup_email_enabled: data.backup_email_enabled ?? false,
                 backup_email_time: data.backup_email_time ?? '08:00',
+                csv_export_email: data.csv_export_email ?? '',
+                csv_export_enabled: data.csv_export_enabled ?? false,
+                csv_export_time: data.csv_export_time ?? '08:00',
             });
             
             // Load GDPR settings separately
@@ -1169,6 +1180,83 @@ const Settings: React.FC = () => {
                             >
                                 <Save className="inline-block mr-2" size={16} />
                                 {saving ? 'Zapisywanie...' : 'Zapisz ustawienia backupu'}
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </div>
+
+            {/* Automatic CSV Export Settings */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <svg className="w-[20px] h-[20px] text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Automatyczny Eksport CSV
+                </h3>
+                <p className="text-gray-600 mb-6 text-sm">
+                    Codzienna wysyłka pliku CSV z rezerwacjami na email.
+                </p>
+
+                {loading ? (
+                    <p className="text-gray-500">Ładowanie...</p>
+                ) : (
+                    <form onSubmit={handleSaveSettings} className="space-y-4">
+                        <div className="flex items-center gap-3 py-1">
+                            <input
+                                type="checkbox"
+                                id="csv_export_enabled"
+                                checked={settings.csv_export_enabled}
+                                onChange={(e) => setSettings({ ...settings, csv_export_enabled: e.target.checked })}
+                                className="w-4 h-4 rounded text-brand-600 cursor-pointer"
+                            />
+                            <label htmlFor="csv_export_enabled" className="text-sm font-medium text-gray-700 cursor-pointer">
+                                Włącz automatyczną wysyłkę CSV
+                            </label>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Email odbiorcy</label>
+                                <input
+                                    type="email"
+                                    value={settings.csv_export_email}
+                                    onChange={(e) => setSettings({ ...settings, csv_export_email: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                    placeholder="recepcja@hotel.com"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Godzina wysyłki</label>
+                                <input
+                                    type="time"
+                                    value={settings.csv_export_time}
+                                    onChange={(e) => setSettings({ ...settings, csv_export_time: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                            <p className="text-sm text-green-800">
+                                <strong>Jak to działa?</strong>
+                            </p>
+                            <ul className="mt-2 space-y-1 text-sm text-green-700">
+                                <li>• Codziennie o wybranej godzinie</li>
+                                <li>• Wysyłka z poprzedniego dnia</li>
+                                <li>• Format CSV (Excel)</li>
+                                <li>• Wszystkie rezerwacje</li>
+                            </ul>
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-6 pt-4 border-t border-gray-200">
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700 transition disabled:opacity-50"
+                            >
+                                <Save className="inline-block mr-2" size={16} />
+                                {saving ? 'Zapisywanie...' : 'Zapisz ustawienia eksportu'}
                             </button>
                         </div>
                     </form>
