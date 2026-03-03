@@ -83,6 +83,7 @@ class DashboardController extends RestController {
         $beds_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('beds');
         $reservations_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('reservations');
         $reservation_beds_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('reservation_beds');
+        $guests_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('guests');
 
         $stats['total_rooms'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$rooms_table}");
         $stats['total_beds'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$beds_table} WHERE is_active = 1");
@@ -138,12 +139,13 @@ class DashboardController extends RestController {
         // 9. Recent Reservations (last 5, any status) - OPTIMIZED
         // Using indexed query with proper JOIN
         $recent = $wpdb->get_results(
-            "SELECT r.id, r.first_name, r.last_name, r.check_in, r.check_out, 
+            "SELECT r.id, g.first_name, g.last_name, r.check_in, r.check_out,
                     r.adults, r.children, r.status, r.total_price, r.created_at,
                     GROUP_CONCAT(rb.bed_id ORDER BY rb.bed_id SEPARATOR ',') as bed_ids
              FROM {$reservations_table} r
+             LEFT JOIN {$guests_table} g ON r.guest_id = g.id
              LEFT JOIN {$reservation_beds_table} rb ON r.id = rb.reservation_id
-             GROUP BY r.id
+             GROUP BY r.id, g.first_name, g.last_name, r.check_in, r.check_out, r.adults, r.children, r.status, r.total_price, r.created_at
              ORDER BY r.created_at DESC
              LIMIT 5",
             ARRAY_A

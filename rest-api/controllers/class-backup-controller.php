@@ -116,7 +116,7 @@ class BackupController extends RestController {
     /**
      * Check permission
      */
-    public function check_permission($request): bool {
+    public function check_permission(): bool {
         return current_user_can('manage_options');
     }
 }
