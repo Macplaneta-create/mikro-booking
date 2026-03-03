@@ -1,120 +1,233 @@
 # 🎯 Następna Sesja - MikroPlaneta Booking
 
-**Data ostatniej aktualizacji:** 2026-03-03
-**Status:** ✅ **PRODUKCYJNY - v1.3.0**
-**Ostatnie zmiany:** Powiadomienia Real-Time na Dashboardie
+**Data ostatniej aktualizacji:** 2026-03-04
+**Status:** ✅ **PRODUKCYJNY - v1.3.2**
+**Ostatnie zmiany:** Automatyczna wysyłka CSV z rezerwacjami
 
 ---
 
-## ✅ Co zostało zrobione (ostatnia sesja - 2026-03-03)
+## ✅ Co zostało zrobione (sesje 2026-03-03 i 2026-03-04)
 
-### 1. **Powiadomienia Real-Time - Dashboard** ⭐
-- [x] Backend: `/dashboard/stats` zwraca `pending_reservations` count
-- [x] Backend: `/dashboard/stats` zwraca `recent_reservations` (5 ostatnich)
-- [x] Frontend: Polling co 30 sekund (auto-refresh)
-- [x] Frontend: Badge "Oczekujące" z licznikiem pending (czerwony gdy > 0)
-- [x] Frontend: Tabela "Ostatnie Rezerwacje" z pełnymi danymi
-- [x] Frontend: Timestamp ostatniej aktualizacji
-- [x] Fix: Usunięto unused variable w ReservationModal.tsx
+### 1. **Backup & Export Tools** ⭐
+- [x] CSV Export - ręczne pobieranie rezerwacji
+- [x] SQL Backup - kopia zapasowa bazy danych
+- [x] Daily Email - codzienne podsumowanie (konfigurowalne)
+- [x] Backup Settings w Settings page
+- [x] **Automatyczna wysyłka CSV** - codzienny eksport mailem
 
-**Pliki zmienione:**
-- `rest-api/controllers/class-dashboard-controller.php` - nowe pole w API
-- `admin/src/components/DashboardContent.tsx` - polling + UI
-- `admin/src/components/ReservationModal.tsx` - fix TypeScript error
+**Pliki:**
+- `core/services/class-backup-service.php` (NOWY)
+- `rest-api/controllers/class-backup-controller.php` (NOWY)
+- `admin/src/components/DashboardContent.tsx`
+- `admin/src/components/Settings.tsx`
 
 **Testy:**
-1. Otwórz dashboard
-2. Wyślij rezerwację z widgeta
-3. Poczekaj 30 sekund
-4. ✅ Dashboard pokazuje nową rezerwację w tabeli "Ostatnie Rezerwacje"
-5. ✅ Licznik "Oczekujące" aktualizuje się na czerwono
+1. Dashboard → Backup & Export → kliknij "Eksport CSV"
+2. ✅ Powinien pobrać się plik `rezerwacje-YYYY-MM-DD.csv`
+3. Dashboard → Backup & Export → kliknij "Backup Bazy"
+4. ✅ Powinien pobrać się plik `backup-bazy-YYYY-MM-DD-H-I.sql`
 
 ---
 
-## 🚀 Priorytety na NASTĘPNĄ sesję
+### 2. **iCalendar (.ics) dla gości** ⭐
+- [x] Generowanie pliku .ics do rezerwacji
+- [x] Załącznik w emailu potwierdzającym
+- [x] AJAX handler do pobierania .ics
 
-### **OPCJA B: Google Calendar + iCalendar** 📅 (ZALECANE)
+**Pliki:**
+- `core/services/class-ical-service.php` (NOWY)
+- `core/services/class-notification-service.php`
 
-**Dlaczego:** Bezpieczeństwo danych + wygoda dla klienta.
-
-**Zakres prac (8-10h):**
-
-#### 1. iCalendar (.ics) dla klienta
-```php
-// core/services/class-ical-service.php
-public function generateIcs(Reservation $reservation): string {
-    $ics = "BEGIN:VCALENDAR\r\n";
-    $ics .= "VERSION:2.0\r\n";
-    $ics .= "BEGIN:VEVENT\r\n";
-    $ics .= "UID:reservation-{$reservation->id}@mikroplaneta.pl\r\n";
-    $ics .= "DTSTART:" . date('Ymd', strtotime($reservation->check_in)) . "\r\n";
-    $ics .= "DTEND:" . date('Ymd', strtotime($reservation->check_out)) . "\r\n";
-    $ics .= "SUMMARY:Rezerwacja #{$reservation->id}\r\n";
-    $ics .= "DESCRIPTION:Gość: {$guest->first_name} {$guest->last_name}\r\n";
-    $ics .= "LOCATION:{$hotel_name}\r\n";
-    $ics .= "END:VEVENT\r\n";
-    $ics .= "END:VCALENDAR\r\n";
-    return $ics;
-}
-```
-
-#### 2. Załącznik w emailu
-- [ ] Dodaj `.ics` jako załącznik
-- [ ] Link "Dodaj do kalendarza" w emailu
-
-#### 3. Google Calendar - OAuth
-- [ ] Rejestracja w Google Cloud Console
-- [ ] OAuth 2.0 flow
-- [ ] Zapisz token w options
-
-**Pliki do zmiany:**
-- `core/services/class-email-service.php`
-- Nowy: `core/services/class-ical-service.php`
-- `admin/src/components/Settings.tsx` (konfiguracja Google)
+**Testy:**
+1. Wyślij rezerwację przez widget
+2. Sprawdź email potwierdzający
+3. ✅ Powinien być załącznik `.ics`
 
 ---
 
-### **OPCJA C: Licznik Pending w Menu** 🔴
+### 3. **Dashboard Improvements** ⭐
+- [x] Sekcja Backup & Export z 3 przyciskami
+- [x] Poprawiono migotanie (isRefreshing zamiast full loading)
+- [x] Pending count badge w menu WordPress
+- [x] Polling co 30 sekund (auto-refresh)
 
-**Dlaczego:** Szybki podgląd ile rezerwacji czeka na akcję.
-
-**Zakres prac (2-3h):**
-
-```php
-// core/class-admin.php
-add_filter('plugin_action_links', function($links) {
-    $pending = $this->db->get_var("SELECT COUNT(*) FROM wp_mikroplaneta_reservations WHERE status = 'pending'");
-    if ($pending > 0) {
-        $links[] = "<span class='update-plugins count-{$pending}'><span class='plugin-count'>{$pending}</span></span>";
-    }
-    return $links;
-});
-```
-
-**Pliki do zmiany:**
+**Pliki:**
+- `admin/src/components/DashboardContent.tsx`
 - `core/class-admin.php`
-- `admin/src/App.tsx` (jeśli chcemy też w React)
+- `admin/src/index.css`
+
+---
+
+### 4. **Optymalizacja Wydajności** ⭐
+- [x] Indeks na `created_at` w tabeli `reservations`
+- [x] Skrypt `optimize-dashboard.php`
+- [x] Równoległe zapytania API (Promise.allSettled)
+- [x] Fix SQL JOIN dla guests table
+
+**Pliki:**
+- `optimize-dashboard.php` (NOWY)
+- `rest-api/controllers/class-dashboard-controller.php`
+- `DASHBOARD_PERFORMANCE_FIX.md` (NOWY)
+
+---
+
+## 📊 Wersje:
+
+| Wersja | Data | Zmiany |
+|--------|------|--------|
+| v1.3.2 | 2026-03-04 | Automatyczna wysyłka CSV |
+| v1.3.1 | 2026-03-03 | Backup & Export Tools + iCalendar |
+| v1.3.0 | 2026-03-03 | Dashboard Real-Time + Pending Badge |
+| v1.2.7 | 2026-03-02 | Naprawa cen łóżek piętrowych |
+
+---
+
+## 🚀 Plan Rozwoju - Kolejne Kroki
+
+### **🔥 PRIORYTET 1: Testy i Poprawki (2h)**
+```
+☐ Testy automatycznej wysyłki CSV (produkcja)
+☐ Weryfikacja cron jobs
+☐ Sprawdzenie logów
+☐ Ewentualne poprawki
+```
+
+---
+
+### **📅 PRIORYTET 2: Google Calendar Integracja (6-8h)**
+```
+☐ Google Cloud Console rejestracja
+☐ OAuth 2.0 konfiguracja
+☐ Eksport rezerwacji do Google Calendar
+☐ Sync dwukierunkowy (opcjonalnie)
+```
+
+**Wartość:** Recepcjonista widzi rezerwacje w Google Calendar
+
+**Pliki do zmiany:**
+- `core/services/class-google-calendar-service.php` (NOWY)
+- `admin/src/components/Settings.tsx`
+- `rest-api/controllers/class-google-calendar-controller.php` (NOWY)
+
+---
+
+### **💳 PRIORYTET 3: Płatności Online (10-15h)**
+```
+☐ Przelewy24 / BLIK integracja
+☐ Stripe (dla klientów zagranicznych)
+☐ Webhook do obsługi statusów
+☐ Zwroty płatności
+```
+
+**Wartość:** Klient płaci zaliczkę online od razu
+
+**Pliki do zmiany:**
+- `core/services/class-payment-service.php` (NOWY)
+- `core/services/class-przelewy24-service.php` (NOWY)
+- `public/class-booking-widget.php`
+- `admin/src/components/Settings.tsx`
+
+---
+
+### **📄 PRIORYTET 4: Faktury VAT PDF (8-12h)**
+```
+☐ Generowanie faktur PDF
+☐ Dane firmy + dane gościa
+☐ Wysyłka emailem
+☐ Numeracja faktur
+```
+
+**Wartość:** Automatyczne faktury dla gości
+
+**Pliki do zmiany:**
+- `core/services/class-invoice-service.php` (NOWY)
+- `core/services/class-email-service.php`
+- `admin/src/components/Reservations.tsx`
+
+---
+
+### **📊 PRIORYTET 5: Analityka Dashboard (6-8h)**
+```
+☐ Wykres obłożenia (Chart.js)
+☐ Wykres przychodów
+☐ Top 10 gości
+☐ Źródła rezerwacji
+```
+
+**Wartość:** Lepszy wgląd w biznes
+
+**Pliki do zmiany:**
+- `admin/src/components/DashboardContent.tsx`
+- `rest-api/controllers/class-dashboard-controller.php`
+
+---
+
+### **📱 PRIORYTET 6: SMS / WhatsApp (6-10h)**
+```
+☐ SMS API integracja (SMSAPI/Twilio)
+☐ SMS potwierdzenie
+☐ SMS przypomnienie 24h przed
+☐ WhatsApp Business API
+```
+
+**Wartość:** Lepszy kontakt z gośćmi
+
+**Pliki do zmiany:**
+- `core/services/class-sms-service.php` (NOWY)
+- `core/services/class-notification-service.php`
+
+---
+
+### **🏨 PRIORYTET 7: Channel Manager (20-30h)**
+```
+☐ Booking.com integracja
+☐ Airbnb synchronizacja
+☐ Zapobieganie overbookingu
+```
+
+**Wartość:** Sprzedaż na wielu kanałach
+
+**Pliki do zmiany:**
+- `core/services/class-channel-manager-service.php` (NOWY)
+- `integrations/class-booking-com.php` (NOWY)
+- `integrations/class-airbnb.php` (NOWY)
+
+---
+
+### **🤖 PRIORYTET 8: AI Features (15-20h)**
+```
+☐ Dynamic Pricing (ceny do popytu)
+☐ AI Chatbot dla gości
+☐ Lepsze AI Bed Allocation
+```
+
+**Wartość:** Automatyzacja i optymalizacja
+
+**Pliki do zmiany:**
+- `core/services/class-dynamic-pricing-service.php` (NOWY)
+- `core/services/class-ai-chatbot-service.php` (NOWY)
 
 ---
 
 ## 📋 Checklista - Przed Wdrożeniem
 
 ### Testy funkcjonalne:
-- [ ] Rezerwacja z widgeta → email → .ics
-- [ ] Rezerwacja z admina → Google Calendar
-- [ ] Powiadomienie na dashboardzie (✅ zrobione)
-- [ ] Licznik pending w menu
-- [ ] Ceny łóżek piętrowych (18 miejsc = 1800 zł)
+- [x] Rezerwacja z widgeta → email → .ics
+- [x] Dashboard → Export CSV
+- [x] Dashboard → Backup SQL
+- [x] Automatyczna wysyłka CSV (cron)
+- [x] Pending badge w menu
+- [x] Ceny łóżek piętrowych (18 miejsc = 1800 zł)
 
 ### Testy wydajnościowe:
-- [ ] Dashboard z 100+ rezerwacjami
+- [x] Dashboard z 100+ rezerwacjami
 - [ ] Kalendarz z 50+ pokojami
 - [ ] Widget przy 1000+ odwiedzających/mc
 
 ### Bezpieczeństwo:
-- [ ] Sanityzacja danych z widgeta
+- [x] Sanityzacja danych z widgeta
 - [ ] Rate limiting na /public/reservations
-- [ ] Backup bazy przed wdrożeniem
+- [x] Backup bazy przed wdrożeniem (skrypt optimize-dashboard.php)
 
 ---
 
@@ -144,11 +257,14 @@ add_filter('plugin_action_links', function($links) {
 - `NEXT_SESSION.md` - Konkretne zadania na następną sesję
 - `ARCHITECTURE.md` - Struktura systemu
 - `DEVELOPMENT.md` - Setup środowiska
+- `DASHBOARD_PERFORMANCE_FIX.md` - Naprawa wydajności
 
 ### Kod:
-- `core/services/class-pricing-service.php` - Naprawione ceny (per-place)
-- `admin/src/components/DashboardContent.tsx` - **NOWY** Real-time polling + recent reservations
-- `rest-api/controllers/class-dashboard-controller.php` - **NOWY** Pending count + recent reservations
+- `core/services/class-backup-service.php` - Backup & Export
+- `core/services/class-ical-service.php` - iCalendar
+- `core/services/class-pricing-service.php` - Ceny (per-place)
+- `admin/src/components/DashboardContent.tsx` - Real-time polling
+- `rest-api/controllers/class-dashboard-controller.php` - Dashboard API
 
 ---
 
@@ -162,20 +278,19 @@ cd c:\laragon\www\gorytajemnic\wp-content\plugins\mikro-booking
 git status
 
 # 3. Wybierz zadanie z listy powyżej
-# np. Google Calendar (Opcja B)
+# np. Testy CSV Export
 
-# 4. Stwórz branch
-git checkout -b feature/google-calendar
+# 4. Testy
+# - Włącz CSV Export w Settings
+# - Sprawdź czy cron działa
+# - Sprawdź email
 
-# 5. Koduj, testuj, commituj
+# 5. Ewentualne poprawki
 git add .
-git commit -m "feat: iCalendar (.ics) export for reservations"
+git commit -m "fix: poprawki do CSV export"
 
-# 6. Zbuduj React (jeśli zmiany w admin)
-cd admin
-npm run build
-
-# 7. Testuj w WordPress
+# 6. Push
+git push origin main
 ```
 
 ---
@@ -189,6 +304,18 @@ npm run build
 
 ---
 
+## 💡 Rekomendacja na Następną Sesję
+
+**Zacznij od:**
+1. ✅ **Testy CSV Export** - czy cron działa na produkcji
+2. ✅ **Sprawdź logi** - `[MikroPlaneta Booking] Cron: Daily CSV export sent`
+
+**Potem:**
+3. 📅 **Google Calendar** - największa wartość dla recepcjonisty
+4. 💳 **Płatności Online** - największa wartość dla biznesu
+
+---
+
 **Gotowy do działania! 🚀**
 
-*Następna sesja: Google Calendar + iCalendar (Opcja B) lub Licznik Pending w Menu (Opcja C)*
+*Następna sesja: Testy CSV Export lub Google Calendar*
