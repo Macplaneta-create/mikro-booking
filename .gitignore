@@ -37,3 +37,7 @@ deploy.config
 # Debug/Test files (should not be in production)
 debug-*.php
 test-*.php
+.phpunit.result.cache
+
+# Local release artifacts
+/releases/
