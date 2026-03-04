@@ -23,6 +23,7 @@ class CronHandler {
     private const HOOK_DAILY_BACKUP = 'mikroplaneta_booking_daily_backup';
     private const HOOK_DAILY_CSV_EXPORT = 'mikroplaneta_booking_daily_csv_export';
     private const HOOK_CLEANUP_TEMP_FILES = 'mikroplaneta_booking_cleanup_temp_files';
+    private const TASK_LOCK_TTL_SECONDS = 300;
     
     /**
      * Initialize cron handlers
@@ -97,6 +98,13 @@ class CronHandler {
      * Handle reservation expiry cron job
      */
     public static function expire_reservations(): void {
+        if (!self::acquireTaskLock('expire_reservations')) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroPlaneta Booking] Cron: Skipping expiry task (already running)');
+            }
+            return;
+        }
+
         try {
             // Load required files
             require_once MIKROPLANETA_BOOKING_PLUGIN_DIR . 'core/repositories/class-reservation-repository.php';
@@ -116,6 +124,8 @@ class CronHandler {
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]));
+        } finally {
+            self::releaseTaskLock('expire_reservations');
         }
     }
 
@@ -123,8 +133,16 @@ class CronHandler {
      * Handle daily reminders (check-in / check-out)
      */
     public static function send_reminders(): void {
+        if (!self::acquireTaskLock('send_reminders')) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroPlaneta Booking] Cron: Skipping reminders task (already running)');
+            }
+            return;
+        }
+
         // Check if notifications are enabled
         if (!get_option('mikroplaneta_booking_email_notifications', true)) {
+            self::releaseTaskLock('send_reminders');
             return;
         }
 
@@ -169,6 +187,8 @@ class CronHandler {
 
         } catch (\Exception $e) {
             error_log('[MikroPlaneta Booking] Cron Error (Reminders): ' . $e->getMessage());
+        } finally {
+            self::releaseTaskLock('send_reminders');
         }
     }
 
@@ -176,8 +196,16 @@ class CronHandler {
      * Send daily backup email
      */
     public static function send_daily_backup(): void {
+        if (!self::acquireTaskLock('send_daily_backup')) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroPlaneta Booking] Cron: Skipping daily backup task (already running)');
+            }
+            return;
+        }
+
         // Check if enabled
         if (!get_option('mikroplaneta_backup_email_enabled', false)) {
+            self::releaseTaskLock('send_daily_backup');
             return;
         }
 
@@ -201,6 +229,8 @@ class CronHandler {
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]));
+        } finally {
+            self::releaseTaskLock('send_daily_backup');
         }
     }
 
@@ -208,8 +238,16 @@ class CronHandler {
      * Send daily CSV export
      */
     public static function send_daily_csv_export(): void {
+        if (!self::acquireTaskLock('send_daily_csv_export')) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroPlaneta Booking] Cron: Skipping daily CSV task (already running)');
+            }
+            return;
+        }
+
         // Check if enabled
         if (!get_option('mikroplaneta_csv_export_enabled', false)) {
+            self::releaseTaskLock('send_daily_csv_export');
             return;
         }
 
@@ -233,6 +271,8 @@ class CronHandler {
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]));
+        } finally {
+            self::releaseTaskLock('send_daily_csv_export');
         }
     }
 
@@ -240,6 +280,13 @@ class CronHandler {
      * Cleanup temporary files (backup exports and iCal files)
      */
     public static function cleanup_temp_files(): void {
+        if (!self::acquireTaskLock('cleanup_temp_files')) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[MikroPlaneta Booking] Cron: Skipping cleanup task (already running)');
+            }
+            return;
+        }
+
         try {
             require_once MIKROPLANETA_BOOKING_PLUGIN_DIR . 'core/services/class-backup-service.php';
             require_once MIKROPLANETA_BOOKING_PLUGIN_DIR . 'core/services/class-ical-service.php';
@@ -263,7 +310,43 @@ class CronHandler {
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]));
+        } finally {
+            self::releaseTaskLock('cleanup_temp_files');
         }
+    }
+
+    /**
+     * Acquire in-process task lock to avoid concurrent cron execution.
+     */
+    private static function acquireTaskLock(string $task): bool {
+        $key = self::getTaskLockKey($task);
+        if ((bool) get_transient($key)) {
+            return false;
+        }
+
+        set_transient($key, 1, self::TASK_LOCK_TTL_SECONDS);
+        return true;
+    }
+
+    /**
+     * Release task lock.
+     */
+    private static function releaseTaskLock(string $task): void {
+        $key = self::getTaskLockKey($task);
+
+        if (function_exists('delete_transient')) {
+            delete_transient($key);
+            return;
+        }
+
+        set_transient($key, 0, 1);
+    }
+
+    /**
+     * Build lock key name for cron task.
+     */
+    private static function getTaskLockKey(string $task): string {
+        return 'mikroplaneta_booking_lock_' . sanitize_key($task);
     }
 }
 

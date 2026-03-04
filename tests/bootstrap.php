@@ -297,6 +297,15 @@ if (!function_exists('set_transient')) {
     }
 }
 
+if (!function_exists('delete_transient')) {
+    function delete_transient(string $key): bool {
+        if (isset($GLOBALS['__mb_transients'][$key])) {
+            unset($GLOBALS['__mb_transients'][$key]);
+        }
+        return true;
+    }
+}
+
 if (!function_exists('wp_get_environment_type')) {
     function wp_get_environment_type(): string {
         return $GLOBALS['__mb_environment_type'] ?? 'development';
