@@ -84,6 +84,65 @@
 
 ## 🚀 Plan Rozwoju - Kolejne Kroki
 
+### **🧭 Plan wykonawczy (bez blokowania roadmapy) - NOWE**
+
+#### Sprint 1 (stabilność, 4-6h)
+```
+☐ Health Check (SMTP / WP-Cron / REST / zapis plików)
+☐ Retry + backoff dla notyfikacji email
+☐ Idempotencja triggerów cron
+☐ Smoke test E2E: backup/export + cron + confirm reservation
+```
+
+**Definition of Done:**
+- brak duplikatów przypomnień,
+- czytelna diagnostyka „dlaczego coś nie działa” w panelu,
+- green dla testów integracyjnych.
+
+---
+
+#### Sprint 2 (płatności MVP, 10-14h)
+```
+☐ Provider #1: Przelewy24
+☐ Webhook statusów płatności
+☐ Statusy: pending_payment / paid / failed / refunded
+☐ Log zdarzeń płatności + ręczny recheck statusu
+```
+
+**Definition of Done:**
+- rezerwacja może przejść pełny cykl zaliczki online,
+- status płatności jest widoczny i audytowalny.
+
+---
+
+#### Sprint 3 (AI MVP, 6-10h)
+```
+☐ Asystent FAQ (RAG) dla recepcji/gościa
+☐ Odpowiedzi na bazie lokalnych danych konfiguracyjnych
+☐ Tryb read-only (bez modyfikacji rezerwacji)
+☐ Log pytań/odpowiedzi do ewaluacji jakości
+```
+
+**Definition of Done:**
+- AI skraca czas odpowiedzi na typowe pytania,
+- brak ryzyka nieautoryzowanej zmiany danych przez AI.
+
+---
+
+#### Sprint 4 (Booking/OTA MVP, 8-12h)
+```
+☐ Integracja iCal (Booking.com / Airbnb)
+☐ Oznaczanie źródła rezerwacji
+☐ Blokady anty-overbooking
+☐ Panel logów synchronizacji
+```
+
+**Definition of Done:**
+- synchronizacja kalendarza działa stabilnie,
+- overbooking jest aktywnie ograniczany.
+
+**Następny etap po MVP OTA:** pełna integracja API (adaptery kanałów + webhook/pull sync + mapowanie jednostek).
+
 ### **🔥 PRIORYTET 1: Testy i Poprawki (2h)**
 ```
 ☐ Testy automatycznej wysyłki CSV (produkcja)

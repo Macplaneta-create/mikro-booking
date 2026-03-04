@@ -1,7 +1,7 @@
 # 🗺️ MikroPlaneta Booking - Roadmap 2026
 
 **Wersja:** 1.2.7  
-**Data ostatniej aktualizacji:** 2026-03-02  
+**Data ostatniej aktualizacji:** 2026-03-04  
 **Status:** ✅ **PRODUKCYJNY**
 
 ---
@@ -35,6 +35,34 @@
 ---
 
 ## 🎯 ROADMAP - Plan Rozwoju
+
+### **Strategia wykonania (żeby nie blokować rozwoju) - NOWE**
+
+**Założenie:** Najpierw mały fundament operacyjny, potem szybkie MVP płatności i AI jako moduły niezależne.
+
+#### Etap A (1 tydzień): Stabilność operacyjna
+- [ ] Health Check w panelu admina (SMTP, WP-Cron, REST, uprawnienia zapisu)
+- [ ] Retry + backoff dla wysyłki email (awarie transportu)
+- [ ] Idempotencja Cron (blokady i ochrona przed duplikatami)
+- [ ] E2E smoke testy krytycznych flow (backup/export, cron, potwierdzenie rezerwacji)
+
+**Cel:** Bezpiecznie i szybko wdrażać kolejne funkcje biznesowe.
+
+#### Etap B (1-2 tygodnie): Płatności MVP
+- [ ] Jedna bramka na start (Przelewy24) + webhook statusów
+- [ ] Statusy płatności w rezerwacji: `pending_payment`, `paid`, `failed`, `refunded`
+- [ ] Rejestr zdarzeń płatności (audit trail)
+- [ ] Minimalny panel administracyjny do weryfikacji i ręcznego odświeżenia statusu
+
+**Cel:** Domknąć realny proces pobrania zaliczki online.
+
+#### Etap C (1 tydzień): AI MVP (bez ryzyka dla danych)
+- [ ] Asystent FAQ dla recepcji i gościa (RAG na treści lokalnej)
+- [ ] Kontekst odpowiedzi: status rezerwacji, polityki, godziny check-in/out
+- [ ] Tryb tylko „read-only” (AI nie modyfikuje danych rezerwacji)
+- [ ] Log pytań i odpowiedzi do poprawy jakości promptów
+
+**Cel:** Szybka wartość biznesowa bez ingerencji AI w krytyczne operacje.
 
 ### **Priorytet 1: Powiadomienia i Alerty (Q1 2026)**
 
@@ -94,6 +122,31 @@
 ---
 
 ### **Priorytet 2: Integracje (Q2 2026)**
+
+#### 2.0 Channel Manager MVP (Booking.com + OTA) 🔴 NOWE
+**Opis:** Integracja kanałów etapami, zaczynając od bezpiecznej synchronizacji dostępności i cen.
+
+**Etap 1 (najbezpieczniejszy):**
+- [ ] iCal import/export dla Booking.com i Airbnb (synchronizacja kalendarza)
+- [ ] Oznaczanie rezerwacji źródłem (`direct`, `booking`, `airbnb`)
+- [ ] Anty-overbooking: blokady miejsc natychmiast po imporcie
+
+**Etap 2 (API):**
+- [ ] Integracja przez API Channel Manager / OTA API (availability + rates + reservations)
+- [ ] Obsługa mapowania: pokoje/łóżka ↔ jednostki OTA
+- [ ] Webhooki/pull sync + retry + deduplikacja
+
+**Wymagania architektoniczne:**
+- [ ] Jedna warstwa integracyjna `core/services/class-channel-manager-service.php`
+- [ ] Adaptery kanałów (`integrations/class-booking-com.php`, `integrations/class-airbnb.php`)
+- [ ] Centralny log synchronizacji (sukcesy, konflikty, błędy)
+
+**Uwaga biznesowa:**
+Dostęp do pełnego API Booking.com zależy od warunków partnerstwa i środowiska dostawcy, dlatego MVP zaczynamy od iCal + modelu adapterów.
+
+**Estimacja:**
+- Etap 1 (iCal): 8-12 godzin
+- Etap 2 (API): 20-35 godzin (zależnie od zakresu i dostępu API)
 
 #### 2.1 Google Calendar - Eksport rezerwacji 🔴 NOWE
 **Opis:** Każda rezerwacja automatycznie trafia do kalendarza Google.
