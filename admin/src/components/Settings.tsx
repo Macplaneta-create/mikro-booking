@@ -688,9 +688,13 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-gray-200">
-                    <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-bold text-gray-900">Historia wysyłek</h4>
+                <details className="mt-8 pt-6 border-t border-gray-200 group">
+                    <summary className="flex items-center justify-between mb-3 cursor-pointer list-none">
+                        <span className="text-sm font-bold text-gray-900">Historia wysyłek</span>
+                        <span className="text-xs text-gray-500 group-open:hidden">Rozwiń</span>
+                    </summary>
+
+                    <div className="flex items-center justify-end mb-3">
                         <button
                             type="button"
                             onClick={loadNotificationLog}
@@ -735,7 +739,7 @@ const Settings: React.FC = () => {
                             </table>
                         </div>
                     )}
-                </div>
+                </details>
             </div>
 
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
@@ -932,26 +936,9 @@ const Settings: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Save button */}
-                        <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="submit"
-                                    disabled={saving}
-                                    className="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700 transition disabled:opacity-50"
-                                >
-                                    <Save className="inline-block mr-2" size={16} />
-                                    {saving ? 'Zapisywanie...' : 'Zapisz ustawienia'}
-                                </button>
-                                {saved && (
-                                    <span className="text-green-600 text-sm flex items-center gap-1">
-                                        <AlertCircle size={16} />
-                                        Zapisano pomyślnie
-                                    </span>
-                                )}
-                            </div>
-
-                            <div className="flex items-center gap-2">
+                        <div className="mt-6 pt-4 border-t border-gray-200">
+                            <h5 className="text-sm font-semibold text-gray-800 mb-3">Narzędzia Cron</h5>
+                            <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     type="button"
                                     onClick={() =>
@@ -981,6 +968,26 @@ const Settings: React.FC = () => {
                                     <Mail size={14} />
                                     Testuj przypomnienia (Cron)
                                 </button>
+                            </div>
+                        </div>
+
+                        {/* Save button */}
+                        <div className="flex items-center mt-6 pt-4 border-t border-gray-200">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700 transition disabled:opacity-50"
+                                >
+                                    <Save className="inline-block mr-2" size={16} />
+                                    {saving ? 'Zapisywanie...' : 'Zapisz ustawienia'}
+                                </button>
+                                {saved && (
+                                    <span className="text-green-600 text-sm flex items-center gap-1">
+                                        <AlertCircle size={16} />
+                                        Zapisano pomyślnie
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </form>
@@ -1329,89 +1336,6 @@ const Settings: React.FC = () => {
                             >
                                 <Save className="inline-block mr-2" size={16} />
                                 {saving ? 'Zapisywanie...' : 'Zapisz ustawienia eksportu'}
-                            </button>
-                        </div>
-                    </form>
-                )}
-            </div>
-
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <Globe className="text-brand-600" size={20} />
-                    Mnożniki cen łóżek
-                </h3>
-                <p className="text-gray-600 mb-6 text-sm">
-                    Określ wagę cenową dla każdego typu łóżka. Cena bazowa pokoju zostanie pomnożona przez ten współczynnik.
-                </p>
-
-                {loading ? (
-                    <p className="text-gray-500">Ładowanie...</p>
-                ) : (
-                    <form onSubmit={handleSaveSettings} className="space-y-4">
-                        <div className="grid grid-cols-3 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Łóżko Pojedyncze
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    min="0.1"
-                                    value={settings.multiplier_single}
-                                    onChange={(e) => setSettings({ ...settings, multiplier_single: parseFloat(e.target.value) || 1.0 })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Łóżko Podwójne
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    min="0.1"
-                                    value={settings.multiplier_double}
-                                    onChange={(e) => setSettings({ ...settings, multiplier_double: parseFloat(e.target.value) || 2.0 })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Łóżko Piętrowe
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    min="0.1"
-                                    value={settings.multiplier_bunk}
-                                    onChange={(e) => setSettings({ ...settings, multiplier_bunk: parseFloat(e.target.value) || 2.0 })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Dziecko (Mnożnik)
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.05"
-                                    min="0"
-                                    max="1.0"
-                                    value={settings.multiplier_children}
-                                    onChange={(e) => setSettings({ ...settings, multiplier_children: parseFloat(e.target.value) || 0.5 })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 mt-6 pt-4 border-t border-gray-200">
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700 transition disabled:opacity-50"
-                            >
-                                <Save className="inline-block mr-2" size={16} />
-                                {saving ? 'Zapisywanie...' : 'Zapisz mnożniki'}
                             </button>
                         </div>
                     </form>

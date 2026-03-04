@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, Plus, Trash2, Calendar, Save, Loader2, AlertCircle } from 'lucide-react';
-import { RoomsAPI, PricingAPI } from '../services/api';
+import { RoomsAPI, PricingAPI, SettingsAPI } from '../services/api';
 
 interface Room {
     id?: number;
@@ -45,6 +45,13 @@ const PricingView: React.FC = () => {
     const [saving, setSaving] = useState(false);
     const [showAddForm, setShowAddForm] = useState(false);
     const [editingRule, setEditingRule] = useState<PricingRule | null>(null);
+    const [multiplierSaving, setMultiplierSaving] = useState(false);
+    const [multipliers, setMultipliers] = useState({
+        single: 1.0,
+        double: 2.0,
+        bunk: 2.0,
+        children: 0.5,
+    });
 
     const [newRule, setNewRule] = useState<PricingRule>({
         name: '',
@@ -68,15 +75,42 @@ const PricingView: React.FC = () => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const roomsData = await RoomsAPI.getAll();
-            setRooms(roomsData);
+            const [roomsData, rulesData, settingsData] = await Promise.all([
+                RoomsAPI.getAll(),
+                PricingAPI.getAll(),
+                SettingsAPI.getAll(),
+            ]);
 
-            const rulesData = await PricingAPI.getAll();
+            setRooms(roomsData);
             setPricingRules(rulesData);
+            setMultipliers({
+                single: settingsData.multiplier_single ?? 1.0,
+                double: settingsData.multiplier_double ?? 2.0,
+                bunk: settingsData.multiplier_bunk ?? 2.0,
+                children: settingsData.multiplier_children ?? 0.5,
+            });
         } catch (error) {
             console.error('Failed to fetch data:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const saveMultipliers = async () => {
+        try {
+            setMultiplierSaving(true);
+            await SettingsAPI.update({
+                multiplier_single: multipliers.single,
+                multiplier_double: multipliers.double,
+                multiplier_bunk: multipliers.bunk,
+                multiplier_children: multipliers.children,
+            });
+            alert('Zapisano mnożniki cen.');
+        } catch (error) {
+            console.error('Failed to save multipliers:', error);
+            alert('Błąd przy zapisywaniu mnożników cen.');
+        } finally {
+            setMultiplierSaving(false);
         }
     };
 
@@ -230,6 +264,76 @@ const PricingView: React.FC = () => {
 
     return (
         <div className="max-w-4xl">
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <DollarSign className="text-brand-600" size={20} />
+                    Mnożniki cen łóżek
+                </h3>
+                <p className="text-gray-600 mb-6 text-sm">
+                    Określ wagę cenową dla typów łóżek. Te wartości są używane przy kalkulacji ceny rezerwacji.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Łóżko pojedyncze</label>
+                        <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            value={multipliers.single}
+                            onChange={(e) => setMultipliers((prev) => ({ ...prev, single: parseFloat(e.target.value) || 1.0 }))}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Łóżko podwójne</label>
+                        <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            value={multipliers.double}
+                            onChange={(e) => setMultipliers((prev) => ({ ...prev, double: parseFloat(e.target.value) || 2.0 }))}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Łóżko piętrowe</label>
+                        <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            value={multipliers.bunk}
+                            onChange={(e) => setMultipliers((prev) => ({ ...prev, bunk: parseFloat(e.target.value) || 2.0 }))}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Dziecko</label>
+                        <input
+                            type="number"
+                            step="0.05"
+                            min="0"
+                            max="1"
+                            value={multipliers.children}
+                            onChange={(e) => setMultipliers((prev) => ({ ...prev, children: parseFloat(e.target.value) || 0.5 }))}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                        />
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2 mt-6 pt-4 border-t border-gray-200">
+                    <button
+                        type="button"
+                        onClick={saveMultipliers}
+                        disabled={multiplierSaving}
+                        className="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-brand-700 transition disabled:opacity-50"
+                    >
+                        <Save className="inline-block mr-2" size={16} />
+                        {multiplierSaving ? 'Zapisywanie...' : 'Zapisz mnożniki'}
+                    </button>
+                </div>
+            </div>
+
             <div className="flex items-center justify-end mb-6">
                 <button
                     onClick={() => setShowAddForm(!showAddForm)}

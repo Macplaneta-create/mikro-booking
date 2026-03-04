@@ -288,15 +288,11 @@ class Admin {
         $js_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'assets/admin/index.js';
         $css_file = MIKROPLANETA_BOOKING_PLUGIN_DIR . 'assets/admin/index.css';
 
-        // Use file modification time for cache busting in development
+        // Use file modification time for cache busting on all environments.
+        // This prevents stale admin bundles after deploying rebuilt assets.
         $version = MIKROPLANETA_BOOKING_VERSION;
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            $js_version = file_exists($js_file) ? filemtime($js_file) : $version;
-            $css_version = file_exists($css_file) ? filemtime($css_file) : $version;
-        } else {
-            $js_version = $version;
-            $css_version = $version;
-        }
+        $js_version = file_exists($js_file) ? (string) filemtime($js_file) : $version;
+        $css_version = file_exists($css_file) ? (string) filemtime($css_file) : $version;
 
         if (file_exists($js_file)) {
             wp_enqueue_script(
