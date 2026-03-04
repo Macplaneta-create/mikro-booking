@@ -39,3 +39,24 @@ Release date: 2026-03-03
 
 - Recommended for all installs due to combined security, reliability and UX consistency improvements.
 - No manual migration step is required for standard upgrades.
+
+## Post-release Update (2026-03-04)
+
+- Admin `Settings` UX cleanup:
+  - Cron test actions moved to dedicated **Narzędzia Cron** block (outside payment controls).
+  - Notification history section kept but collapsed by default for better scanability.
+- Pricing settings organization:
+  - Bed price multipliers moved from `Settings` into `Pricing` view where they are now edited and saved.
+- Admin asset cache-busting fix:
+  - `core/class-admin.php` now versions `assets/admin/index.js` and `index.css` via `filemtime()` in all environments.
+  - Prevents stale admin bundles when `WP_DEBUG` is disabled.
+- QA and repository hygiene:
+  - Added [QA_CHECKLIST_1.2.7.md](QA_CHECKLIST_1.2.7.md) for manual verification before release.
+  - Added ignore rules for local generated artifacts (`.phpunit.result.cache`, `releases/`) and stopped tracking PHPUnit cache file.
+
+### Commit Summary (pushed to `main`)
+
+- `f70ed3d` — admin: reorder Settings cron tools and improve admin asset cache busting
+- `0dcf58f` — docs: add QA checklist for 1.2.7 verification
+- `c8c770b` — chore: ignore local test cache and release artifacts
+- `4dd0243` — chore: stop tracking phpunit result cache
