@@ -107,6 +107,13 @@ if (!function_exists('sanitize_text_field')) {
     }
 }
 
+if (!function_exists('sanitize_key')) {
+    function sanitize_key($key): string {
+        $key = strtolower((string) $key);
+        return preg_replace('/[^a-z0-9_\-]/', '', $key) ?? '';
+    }
+}
+
 if (!function_exists('sanitize_email')) {
     function sanitize_email($email): string {
         return trim((string) $email);

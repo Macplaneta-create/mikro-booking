@@ -316,6 +316,21 @@ class ReservationService {
         }
         
         $updated = $this->reservation_repository->update($id, $update_data);
+
+        // Send confirmation email if enabled
+        $email_notifications = (bool) get_option('mikroplaneta_booking_email_notifications', true);
+        if ($email_notifications) {
+            $guest = $this->guest_repository->find($updated->guest_id);
+            if ($guest && $guest->email) {
+                try {
+                    $this->notification_service->sendReservationConfirmation($updated, $guest, [
+                        'reason' => $reason,
+                    ]);
+                } catch (\Exception $e) {
+                    error_log('Failed to send reservation confirmation email on confirm: ' . $e->getMessage());
+                }
+            }
+        }
         
         // Fire WordPress action
         do_action('mikroplaneta_booking_reservation_confirmed', $updated, $reason);

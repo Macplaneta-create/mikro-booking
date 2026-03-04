@@ -356,6 +356,24 @@ const Settings: React.FC = () => {
         }
     };
 
+    const triggerCronTask = async (
+        task: 'expiry' | 'reminders',
+        confirmMessage: string,
+        fallbackErrorMessage: string
+    ) => {
+        if (!window.confirm(confirmMessage)) {
+            return;
+        }
+
+        try {
+            const res = await SettingsAPI.triggerCron(task);
+            alert(res?.data?.message || 'Operacja zakończona.');
+        } catch (error) {
+            alert(fallbackErrorMessage);
+            console.error(error);
+        }
+    };
+
     const previewHtml = (template: EmailTemplate | null): string => {
         if (!template) return '';
         const replacements: Record<string, string> = {
@@ -933,24 +951,37 @@ const Settings: React.FC = () => {
                                 )}
                             </div>
 
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    if (window.confirm('Czy na pewno chcesz teraz uruchomić sprawdzanie wygasania rezerwacji?')) {
-                                        try {
-                                            const res = await SettingsAPI.triggerCron();
-                                            alert(res.data.message);
-                                        } catch (error) {
-                                            alert('Błąd podczas uruchamiania testu');
-                                            console.error(error);
-                                        }
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        triggerCronTask(
+                                            'expiry',
+                                            'Czy na pewno chcesz teraz uruchomić sprawdzanie wygasania rezerwacji?',
+                                            'Błąd podczas uruchamiania testu wygasania'
+                                        )
                                     }
-                                }}
-                                className="text-xs bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-gray-500 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm flex items-center gap-2"
-                            >
-                                <Clock size={14} />
-                                Testuj wygasanie (Cron)
-                            </button>
+                                    className="text-xs bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-gray-500 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm flex items-center gap-2"
+                                >
+                                    <Clock size={14} />
+                                    Testuj wygasanie (Cron)
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        triggerCronTask(
+                                            'reminders',
+                                            'Czy na pewno chcesz teraz uruchomić wysyłkę przypomnień (check-in / check-out)?',
+                                            'Błąd podczas uruchamiania testu przypomnień'
+                                        )
+                                    }
+                                    className="text-xs bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-gray-500 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm flex items-center gap-2"
+                                >
+                                    <Mail size={14} />
+                                    Testuj przypomnienia (Cron)
+                                </button>
+                            </div>
                         </div>
                     </form>
                 )}

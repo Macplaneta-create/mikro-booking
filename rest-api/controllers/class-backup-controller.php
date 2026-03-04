@@ -99,15 +99,24 @@ class BackupController extends RestController {
      * Send daily backup email (test)
      */
     public function send_daily($request): WP_REST_Response {
+        $recipient = sanitize_email((string) get_option('mikroplaneta_backup_email', get_option('admin_email')));
+
+        if (empty($recipient) || !is_email($recipient)) {
+            return $this->error('Ustaw poprawny adres email dla backupu w Ustawieniach.', 400);
+        }
+
         $settings = [
-            'email' => get_option('mikroplaneta_backup_email', get_option('admin_email')),
+            'email' => $recipient,
             'enabled' => true
         ];
 
         $sent = $this->backup_service->sendDailyBackupEmail($settings);
 
         if ($sent) {
-            return $this->success(['message' => 'Email wysłany pomyślnie']);
+            return $this->success([
+                'message' => 'Wiadomość została przekazana do wysyłki. Sprawdź skrzynkę odbiorczą oraz logi SMTP/serwera poczty.',
+                'recipient' => $recipient,
+            ]);
         } else {
             return $this->error('Nie udało się wysłać emaila', 500);
         }

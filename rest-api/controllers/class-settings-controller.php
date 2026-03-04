@@ -90,6 +90,9 @@ class SettingsController extends RestController {
                 'methods' => 'POST',
                 'callback' => [$this, 'trigger_cron'],
                 'permission_callback' => [$this, 'check_permission'],
+                'args' => [
+                    'task' => ['type' => 'string'],
+                ],
             ],
         ]);
 
@@ -391,15 +394,26 @@ class SettingsController extends RestController {
      */
     public function trigger_cron($request): WP_REST_Response {
         try {
-            // Include cron handler if not already loaded
-            if (!class_exists('\MikroPlaneta\Booking\Core\CronHandler')) {
-                require_once MIKROPLANETA_BOOKING_PLUGIN_DIR . 'core/class-cron-handler.php';
+            $task = sanitize_key((string) $request->get_param('task'));
+            if ($task === '') {
+                $task = 'expiry';
             }
-            
-            // Re-fetch count by executing the static method from CronHandler
-            \MikroPlaneta\Booking\Core\CronHandler::expire_reservations();
-            
-            return $this->success(['message' => 'Uruchomiono sprawdzanie wygasania rezerwacji. Sprawdź logi lub kalendarz.']);
+
+            if ($task === 'reminders') {
+                do_action('mikroplaneta_booking_send_reminders');
+                return $this->success([
+                    'message' => 'Uruchomiono wysyłkę przypomnień (check-in / check-out). Sprawdź log powiadomień i skrzynkę email.',
+                    'task' => 'reminders',
+                ]);
+            }
+
+            // Default task: expiry check
+            do_action('mikroplaneta_booking_expire_reservations');
+
+            return $this->success([
+                'message' => 'Uruchomiono sprawdzanie wygasania rezerwacji. Sprawdź logi lub kalendarz.',
+                'task' => 'expiry',
+            ]);
         } catch (\Exception $e) {
             return $this->error($e->getMessage());
         }

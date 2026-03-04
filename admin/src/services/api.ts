@@ -446,8 +446,8 @@ export const SettingsAPI = {
         const res = await api.post('/settings', data);
         return res.data.data;
     },
-    triggerCron: async () => {
-        const res = await api.post('/settings/trigger-cron');
+    triggerCron: async (task: 'expiry' | 'reminders' = 'expiry') => {
+        const res = await api.post('/settings/trigger-cron', { task });
         return res.data;
     },
     getEmailTemplates: async () => {

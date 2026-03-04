@@ -119,6 +119,10 @@ class NotificationService {
      * Send check-in reminder
      */
     public function sendCheckInReminder(Reservation $reservation, Guest $guest): bool {
+        if ($this->wasNotificationSentToday('checkin_reminder', (int) $reservation->id, (int) $guest->id)) {
+            return true;
+        }
+
         [$subject, $message] = $this->resolveTemplate('checkin_reminder', $reservation, $guest);
         
         $sent = wp_mail(
@@ -147,6 +151,10 @@ class NotificationService {
      * Send check-out reminder
      */
     public function sendCheckOutReminder(Reservation $reservation, Guest $guest): bool {
+        if ($this->wasNotificationSentToday('checkout_reminder', (int) $reservation->id, (int) $guest->id)) {
+            return true;
+        }
+
         [$subject, $message] = $this->resolveTemplate('checkout_reminder', $reservation, $guest);
         
         $sent = wp_mail(
@@ -475,6 +483,35 @@ class NotificationService {
         $this->notifications_table_available = ($found === $table);
 
         return $this->notifications_table_available;
+    }
+
+    /**
+     * Check whether reminder notification was already sent today for reservation/guest.
+     */
+    private function wasNotificationSentToday(string $template_name, int $reservation_id, int $guest_id): bool {
+        if (!$this->isNotificationsTableAvailable() || $reservation_id <= 0 || $guest_id <= 0) {
+            return false;
+        }
+
+        global $wpdb;
+        $table = Schema::get_table_name('notifications');
+        $today = (string) current_time('Y-m-d');
+
+        $count = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table}
+             WHERE template_name = %s
+               AND reservation_id = %d
+               AND guest_id = %d
+               AND status = %s
+               AND DATE(sent_at) = %s",
+            $template_name,
+            $reservation_id,
+            $guest_id,
+            'sent',
+            $today
+        ));
+
+        return $count > 0;
     }
     
     /**

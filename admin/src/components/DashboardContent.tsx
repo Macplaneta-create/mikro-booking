@@ -516,6 +516,9 @@ const DashboardContent: React.FC = () => {
                         <p className="text-xs text-gray-500">Wyślij podsumowanie na email</p>
                     </button>
                 </div>
+                <p className="text-xs text-amber-700 mt-3">
+                    Test Email wymaga poprawnie skonfigurowanej wysyłki maili na serwerze (SMTP lub inny transport WordPress).
+                </p>
                 <p className="text-xs text-gray-500 mt-4">
                     ℹ️ Więcej ustawień backupu znajdziesz w <a href="admin.php?page=mikroplaneta-booking-settings" className="text-brand-600 hover:underline">Ustawieniach</a>.
                 </p>
