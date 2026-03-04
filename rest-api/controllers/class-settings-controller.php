@@ -96,6 +96,15 @@ class SettingsController extends RestController {
             ],
         ]);
 
+        // Operational health check diagnostics
+        register_rest_route($this->namespace, '/' . $this->rest_base . '/health-check', [
+            [
+                'methods' => 'GET',
+                'callback' => [$this, 'get_health_check'],
+                'permission_callback' => [$this, 'check_permission'],
+            ],
+        ]);
+
         // Email templates settings
         register_rest_route($this->namespace, '/' . $this->rest_base . '/email-templates', [
             [
@@ -417,6 +426,179 @@ class SettingsController extends RestController {
         } catch (\Exception $e) {
             return $this->error($e->getMessage());
         }
+    }
+
+    /**
+     * Get operational health-check diagnostics for admin settings page
+     */
+    public function get_health_check(WP_REST_Request $request): WP_REST_Response {
+        $results = [];
+
+        $results[] = $this->build_smtp_health_check();
+        $results[] = $this->build_cron_health_check();
+        $results[] = $this->build_rest_health_check();
+        $results[] = $this->build_storage_health_check();
+
+        $summary = [
+            'ok' => 0,
+            'warning' => 0,
+            'error' => 0,
+        ];
+
+        foreach ($results as $row) {
+            $status = (string) ($row['status'] ?? 'warning');
+            if (!isset($summary[$status])) {
+                $status = 'warning';
+            }
+            $summary[$status]++;
+        }
+
+        return $this->success([
+            'checked_at' => current_time('mysql'),
+            'summary' => $summary,
+            'checks' => $results,
+        ]);
+    }
+
+    /**
+     * SMTP/mail transport health check
+     */
+    private function build_smtp_health_check(): array {
+        $admin_email = (string) get_option('admin_email', '');
+        $email_valid = is_email($admin_email);
+        $has_wp_mail = function_exists('wp_mail');
+        $has_phpmailer_hook = function_exists('has_action') && has_action('phpmailer_init');
+
+        $status = 'ok';
+        $message = 'Transport poczty wygląda poprawnie.';
+
+        if (!$has_wp_mail || !$email_valid) {
+            $status = 'error';
+            $message = 'Brak poprawnej konfiguracji podstawowej poczty (wp_mail/admin_email).';
+        } elseif (!$has_phpmailer_hook) {
+            $status = 'warning';
+            $message = 'Nie wykryto niestandardowego transportu SMTP. Sprawdź konfigurację pluginu SMTP.';
+        }
+
+        return [
+            'key' => 'smtp',
+            'label' => 'SMTP / Email transport',
+            'status' => $status,
+            'message' => $message,
+            'details' => [
+                'admin_email' => $admin_email,
+                'admin_email_valid' => (bool) $email_valid,
+                'wp_mail_available' => $has_wp_mail,
+                'phpmailer_hook_detected' => (bool) $has_phpmailer_hook,
+            ],
+        ];
+    }
+
+    /**
+     * WP-Cron scheduling health check
+     */
+    private function build_cron_health_check(): array {
+        $is_disabled = defined('DISABLE_WP_CRON') && DISABLE_WP_CRON;
+        $expiry_next = wp_next_scheduled('mikroplaneta_booking_expire_reservations');
+        $reminders_next = wp_next_scheduled('mikroplaneta_booking_send_reminders');
+        $cleanup_next = wp_next_scheduled('mikroplaneta_booking_cleanup_temp_files');
+
+        $status = 'ok';
+        $message = 'Zadania Cron są zaplanowane.';
+
+        if ($is_disabled) {
+            $status = 'warning';
+            $message = 'WP-Cron jest wyłączony (DISABLE_WP_CRON=true). Upewnij się, że działa cron systemowy.';
+        }
+
+        if (!$expiry_next || !$reminders_next || !$cleanup_next) {
+            $status = $is_disabled ? 'warning' : 'error';
+            $message = 'Brakuje części zaplanowanych zadań Cron. Zapisz ustawienia lub aktywuj ponownie plugin.';
+        }
+
+        return [
+            'key' => 'cron',
+            'label' => 'WP-Cron',
+            'status' => $status,
+            'message' => $message,
+            'details' => [
+                'disabled' => $is_disabled,
+                'next_expiry' => $expiry_next ? gmdate('Y-m-d H:i:s', (int) $expiry_next) : null,
+                'next_reminders' => $reminders_next ? gmdate('Y-m-d H:i:s', (int) $reminders_next) : null,
+                'next_cleanup' => $cleanup_next ? gmdate('Y-m-d H:i:s', (int) $cleanup_next) : null,
+            ],
+        ];
+    }
+
+    /**
+     * REST API base diagnostics
+     */
+    private function build_rest_health_check(): array {
+        $rest_base = function_exists('rest_url') ? rest_url('mikroplaneta/v1') : '';
+        $nonce_available = function_exists('wp_create_nonce') ? (bool) wp_create_nonce('wp_rest') : false;
+
+        $status = 'ok';
+        $message = 'REST API wygląda poprawnie.';
+
+        if ($rest_base === '') {
+            $status = 'error';
+            $message = 'Nie udało się wyznaczyć adresu REST API.';
+        } elseif (!$nonce_available) {
+            $status = 'warning';
+            $message = 'Nonce REST może być niedostępny dla części żądań administracyjnych.';
+        }
+
+        return [
+            'key' => 'rest',
+            'label' => 'REST API',
+            'status' => $status,
+            'message' => $message,
+            'details' => [
+                'base_url' => $rest_base,
+                'nonce_available' => $nonce_available,
+            ],
+        ];
+    }
+
+    /**
+     * Writable directories diagnostics for temp exports / ical
+     */
+    private function build_storage_health_check(): array {
+        $upload_dir = wp_upload_dir();
+        $base_dir = trailingslashit((string) ($upload_dir['basedir'] ?? '')) . 'mikroplaneta-booking/';
+        $upload_error = (string) ($upload_dir['error'] ?? '');
+
+        $status = 'ok';
+        $message = 'Katalogi tymczasowe są gotowe do zapisu.';
+
+        if ($upload_error !== '') {
+            $status = 'error';
+            $message = 'WordPress zgłasza błąd katalogu upload.';
+        }
+
+        $upload_writable = is_dir((string) ($upload_dir['basedir'] ?? '')) && is_writable((string) ($upload_dir['basedir'] ?? ''));
+        $base_exists = is_dir($base_dir);
+        $base_writable = $base_exists ? is_writable($base_dir) : $upload_writable;
+
+        if ($status !== 'error' && (!$upload_writable || !$base_writable)) {
+            $status = 'error';
+            $message = 'Brak uprawnień zapisu do katalogów tymczasowych pluginu.';
+        }
+
+        return [
+            'key' => 'storage',
+            'label' => 'Pliki tymczasowe (backup / iCal)',
+            'status' => $status,
+            'message' => $message,
+            'details' => [
+                'upload_basedir' => (string) ($upload_dir['basedir'] ?? ''),
+                'upload_writable' => $upload_writable,
+                'plugin_temp_dir' => $base_dir,
+                'plugin_temp_dir_exists' => $base_exists,
+                'plugin_temp_dir_writable' => $base_writable,
+                'upload_error' => $upload_error,
+            ],
+        ];
     }
 
     /**

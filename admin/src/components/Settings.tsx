@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Save, AlertCircle, Building2, Mail, Globe, Shield } from 'lucide-react';
+import { Calendar, Clock, Save, AlertCircle, Building2, Mail, Globe, Shield, RefreshCw } from 'lucide-react';
 import { SettingsAPI, RoomsAPI, type Room } from '../services/api';
 
 interface Page {
@@ -76,6 +76,14 @@ interface NotificationLogEntry {
     email?: string;
 }
 
+interface HealthCheckItem {
+    key: string;
+    label: string;
+    status: 'ok' | 'warning' | 'error';
+    message: string;
+    details?: Record<string, unknown>;
+}
+
 const Settings: React.FC = () => {
     const [licenseKey, setLicenseKey] = useState('');
     const [status, setStatus] = useState<'inactive' | 'active'>('inactive');
@@ -138,6 +146,10 @@ const Settings: React.FC = () => {
     const [testEmail, setTestEmail] = useState('');
     const [sendingTestEmail, setSendingTestEmail] = useState(false);
     const [pages, setPages] = useState<Page[]>([]);
+    const [healthCheckLoading, setHealthCheckLoading] = useState(false);
+    const [healthCheckCheckedAt, setHealthCheckCheckedAt] = useState<string>('');
+    const [healthCheckSummary, setHealthCheckSummary] = useState({ ok: 0, warning: 0, error: 0 });
+    const [healthChecks, setHealthChecks] = useState<HealthCheckItem[]>([]);
 
     // Load settings on mount
     useEffect(() => {
@@ -146,7 +158,30 @@ const Settings: React.FC = () => {
         loadEmailTemplates();
         loadNotificationLog();
         loadPages();
+        loadHealthCheck();
     }, []);
+
+    const loadHealthCheck = async () => {
+        try {
+            setHealthCheckLoading(true);
+            const data = await SettingsAPI.getHealthCheck();
+            setHealthCheckCheckedAt(data.checked_at || '');
+            setHealthCheckSummary(data.summary || { ok: 0, warning: 0, error: 0 });
+            setHealthChecks(data.checks || []);
+        } catch (error) {
+            console.error('Failed to load health check:', error);
+            setHealthChecks([]);
+            setHealthCheckSummary({ ok: 0, warning: 0, error: 1 });
+        } finally {
+            setHealthCheckLoading(false);
+        }
+    };
+
+    const getHealthStatusBadgeClass = (status: HealthCheckItem['status']): string => {
+        if (status === 'ok') return 'bg-green-100 text-green-700';
+        if (status === 'warning') return 'bg-amber-100 text-amber-700';
+        return 'bg-red-100 text-red-700';
+    };
 
     const loadSettings = async () => {
         try {
@@ -519,6 +554,66 @@ const Settings: React.FC = () => {
                             )}
                         </div>
                     </form>
+                )}
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                            <Shield className="text-brand-600" size={20} />
+                            Health Check
+                        </h3>
+                        <p className="text-gray-600 text-sm">
+                            Szybka diagnostyka środowiska: SMTP, Cron, REST API i zapis plików tymczasowych.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={loadHealthCheck}
+                        disabled={healthCheckLoading}
+                        className="text-xs bg-white border border-gray-200 px-3 py-2 rounded-lg text-gray-600 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
+                    >
+                        <RefreshCw size={14} className={healthCheckLoading ? 'animate-spin' : ''} />
+                        {healthCheckLoading ? 'Sprawdzanie...' : 'Odśwież'}
+                    </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">OK: {healthCheckSummary.ok}</span>
+                    <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">Ostrzeżenia: {healthCheckSummary.warning}</span>
+                    <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">Błędy: {healthCheckSummary.error}</span>
+                    {healthCheckCheckedAt && (
+                        <span className="text-xs text-gray-500 ml-auto">Ostatnie sprawdzenie: {healthCheckCheckedAt}</span>
+                    )}
+                </div>
+
+                {healthCheckLoading && healthChecks.length === 0 ? (
+                    <p className="text-sm text-gray-500">Trwa pobieranie diagnostyki...</p>
+                ) : healthChecks.length === 0 ? (
+                    <p className="text-sm text-gray-500">Brak danych diagnostycznych.</p>
+                ) : (
+                    <div className="space-y-3">
+                        {healthChecks.map((check) => (
+                            <div key={check.key} className="border border-gray-200 rounded-xl p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="text-sm font-semibold text-gray-900">{check.label}</div>
+                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${getHealthStatusBadgeClass(check.status)}`}>
+                                        {check.status === 'ok' ? 'OK' : check.status === 'warning' ? 'OSTRZEŻENIE' : 'BŁĄD'}
+                                    </span>
+                                </div>
+                                <p className="text-sm text-gray-600 mt-1">{check.message}</p>
+                                {check.details && (
+                                    <details className="mt-2">
+                                        <summary className="text-xs text-gray-500 cursor-pointer">Szczegóły</summary>
+                                        <pre className="mt-2 text-xs bg-gray-50 border border-gray-200 rounded-lg p-2 overflow-auto text-gray-700">
+                                            {JSON.stringify(check.details, null, 2)}
+                                        </pre>
+                                    </details>
+                                )}
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
 

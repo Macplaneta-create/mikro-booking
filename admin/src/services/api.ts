@@ -450,6 +450,24 @@ export const SettingsAPI = {
         const res = await api.post('/settings/trigger-cron', { task });
         return res.data;
     },
+    getHealthCheck: async () => {
+        const res = await api.get('/settings/health-check');
+        return res.data.data as {
+            checked_at: string;
+            summary: {
+                ok: number;
+                warning: number;
+                error: number;
+            };
+            checks: Array<{
+                key: string;
+                label: string;
+                status: 'ok' | 'warning' | 'error';
+                message: string;
+                details?: Record<string, unknown>;
+            }>;
+        };
+    },
     getEmailTemplates: async () => {
         const res = await api.get('/settings/email-templates');
         return res.data.data as {
