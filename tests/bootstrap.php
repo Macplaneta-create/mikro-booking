@@ -120,6 +120,151 @@ if (!function_exists('sanitize_email')) {
     }
 }
 
+if (!function_exists('sanitize_textarea_field')) {
+    function sanitize_textarea_field($text): string {
+        return trim((string) $text);
+    }
+}
+
+if (!function_exists('__')) {
+    function __($text, $domain = null): string {
+        return (string) $text;
+    }
+}
+
+if (!function_exists('_e')) {
+    function _e($text, $domain = null): void {
+        echo (string) $text;
+    }
+}
+
+if (!function_exists('esc_html')) {
+    function esc_html($text): string {
+        return (string) $text;
+    }
+}
+
+if (!function_exists('esc_url')) {
+    function esc_url($url): string {
+        return (string) $url;
+    }
+}
+
+if (!function_exists('wp_kses_post')) {
+    function wp_kses_post($content): string {
+        return (string) $content;
+    }
+}
+
+if (!function_exists('get_bloginfo')) {
+    function get_bloginfo($show = ''): string {
+        if ($show === 'name') {
+            return 'MikroPlaneta Test';
+        }
+        if ($show === 'version') {
+            return '6.0';
+        }
+        return 'MikroPlaneta Test';
+    }
+}
+
+if (!function_exists('home_url')) {
+    function home_url($path = '', $scheme = null): string {
+        $base = 'https://example.test';
+        $path = ltrim((string) $path, '/');
+        return $path === '' ? $base : $base . '/' . $path;
+    }
+}
+
+if (!function_exists('get_privacy_policy_url')) {
+    function get_privacy_policy_url(): string {
+        return 'https://example.test/privacy-policy';
+    }
+}
+
+if (!function_exists('date_i18n')) {
+    function date_i18n($format, $timestamp = false, $gmt = false): string {
+        $ts = $timestamp ? (int) $timestamp : (int) ($GLOBALS['__mb_current_timestamp'] ?? time());
+        return date((string) $format, $ts);
+    }
+}
+
+if (!function_exists('is_email')) {
+    function is_email($email): bool {
+        return (bool) filter_var((string) $email, FILTER_VALIDATE_EMAIL);
+    }
+}
+
+if (!function_exists('trailingslashit')) {
+    function trailingslashit($value): string {
+        return rtrim((string) $value, '/\\') . '/';
+    }
+}
+
+if (!function_exists('wp_upload_dir')) {
+    function wp_upload_dir($time = null, $create_dir = true, $refresh_cache = false): array {
+        $basedir = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'mikro-booking-tests-uploads';
+        if (!is_dir($basedir)) {
+            @mkdir($basedir, 0777, true);
+        }
+
+        return [
+            'path' => $basedir,
+            'url' => 'https://example.test/wp-content/uploads',
+            'subdir' => '',
+            'basedir' => $basedir,
+            'baseurl' => 'https://example.test/wp-content/uploads',
+            'error' => '',
+        ];
+    }
+}
+
+if (!function_exists('wp_mail')) {
+    function wp_mail($to, $subject, $message, $headers = '', $attachments = []): bool {
+        $GLOBALS['__mb_wp_mail_calls'][] = [
+            'to' => $to,
+            'subject' => $subject,
+            'message' => $message,
+            'headers' => $headers,
+            'attachments' => $attachments,
+        ];
+
+        if (!empty($GLOBALS['__mb_wp_mail_results']) && is_array($GLOBALS['__mb_wp_mail_results'])) {
+            $result = array_shift($GLOBALS['__mb_wp_mail_results']);
+            return (bool) $result;
+        }
+
+        return (bool) ($GLOBALS['__mb_wp_mail_result'] ?? true);
+    }
+}
+
+if (!function_exists('has_action')) {
+    function has_action(string $hook, $callback = false) {
+        $actions = $GLOBALS['__mb_actions_registered'] ?? [];
+        $count = 0;
+        foreach ($actions as $action) {
+            if (($action['hook'] ?? null) === $hook) {
+                $count++;
+            }
+        }
+
+        return $count > 0 ? $count : false;
+    }
+}
+
+if (!function_exists('rest_url')) {
+    function rest_url($path = '', $scheme = 'rest'): string {
+        $path = ltrim((string) $path, '/');
+        return 'https://example.test/wp-json/' . $path;
+    }
+}
+
+if (!function_exists('wp_create_nonce')) {
+    function wp_create_nonce($action = -1): string {
+        return 'test-nonce';
+    }
+}
+
 if (!function_exists('wp_unslash')) {
     function wp_unslash($value) {
         return $value;

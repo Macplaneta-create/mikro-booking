@@ -31,6 +31,9 @@ class NotificationService {
     private ?bool $notifications_table_available = null;
     private ?IcalService $ical_service = null;
 
+    private const EMAIL_RETRY_ATTEMPTS = 3;
+    private const EMAIL_RETRY_BACKOFF_MS = [0, 300, 900];
+
     /**
      * Get iCalendar service
      */
@@ -62,7 +65,7 @@ class NotificationService {
             $attachments[] = $ics_filepath;
         }
 
-        $sent = wp_mail(
+        $result = $this->sendEmailWithRetry(
             $guest->email,
             $subject,
             $message,
@@ -70,12 +73,15 @@ class NotificationService {
             $attachments
         );
 
+        $sent = (bool) $result['sent'];
+        $attempts = (int) $result['attempts'];
+
         $this->logNotification(
             $template,
             $reservation,
             $guest,
             $sent,
-            $sent ? '' : 'wp_mail() returned false'
+            $sent ? '' : sprintf('wp_mail() returned false after %d attempts', $attempts)
         );
 
         if ($sent) {
@@ -93,19 +99,22 @@ class NotificationService {
             'reason' => $reason,
         ]);
         
-        $sent = wp_mail(
+        $result = $this->sendEmailWithRetry(
             $guest->email,
             $subject,
             $message,
             $this->getEmailHeaders()
         );
 
+        $sent = (bool) $result['sent'];
+        $attempts = (int) $result['attempts'];
+
         $this->logNotification(
             'reservation_cancellation',
             $reservation,
             $guest,
             $sent,
-            $sent ? '' : 'wp_mail() returned false'
+            $sent ? '' : sprintf('wp_mail() returned false after %d attempts', $attempts)
         );
         
         if ($sent) {
@@ -125,19 +134,22 @@ class NotificationService {
 
         [$subject, $message] = $this->resolveTemplate('checkin_reminder', $reservation, $guest);
         
-        $sent = wp_mail(
+        $result = $this->sendEmailWithRetry(
             $guest->email,
             $subject,
             $message,
             $this->getEmailHeaders()
         );
 
+        $sent = (bool) $result['sent'];
+        $attempts = (int) $result['attempts'];
+
         $this->logNotification(
             'checkin_reminder',
             $reservation,
             $guest,
             $sent,
-            $sent ? '' : 'wp_mail() returned false'
+            $sent ? '' : sprintf('wp_mail() returned false after %d attempts', $attempts)
         );
         
         if ($sent) {
@@ -157,19 +169,22 @@ class NotificationService {
 
         [$subject, $message] = $this->resolveTemplate('checkout_reminder', $reservation, $guest);
         
-        $sent = wp_mail(
+        $result = $this->sendEmailWithRetry(
             $guest->email,
             $subject,
             $message,
             $this->getEmailHeaders()
         );
 
+        $sent = (bool) $result['sent'];
+        $attempts = (int) $result['attempts'];
+
         $this->logNotification(
             'checkout_reminder',
             $reservation,
             $guest,
             $sent,
-            $sent ? '' : 'wp_mail() returned false'
+            $sent ? '' : sprintf('wp_mail() returned false after %d attempts', $attempts)
         );
         
         if ($sent) {
@@ -308,7 +323,74 @@ class NotificationService {
             'reason' => 'To jest testowa wiadomość.',
         ]);
 
-        return wp_mail($to_email, $subject, $message, $this->getEmailHeaders());
+        $result = $this->sendEmailWithRetry($to_email, $subject, $message, $this->getEmailHeaders());
+        return (bool) $result['sent'];
+    }
+
+    /**
+     * Send email with retry + incremental backoff.
+     *
+     * @return array{sent:bool,attempts:int,error:string}
+     */
+    private function sendEmailWithRetry(
+        string $to,
+        string $subject,
+        string $message,
+        array $headers,
+        array $attachments = []
+    ): array {
+        $max_attempts = (int) apply_filters(
+            'mikroplaneta_booking_email_retry_attempts',
+            self::EMAIL_RETRY_ATTEMPTS
+        );
+        $max_attempts = max(1, $max_attempts);
+
+        $backoff_ms = apply_filters(
+            'mikroplaneta_booking_email_retry_backoff_ms',
+            self::EMAIL_RETRY_BACKOFF_MS
+        );
+
+        if (!is_array($backoff_ms) || $backoff_ms === []) {
+            $backoff_ms = self::EMAIL_RETRY_BACKOFF_MS;
+        }
+
+        $last_error = '';
+
+        for ($attempt = 1; $attempt <= $max_attempts; $attempt++) {
+            if ($attempt > 1) {
+                $delay_ms = $this->getBackoffDelayMs($backoff_ms, $attempt - 1);
+                if ($delay_ms > 0) {
+                    usleep($delay_ms * 1000);
+                }
+            }
+
+            $sent = wp_mail($to, $subject, $message, $headers, $attachments);
+            if ($sent) {
+                return [
+                    'sent' => true,
+                    'attempts' => $attempt,
+                    'error' => '',
+                ];
+            }
+
+            $last_error = 'wp_mail() returned false';
+        }
+
+        return [
+            'sent' => false,
+            'attempts' => $max_attempts,
+            'error' => $last_error,
+        ];
+    }
+
+    /**
+     * Resolve backoff delay for a retry attempt (1-based retry index).
+     */
+    private function getBackoffDelayMs(array $backoff_ms, int $retry_index): int {
+        $index = max(0, $retry_index - 1);
+        $last = (int) end($backoff_ms);
+        $value = $backoff_ms[$index] ?? $last;
+        return max(0, (int) $value);
     }
 
     /**
