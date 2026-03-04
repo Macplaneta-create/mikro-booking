@@ -2,7 +2,7 @@
 
 **Data ostatniej aktualizacji:** 2026-03-04
 **Status:** ✅ **PRODUKCYJNY - v1.3.2**
-**Ostatnie zmiany:** Automatyczna wysyłka CSV z rezerwacjami
+**Ostatnie zmiany:** Sprint 1 Stabilność domknięty (Health Check + retry maili + locki Cron)
 
 ---
 
@@ -88,16 +88,18 @@
 
 #### Sprint 1 (stabilność, 4-6h)
 ```
-☐ Health Check (SMTP / WP-Cron / REST / zapis plików)
-☐ Retry + backoff dla notyfikacji email
-☐ Idempotencja triggerów cron
-☐ Smoke test E2E: backup/export + cron + confirm reservation
+✅ Health Check (SMTP / WP-Cron / REST / zapis plików)
+✅ Retry + backoff dla notyfikacji email
+✅ Idempotencja triggerów cron
+✅ Smoke test E2E: backup/export + cron + confirm reservation
 ```
 
 **Definition of Done:**
 - brak duplikatów przypomnień,
 - czytelna diagnostyka „dlaczego coś nie działa” w panelu,
 - green dla testów integracyjnych.
+
+**Status realizacji:** ✅ ZREALIZOWANE (commity: `a19aba3`, `32657fd`, `1e2191f`)
 
 ---
 

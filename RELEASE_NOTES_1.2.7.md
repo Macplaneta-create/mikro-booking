@@ -60,3 +60,16 @@ Release date: 2026-03-03
 - `0dcf58f` — docs: add QA checklist for 1.2.7 verification
 - `c8c770b` — chore: ignore local test cache and release artifacts
 - `4dd0243` — chore: stop tracking phpunit result cache
+
+## Stability Sprint 1 Update (2026-03-04)
+
+- Operational Health Check added in admin settings (`SMTP`, `WP-Cron`, `REST API`, temp storage permissions).
+- Email delivery hardened with retry + backoff in notification flows.
+- Cron idempotency improved with task-level locks to prevent concurrent duplicate executions.
+- Integration tests expanded and green after update.
+
+### Additional commits
+
+- `a19aba3` — feat(settings): add operational health check diagnostics
+- `32657fd` — feat(email): add retry with backoff for notification delivery
+- `1e2191f` — feat(cron): add task locks to prevent concurrent executions
