@@ -19,6 +19,7 @@ if (!defined('ABSPATH')) {
 }
 
 class IcalService {
+    private const GUEST_DOWNLOAD_TTL_SECONDS = 1209600; // 14 days
 
     /**
      * Directory for temporary iCal files
@@ -208,6 +209,49 @@ class IcalService {
             admin_url('admin-ajax.php?action=mikroplaneta_download_ical&reservation_id=' . $reservationId),
             'download_ical_' . $reservationId
         );
+    }
+
+    /**
+     * Get signed public download URL for guest-facing email CTA.
+     */
+    public function getGuestDownloadUrl(Reservation $reservation, Guest $guest): string {
+        $reservation_id = (int) $reservation->id;
+        $guest_id = (int) $guest->id;
+        $expires = time() + self::GUEST_DOWNLOAD_TTL_SECONDS;
+        $token = $this->buildGuestDownloadSignature($reservation_id, $guest_id, $expires);
+
+        return add_query_arg([
+            'action' => 'mikroplaneta_download_ical_guest',
+            'reservation_id' => $reservation_id,
+            'guest_id' => $guest_id,
+            'expires' => $expires,
+            'token' => $token,
+        ], admin_url('admin-ajax.php'));
+    }
+
+    /**
+     * Validate signed public download request.
+     */
+    public function isGuestDownloadRequestValid(int $reservation_id, int $guest_id, int $expires, string $token): bool {
+        if ($reservation_id <= 0 || $guest_id <= 0 || $expires <= 0 || $token === '') {
+            return false;
+        }
+
+        if ($expires < time()) {
+            return false;
+        }
+
+        $expected = $this->buildGuestDownloadSignature($reservation_id, $guest_id, $expires);
+        return hash_equals($expected, $token);
+    }
+
+    /**
+     * Build HMAC signature for guest download links.
+     */
+    private function buildGuestDownloadSignature(int $reservation_id, int $guest_id, int $expires): string {
+        $payload = $reservation_id . '|' . $guest_id . '|' . $expires;
+        $secret = wp_salt('mikroplaneta_booking_ical_download');
+        return hash_hmac('sha256', $payload, $secret);
     }
 
     /**

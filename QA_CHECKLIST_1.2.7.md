@@ -18,14 +18,23 @@ Commit checkpoint: e192711
 
 ## 3) Rezerwacja publiczna (flow użytkownika)
 
-- [ ] Utwórz nową rezerwację z frontu (status początkowy: pending/confirmed wg konfiguracji).
+- [ ] Utwórz nową rezerwację z frontu (status początkowy: pending).
 - [ ] Zweryfikuj poprawność walidacji dat i komunikatów formularza.
 - [ ] Potwierdź, że CAPTCHA działa zgodnie z ustawionym providerem (`none` / `recaptcha_v3` / `hcaptcha`).
+- [ ] Potwierdź, że email po utworzeniu rezerwacji zawiera załącznik `.ics`.
+- [ ] Potwierdź, że email po utworzeniu rezerwacji ma wyróżnioną sekcję "Dodaj do kalendarza" z instrukcją otwarcia `.ics`.
+- [ ] Kliknij przycisk "Dodaj do kalendarza" w mailu i potwierdź pobranie `.ics` bez logowania do WP admina.
+- [ ] Sprawdź `wp-content/debug.log`, że pojawia się wpis audytowy: `[MikroPlaneta Booking] iCal guest download` ze statusem `success`.
 
 ## 4) Rezerwacja w adminie
 
 - [ ] Otwórz nową rezerwację i wykonaj `Potwierdź`.
 - [ ] Potwierdź wysyłkę maila po potwierdzeniu rezerwacji.
+- [ ] Potwierdź, że mail `confirmed` zawiera załącznik `.ics`.
+- [ ] Potwierdź, że mail `confirmed` ma wyróżnioną sekcję "Dodaj do kalendarza".
+- [ ] Kliknij przycisk "Dodaj do kalendarza" w mailu `confirmed` i potwierdź pobranie `.ics`.
+- [ ] Sprawdź `wp-content/debug.log`, że kliknięcie z maila `confirmed` zapisuje wpis audytowy `iCal guest download`.
+- [ ] W historii zmian rezerwacji użyj filtra `iCal CTA` i potwierdź widoczny wpis kliknięcia.
 - [ ] Sprawdź wpisy w logu notyfikacji (`sent/failed`, template_name, guest, czas).
 
 ## 5) Przypomnienia mailowe

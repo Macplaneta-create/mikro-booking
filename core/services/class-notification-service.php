@@ -613,6 +613,7 @@ class NotificationService {
      * Get reservation confirmation template
      */
     private function getReservationConfirmationTemplate(Reservation $reservation, Guest $guest): string {
+        $calendar_download_url = $this->getIcalService()->getGuestDownloadUrl($reservation, $guest);
         ob_start();
         ?>
         <!DOCTYPE html>
@@ -625,6 +626,8 @@ class NotificationService {
                 .header { background: #0073aa; color: white; padding: 20px; text-align: center; }
                 .content { padding: 20px; background: #f9f9f9; }
                 .details { background: white; padding: 15px; margin: 15px 0; border-left: 4px solid #0073aa; }
+                .calendar-cta { background: #eff6ff; padding: 15px; margin: 15px 0; border-left: 4px solid #1d4ed8; }
+                .calendar-cta .button-like { display: inline-block; padding: 9px 14px; border-radius: 6px; background: #1d4ed8; color: #fff; text-decoration: none; font-weight: 600; }
                 .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
             </style>
         </head>
@@ -663,6 +666,13 @@ class NotificationService {
                         </p>
                     </div>
 
+                    <div class="calendar-cta">
+                        <p><strong><?php _e('Add this stay to your calendar', 'mikroplaneta-booking'); ?></strong></p>
+                        <p><?php _e('The .ics calendar file is attached to this email. Open the attachment to add your reservation to Google Calendar, Apple Calendar or Outlook.', 'mikroplaneta-booking'); ?></p>
+                        <a href="<?php echo esc_url($calendar_download_url); ?>" class="button-like"><?php _e('Add to calendar', 'mikroplaneta-booking'); ?></a>
+                        <p style="font-size: 12px; color: #666; margin-top: 10px;"><?php _e('If your email client does not show the button, open the .ics attachment manually.', 'mikroplaneta-booking'); ?></p>
+                    </div>
+
                     <p><?php _e('We look forward to welcoming you!', 'mikroplaneta-booking'); ?></p>
                 </div>
                 
@@ -681,6 +691,7 @@ class NotificationService {
      * Get reservation pending template (with deposit info)
      */
     private function getReservationPendingTemplate(Reservation $reservation, Guest $guest): string {
+        $calendar_download_url = $this->getIcalService()->getGuestDownloadUrl($reservation, $guest);
         // Get deposit settings
         $deposit_enabled = (bool) get_option('mikroplaneta_booking_deposit_enabled', false);
         $deposit_percent = (int) get_option('mikroplaneta_booking_deposit_percent', 30);
@@ -711,6 +722,8 @@ class NotificationService {
                 .content { padding: 20px; background: #f9f9f9; }
                 .details { background: white; padding: 15px; margin: 15px 0; border-left: 4px solid #f59e0b; }
                 .payment-info { background: #fef3c7; padding: 15px; margin: 15px 0; border-left: 4px solid #f59e0b; }
+                .calendar-cta { background: #eff6ff; padding: 15px; margin: 15px 0; border-left: 4px solid #1d4ed8; }
+                .calendar-cta .button-like { display: inline-block; padding: 9px 14px; border-radius: 6px; background: #1d4ed8; color: #fff; text-decoration: none; font-weight: 600; }
                 .footer { text-align: center; padding: 20px; font-size: 12px; color: #666; }
                 .highlight { font-weight: bold; color: #d97706; }
             </style>
@@ -801,6 +814,13 @@ class NotificationService {
                             <?php _e('By making this reservation, you have agreed to our', 'mikroplaneta-booking'); ?>
                             <a href="<?php echo esc_url(get_privacy_policy_url()); ?>"><?php _e('Privacy Policy', 'mikroplaneta-booking'); ?></a>.
                         </p>
+                    </div>
+
+                    <div class="calendar-cta">
+                        <p><strong><?php _e('Add this stay to your calendar', 'mikroplaneta-booking'); ?></strong></p>
+                        <p><?php _e('The .ics calendar file is attached to this email. Open the attachment to add your reservation to Google Calendar, Apple Calendar or Outlook.', 'mikroplaneta-booking'); ?></p>
+                        <a href="<?php echo esc_url($calendar_download_url); ?>" class="button-like"><?php _e('Add to calendar', 'mikroplaneta-booking'); ?></a>
+                        <p style="font-size: 12px; color: #666; margin-top: 10px;"><?php _e('If your email client does not show the button, open the .ics attachment manually.', 'mikroplaneta-booking'); ?></p>
                     </div>
 
                     <p><?php _e('If you have any questions, please contact us.', 'mikroplaneta-booking'); ?></p>

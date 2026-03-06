@@ -138,8 +138,10 @@ class Plugin {
         // Global REST API throttling
         (new \MikroPlaneta\Booking\Core\RestRateLimiter())->register();
 
-        // AJAX handlers for iCalendar download (admin only)
+        // AJAX handlers for iCalendar download
         add_action('wp_ajax_mikroplaneta_download_ical', [$this, 'handle_ical_download']);
+        add_action('wp_ajax_mikroplaneta_download_ical_guest', [$this, 'handle_ical_download_guest']);
+        add_action('wp_ajax_nopriv_mikroplaneta_download_ical_guest', [$this, 'handle_ical_download_guest']);
 
         // AJAX handlers for Backup & Export
         add_action('wp_ajax_mikroplaneta_export_csv', [$this, 'handle_export_csv']);
@@ -292,6 +294,154 @@ class Plugin {
             $ical_service->sendDownload($filepath, $filename);
         } else {
             wp_die('Failed to generate iCalendar file', 'Error', ['response' => 500]);
+        }
+    }
+
+    /**
+     * Handle public iCalendar download for guests via signed URL
+     */
+    public function handle_ical_download_guest(): void {
+        $reservation_id = isset($_GET['reservation_id']) ? intval($_GET['reservation_id']) : 0;
+        $guest_id = isset($_GET['guest_id']) ? intval($_GET['guest_id']) : 0;
+        $expires = isset($_GET['expires']) ? intval($_GET['expires']) : 0;
+        $token = isset($_GET['token']) ? sanitize_text_field((string) $_GET['token']) : '';
+
+        if ($reservation_id <= 0 || $guest_id <= 0 || $expires <= 0 || $token === '') {
+            $this->log_ical_guest_download_event('rejected', [
+                'reservation_id' => $reservation_id,
+                'guest_id' => $guest_id,
+                'reason' => 'invalid_params',
+            ]);
+            wp_die('Invalid iCalendar request', 'Error', ['response' => 400]);
+        }
+
+        $ical_service = new \MikroPlaneta\Booking\Core\Services\IcalService();
+        if (!$ical_service->isGuestDownloadRequestValid($reservation_id, $guest_id, $expires, $token)) {
+            $this->log_ical_guest_download_event('rejected', [
+                'reservation_id' => $reservation_id,
+                'guest_id' => $guest_id,
+                'reason' => 'invalid_or_expired_signature',
+            ]);
+            wp_die('Invalid or expired iCalendar link', 'Error', ['response' => 403]);
+        }
+
+        global $wpdb;
+        $reservations_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('reservations');
+        $guests_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('guests');
+
+        $reservation_data = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$reservations_table} WHERE id = %d",
+            $reservation_id
+        ), ARRAY_A);
+
+        if (!$reservation_data) {
+            $this->log_ical_guest_download_event('rejected', [
+                'reservation_id' => $reservation_id,
+                'guest_id' => $guest_id,
+                'reason' => 'reservation_not_found',
+            ]);
+            wp_die('Reservation not found', 'Error', ['response' => 404]);
+        }
+
+        if (intval($reservation_data['guest_id']) !== $guest_id) {
+            $this->log_ical_guest_download_event('rejected', [
+                'reservation_id' => $reservation_id,
+                'guest_id' => $guest_id,
+                'reason' => 'guest_mismatch',
+            ]);
+            wp_die('Invalid reservation guest mapping', 'Error', ['response' => 403]);
+        }
+
+        $guest_data = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$guests_table} WHERE id = %d",
+            $guest_id
+        ), ARRAY_A);
+
+        if (!$guest_data) {
+            $this->log_ical_guest_download_event('rejected', [
+                'reservation_id' => $reservation_id,
+                'guest_id' => $guest_id,
+                'reason' => 'guest_not_found',
+            ]);
+            wp_die('Guest not found', 'Error', ['response' => 404]);
+        }
+
+        $reservation = new \MikroPlaneta\Booking\Core\Models\Reservation($reservation_data);
+        $guest = new \MikroPlaneta\Booking\Core\Models\Guest($guest_data);
+
+        $ics_content = $ical_service->generateIcs($reservation, $guest);
+        $filename = 'rezerwacja-' . $reservation_id . '.ics';
+
+        $filepath = $ical_service->saveIcsFile($ics_content, $reservation_id);
+        if ($filepath) {
+            $this->log_ical_guest_download_event('success', [
+                'reservation_id' => $reservation_id,
+                'guest_id' => $guest_id,
+                'reason' => '',
+            ]);
+            $ical_service->sendDownload($filepath, $filename);
+        }
+
+        $this->log_ical_guest_download_event('failed', [
+            'reservation_id' => $reservation_id,
+            'guest_id' => $guest_id,
+            'reason' => 'file_generation_failed',
+        ]);
+
+        wp_die('Failed to generate iCalendar file', 'Error', ['response' => 500]);
+    }
+
+    /**
+     * Lightweight audit log for guest iCal link usage.
+     */
+    private function log_ical_guest_download_event(string $status, array $context): void {
+        $payload = [
+            'status' => $status,
+            'reservation_id' => intval($context['reservation_id'] ?? 0),
+            'guest_id' => intval($context['guest_id'] ?? 0),
+            'reason' => sanitize_text_field((string) ($context['reason'] ?? '')),
+            'ip' => sanitize_text_field((string) ($_SERVER['REMOTE_ADDR'] ?? '')),
+            'user_agent' => sanitize_text_field((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')),
+        ];
+
+        // Mirror CTA usage in reservation changes log so it is visible in admin history panel.
+        $this->log_ical_guest_download_to_changes_log(
+            (int) $payload['reservation_id'],
+            (string) $payload['status'],
+            (string) $payload['reason'],
+            (int) $payload['guest_id']
+        );
+
+        error_log('[MikroPlaneta Booking] iCal guest download: ' . wp_json_encode($payload));
+    }
+
+    /**
+     * Write iCal CTA events to reservation changes log for admin visibility.
+     */
+    private function log_ical_guest_download_to_changes_log(
+        int $reservation_id,
+        string $status,
+        string $reason,
+        int $guest_id
+    ): void {
+        if ($reservation_id <= 0) {
+            return;
+        }
+
+        try {
+            $repository = new \MikroPlaneta\Booking\Core\Repositories\ChangesLogRepository();
+            $logger = new \MikroPlaneta\Booking\Core\Services\LoggerService($repository);
+
+            $logger->log($reservation_id, 'updated', [], [
+                'event' => 'ical_guest_download',
+                'status' => $status,
+                'reason' => $reason,
+                'guest_id' => $guest_id,
+                'source' => 'email_cta',
+                'logged_at' => current_time('mysql'),
+            ]);
+        } catch (\Throwable $e) {
+            error_log('[MikroPlaneta Booking] Failed to persist iCal CTA log to changes_log: ' . $e->getMessage());
         }
     }
     

@@ -21,6 +21,7 @@ interface BookingHistoryProps {
 
 const BookingHistory: React.FC<BookingHistoryProps> = ({ reservationId }) => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
+    const [filter, setFilter] = useState<'all' | 'ical'>('all');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -53,12 +54,36 @@ const BookingHistory: React.FC<BookingHistoryProps> = ({ reservationId }) => {
         return <div className="p-4 text-center text-gray-500">Brak historii zmian dla tej rezerwacji.</div>;
     }
 
+    const isIcalCtaLog = (log: LogEntry) => {
+        return log.change_type === 'updated' && log.new_value?.event === 'ical_guest_download';
+    };
+
+    const filteredLogs = filter === 'ical'
+        ? logs.filter((log) => isIcalCtaLog(log))
+        : logs;
+
     const formatChangeValue = (val: any) => {
         if (!val) return '-';
         if (typeof val === 'object') {
             return JSON.stringify(val, null, 2);
         }
         return String(val);
+    };
+
+    const getIcalStatusBadge = (statusRaw: any) => {
+        const status = String(statusRaw || '').toLowerCase();
+
+        if (status === 'success') {
+            return <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 font-semibold">success</span>;
+        }
+        if (status === 'rejected') {
+            return <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 font-semibold">rejected</span>;
+        }
+        if (status === 'failed') {
+            return <span className="inline-flex items-center rounded-full bg-red-100 text-red-700 px-2 py-0.5 font-semibold">failed</span>;
+        }
+
+        return <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-700 px-2 py-0.5 font-semibold">{status || 'unknown'}</span>;
     };
 
     const getActionLabel = (type: string) => {
@@ -74,14 +99,40 @@ const BookingHistory: React.FC<BookingHistoryProps> = ({ reservationId }) => {
     };
 
     return (
-        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-            {logs.map((log) => (
+        <div className="space-y-3">
+            <div className="flex items-center gap-2">
+                <button
+                    type="button"
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium border ${filter === 'all' ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700 border-gray-300'}`}
+                    onClick={() => setFilter('all')}
+                >
+                    Wszystkie ({logs.length})
+                </button>
+                <button
+                    type="button"
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium border ${filter === 'ical' ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-gray-700 border-gray-300'}`}
+                    onClick={() => setFilter('ical')}
+                >
+                    iCal CTA ({logs.filter((log) => isIcalCtaLog(log)).length})
+                </button>
+            </div>
+
+            {filteredLogs.length === 0 && (
+                <div className="p-3 text-center text-gray-500 bg-gray-50 rounded-lg text-sm">
+                    Brak wpisów dla wybranego filtra.
+                </div>
+            )}
+
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+            {filteredLogs.map((log) => (
                 <div key={log.id} className="relative pl-6 pb-4 border-l-2 border-gray-200 last:border-l-0 last:pb-0">
                     <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-brand-100 border-2 border-brand-500"></div>
 
                     <div className="bg-gray-50 rounded-lg p-3 text-sm">
                         <div className="flex justify-between items-start mb-2">
-                            <span className="font-bold text-gray-900">{getActionLabel(log.change_type)}</span>
+                            <span className="font-bold text-gray-900">
+                                {isIcalCtaLog(log) ? 'Kliknięcie: Dodaj do kalendarza (iCal)' : getActionLabel(log.change_type)}
+                            </span>
                             <span className="text-gray-500 text-xs flex items-center gap-1">
                                 <Clock size={12} />
                                 {format(new Date(log.created_at), 'd MMM HH:mm', { locale: pl })}
@@ -94,7 +145,16 @@ const BookingHistory: React.FC<BookingHistoryProps> = ({ reservationId }) => {
                         </div>
 
                         {/* Simple diff visualization */}
-                        {(log.change_type === 'updated' || log.change_type === 'status_changed') && (
+                        {isIcalCtaLog(log) && (
+                            <div className="bg-white border border-blue-200 rounded p-2 text-xs mt-2">
+                                <div className="flex items-center gap-2"><span className="text-gray-500">Status:</span> {getIcalStatusBadge(log.new_value?.status)}</div>
+                                <div><span className="text-gray-500">Guest ID:</span> <span className="font-mono">{formatChangeValue(log.new_value?.guest_id)}</span></div>
+                                <div><span className="text-gray-500">Source:</span> <span className="font-mono">{formatChangeValue(log.new_value?.source)}</span></div>
+                                {log.new_value?.reason && <div><span className="text-gray-500">Reason:</span> <span className="text-amber-700">{formatChangeValue(log.new_value?.reason)}</span></div>}
+                            </div>
+                        )}
+
+                        {(log.change_type === 'updated' || log.change_type === 'status_changed') && !isIcalCtaLog(log) && (
                             <div className="bg-white border border-gray-200 rounded p-2 text-xs font-mono mt-2">
                                 {Object.keys(log.new_value || {}).map(key => (
                                     <div key={key} className="flex gap-2">
@@ -119,6 +179,7 @@ const BookingHistory: React.FC<BookingHistoryProps> = ({ reservationId }) => {
                     </div>
                 </div>
             ))}
+            </div>
         </div>
     );
 };
