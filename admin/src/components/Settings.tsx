@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Save, AlertCircle, Building2, Mail, Globe, Shield, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Calendar, Clock, Save, AlertCircle, Building2, Mail, Globe, Shield, RefreshCw, Link, CheckCircle, XCircle } from 'lucide-react';
 import { SettingsAPI, RoomsAPI, type Room } from '../services/api';
 
 interface Page {
@@ -84,9 +84,38 @@ interface HealthCheckItem {
     details?: Record<string, unknown>;
 }
 
+interface GcalCalendar {
+    id: string;
+    summary: string;
+    primary: boolean;
+}
+
+interface GcalStatus {
+    connected: boolean;
+    enabled: boolean;
+    has_credentials: boolean;
+    email: string;
+    calendar_id: string;
+    redirect_uri: string;
+    calendars: GcalCalendar[];
+}
+
 const Settings: React.FC = () => {
     const [licenseKey, setLicenseKey] = useState('');
     const [status, setStatus] = useState<'inactive' | 'active'>('inactive');
+
+    // Google Calendar
+    const [gcal, setGcal] = useState<GcalStatus>({
+        connected: false, enabled: false, has_credentials: false,
+        email: '', calendar_id: 'primary', redirect_uri: '', calendars: [],
+    });
+    const [gcalClientId, setGcalClientId]         = useState('');
+    const [gcalClientSecret, setGcalClientSecret] = useState('');
+    const [gcalSaving, setGcalSaving]             = useState(false);
+    const [gcalSyncing, setGcalSyncing]           = useState(false);
+    const [gcalMsg, setGcalMsg]                   = useState<{type:'ok'|'err'; text:string}|null>(null);
+    const [gcalLoading, setGcalLoading]           = useState(false);
+    const gcalPollRef                             = useRef<ReturnType<typeof setInterval>|null>(null);
     const [settings, setSettings] = useState<PluginSettings>({
         hotel_name: 'Mój Hotel',
         check_in_time: '14:00',
@@ -159,6 +188,17 @@ const Settings: React.FC = () => {
         loadNotificationLog();
         loadPages();
         loadHealthCheck();
+        loadGcalStatus();
+
+        // Check for OAuth callback URL param
+        const urlParams = new URLSearchParams(window.location.search);
+        const code  = urlParams.get('code');
+        const state = urlParams.get('state');
+        if (code && state) {
+            handleGcalOAuthCallback(code, state);
+        }
+
+        return () => { if (gcalPollRef.current) clearInterval(gcalPollRef.current); };
     }, []);
 
     const loadHealthCheck = async () => {
@@ -427,6 +467,131 @@ const Settings: React.FC = () => {
             (acc, [token, value]) => acc.split(token).join(value),
             template.body || ''
         );
+    };
+
+    /* ================================================================== */
+    /*  Google Calendar handlers                                            */
+    /* ================================================================== */
+
+    const gcalApi = (window as any).mikroplanetaBooking?.apiUrl || '/wp-json/mikroplaneta/v1';
+    const gcalNonce = () => (window as any).mikroplanetaBooking?.nonce || '';
+
+    const loadGcalStatus = async () => {
+        setGcalLoading(true);
+        try {
+            const res = await fetch(`${gcalApi}/gcal/status`, {
+                headers: { 'X-WP-Nonce': gcalNonce() },
+            });
+            const json = await res.json();
+            if (json.success) setGcal(json.data as GcalStatus);
+        } catch (e) {
+            console.error('GCal status load failed', e);
+        } finally {
+            setGcalLoading(false);
+        }
+    };
+
+    const handleGcalConnect = async () => {
+        setGcalSaving(true);
+        setGcalMsg(null);
+        try {
+            // 1. Save credentials
+            await fetch(`${gcalApi}/gcal/settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': gcalNonce() },
+                body: JSON.stringify({ client_id: gcalClientId, client_secret: gcalClientSecret }),
+            });
+            // 2. Get auth URL and open popup
+            const res  = await fetch(`${gcalApi}/gcal/auth-url`, { headers: { 'X-WP-Nonce': gcalNonce() } });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message || 'Failed to get auth URL');
+            // 3. Open OAuth popup and wait for redirect with code+state
+            window.location.href = json.data.auth_url;
+        } catch (e: any) {
+            setGcalMsg({ type: 'err', text: e.message || 'Błąd konfiguracji' });
+        } finally {
+            setGcalSaving(false);
+        }
+    };
+
+    const handleGcalOAuthCallback = async (code: string, state: string) => {
+        setGcalLoading(true);
+        setGcalMsg(null);
+        try {
+            const res  = await fetch(`${gcalApi}/gcal/callback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': gcalNonce() },
+                body: JSON.stringify({ code, state }),
+            });
+            const json = await res.json();
+            if (json.success) {
+                setGcalMsg({ type: 'ok', text: json.data.message });
+                await loadGcalStatus();
+                // Clean up URL
+                const url = new URL(window.location.href);
+                url.searchParams.delete('code');
+                url.searchParams.delete('state');
+                window.history.replaceState({}, '', url.toString());
+            } else {
+                setGcalMsg({ type: 'err', text: json.message || 'Błąd autoryzacji' });
+            }
+        } catch (e: any) {
+            setGcalMsg({ type: 'err', text: e.message || 'Błąd autoryzacji' });
+        } finally {
+            setGcalLoading(false);
+        }
+    };
+
+    const handleGcalSaveSetting = async (key: 'calendar_id' | 'enabled', value: string | boolean) => {
+        try {
+            const res  = await fetch(`${gcalApi}/gcal/settings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': gcalNonce() },
+                body: JSON.stringify({ [key]: value }),
+            });
+            const json = await res.json();
+            if (json.success) {
+                setGcal(prev => ({ ...prev, [key]: value }));
+                setGcalMsg({ type: 'ok', text: 'Zapisano.' });
+                setTimeout(() => setGcalMsg(null), 2000);
+            }
+        } catch (e: any) {
+            setGcalMsg({ type: 'err', text: e.message || 'Błąd zapisu' });
+        }
+    };
+
+    const handleGcalSyncAll = async () => {
+        setGcalSyncing(true);
+        setGcalMsg(null);
+        try {
+            const res  = await fetch(`${gcalApi}/gcal/sync-all`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': gcalNonce() },
+            });
+            const json = await res.json();
+            setGcalMsg({ type: json.success ? 'ok' : 'err', text: json.data?.message || json.message || 'Błąd synchronizacji' });
+        } catch (e: any) {
+            setGcalMsg({ type: 'err', text: e.message || 'Błąd synchronizacji' });
+        } finally {
+            setGcalSyncing(false);
+        }
+    };
+
+    const handleGcalDisconnect = async () => {
+        if (!window.confirm('Czy na pewno chcesz rozłączyć Google Calendar? Przyszłe rezerwacje nie będą synchronizowane.')) return;
+        try {
+            await fetch(`${gcalApi}/gcal/disconnect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': gcalNonce() },
+            });
+            setGcal(prev => ({ ...prev, connected: false, enabled: false, email: '', calendars: [] }));
+            setGcalClientId('');
+            setGcalClientSecret('');
+            setGcalMsg({ type: 'ok', text: 'Rozłączono konto Google.' });
+            await loadGcalStatus();
+        } catch (e: any) {
+            setGcalMsg({ type: 'err', text: e.message || 'Błąd rozłączania' });
+        }
     };
 
     return (
@@ -1541,48 +1706,148 @@ const Settings: React.FC = () => {
                 <p className="text-xs text-gray-400 mt-2">Klucz otrzymasz po zakupie na mikroplaneta.pl</p>
             </div>
 
-            {/* Payment Settings Migration */}
+
+            {/* ===== GOOGLE CALENDAR INTEGRATION ===== */}
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Aktualizacja Bazy Danych</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                    Jeśli po aktualizacji pluginu brakuje ustawień płatności, kliknij przycisk poniżej aby dodać nowe opcje do bazy danych.
+                <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                    <Calendar className="text-brand-600" size={20} />
+                    Google Calendar
+                </h3>
+                <p className="text-gray-600 text-sm mb-5">
+                    Każda rezerwacja automatycznie pojawia się w Twoim kalendarzu Google – idealny backup na wypadek awarii strony.
                 </p>
-                <button
-                    onClick={async () => {
-                        try {
-                            const bookingData = (window as any).mikroplanetaBooking || {};
-                            const response = await fetch(`${bookingData.apiUrl || '/wp-json/mikroplaneta/v1'}/settings/force-add-payment-options`, {
-                                method: 'POST',
-                                headers: {
-                                    'X-WP-Nonce': bookingData.nonce || '',
-                                    'Content-Type': 'application/json',
-                                },
-                            });
-                            const data = await response.json();
-                            if (data.success) {
-                                alert('✅ Dodano ustawienia płatności!\n\n' + JSON.stringify(data.data, null, 2));
-                            } else {
-                                alert('❌ Błąd: ' + (data.message || 'Nieznany błąd'));
-                            }
-                        } catch (error: any) {
-                            alert('❌ Błąd: ' + (error.message || 'Nieznany błąd'));
-                        }
-                    }}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition flex items-center gap-2"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="17 8 12 3 7 8"/>
-                        <line x1="12" y1="3" x2="12" y2="15"/>
-                    </svg>
-                    Dodaj ustawienia płatności
-                </button>
-                <p className="text-xs text-gray-400 mt-2">Uruchom tylko raz po aktualizacji pluginu</p>
+
+                {gcalMsg && (
+                    <div className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg mb-4 ${
+                        gcalMsg.type === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                    }`}>
+                        {gcalMsg.type === 'ok' ? <CheckCircle size={16}/> : <XCircle size={16}/>}
+                        {gcalMsg.text}
+                    </div>
+                )}
+
+                {gcalLoading ? (
+                    <p className="text-sm text-gray-500">Ładowanie statusu...</p>
+                ) : gcal.connected ? (
+                    // ── STATE B: Connected ──
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-sm">
+                            <CheckCircle size={16} className="text-green-500 shrink-0" />
+                            <span className="font-medium text-gray-900">Połączony</span>
+                            {gcal.email && <span className="text-gray-500">({gcal.email})</span>}
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Kalendarz docelowy</label>
+                            <select
+                                value={gcal.calendar_id}
+                                onChange={(e) => handleGcalSaveSetting('calendar_id', e.target.value)}
+                                className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                            >
+                                {gcal.calendars.map(c => (
+                                    <option key={c.id} value={c.id}>{c.summary}{c.primary ? ' (główny)' : ''}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <input
+                                type="checkbox"
+                                id="gcal_enabled"
+                                checked={gcal.enabled}
+                                onChange={(e) => handleGcalSaveSetting('enabled', e.target.checked)}
+                                className="w-4 h-4 rounded text-brand-600 cursor-pointer"
+                            />
+                            <label htmlFor="gcal_enabled" className="text-sm font-medium text-gray-700 cursor-pointer">
+                                Włącz automatyczną synchronizację rezerwacji
+                            </label>
+                        </div>
+
+                        <div className="flex flex-wrap gap-3 pt-2">
+                            <button
+                                onClick={handleGcalSyncAll}
+                                disabled={gcalSyncing || !gcal.enabled}
+                                className="bg-brand-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition disabled:opacity-50 flex items-center gap-2"
+                            >
+                                <RefreshCw size={14} className={gcalSyncing ? 'animate-spin' : ''}/>
+                                {gcalSyncing ? 'Synchronizuję...' : 'Synchronizuj wszystkie rezerwacje'}
+                            </button>
+                            <button
+                                onClick={handleGcalDisconnect}
+                                className="border border-gray-300 text-gray-600 px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition"
+                            >
+                                Rozłącz konto
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    // ── STATE A: Setup wizard ──
+                    <div className="space-y-5">
+                        {/* Step-by-step instructions */}
+                        <details className="border border-blue-200 rounded-xl overflow-hidden">
+                            <summary className="flex items-center gap-2 px-4 py-3 bg-blue-50 cursor-pointer select-none text-sm font-semibold text-blue-800">
+                                <Link size={14}/> Instrukcja konfiguracji Google Cloud Console
+                            </summary>
+                            <div className="px-4 py-4 text-sm text-gray-700 space-y-3">
+                                <p className="text-gray-500 text-xs">Pełna dokumentacja: <code>docs/GOOGLE_CALENDAR_SETUP.md</code></p>
+                                <ol className="list-decimal list-inside space-y-2">
+                                    <li>Otwórz <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" className="text-blue-600 underline">console.cloud.google.com</a> i utwórz nowy projekt.</li>
+                                    <li>W menu wybierz <strong>API i usługi → Biblioteka</strong>, wyszukaj <strong>Google Calendar API</strong> i kliknij <strong>Włącz</strong>.</li>
+                                    <li>Przejdź do <strong>API i usługi → Ekran zgody OAuth</strong>. Wybierz typ <strong>Zewnętrzny</strong>, uzupełnij nazwa aplikacji i dodaj swój email jako <em>Użytkownik testowy</em>.</li>
+                                    <li>Przejdź do <strong>API i usługi → Dane logowania → Utwórz dane logowania → OAuth 2.0 Client ID</strong>. Typ: <strong>Aplikacja internetowa</strong>.</li>
+                                    <li>
+                                        W sekcji <strong>Autoryzowane URI przekierowania</strong> dodaj poniższy adres (skopiuj dokładnie):
+                                        <div className="mt-1 flex items-center gap-2">
+                                            <code className="bg-gray-100 border border-gray-300 rounded px-2 py-1 text-xs flex-1 break-all">{gcal.redirect_uri || '(ładowanie...)'}</code>
+                                            <button
+                                                onClick={() => { navigator.clipboard.writeText(gcal.redirect_uri); setGcalMsg({type:'ok',text:'Skopiowano Redirect URI!'}); setTimeout(()=>setGcalMsg(null),3000); }}
+                                                className="text-xs border border-gray-300 px-2 py-1 rounded hover:bg-gray-50 transition whitespace-nowrap"
+                                            >Kopiuj</button>
+                                        </div>
+                                    </li>
+                                    <li>Po zapisaniu skopiuj <strong>Client ID</strong> i <strong>Client Secret</strong> i wklej je poniżej.</li>
+                                </ol>
+                            </div>
+                        </details>
+
+                        <div className="grid grid-cols-1 gap-3">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
+                                <input
+                                    type="text"
+                                    value={gcalClientId}
+                                    onChange={e => setGcalClientId(e.target.value)}
+                                    placeholder="123456789-abc....apps.googleusercontent.com"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-mono"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+                                <input
+                                    type="password"
+                                    value={gcalClientSecret}
+                                    onChange={e => setGcalClientSecret(e.target.value)}
+                                    placeholder="GOCSPX-..."
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-mono"
+                                />
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={handleGcalConnect}
+                            disabled={gcalSaving || !gcalClientId || !gcalClientSecret}
+                            className="bg-brand-600 text-white px-6 py-2 rounded-lg font-medium text-sm hover:bg-brand-700 transition disabled:opacity-50 flex items-center gap-2"
+                        >
+                            <Calendar size={15}/>
+                            {gcalSaving ? 'Zapisywanie...' : 'Zapisz i połącz z Google'}
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm opacity-50 pointer-events-none">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Integracje (Wkrótce)</h3>
-                <p className="text-gray-500">Google Calendar, Booking.com, Airbnb</p>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Inne Integracje (Wkrótce)</h3>
+                <p className="text-gray-500">Booking.com, Airbnb, Channel Manager</p>
             </div>
         </div>
     );

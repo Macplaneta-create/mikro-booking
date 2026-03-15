@@ -319,6 +319,7 @@ class Admin {
             'nonce' => wp_create_nonce('wp_rest'),
             'currentPage' => isset($_GET['page']) ? sanitize_text_field($_GET['page']) : '',
             'version' => MIKROPLANETA_BOOKING_VERSION,
+            'isOnboardingCompleted' => (bool) get_option('mikroplaneta_onboarding_completed', false),
         ]);
         
     }

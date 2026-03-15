@@ -80,6 +80,9 @@ class SettingsController extends RestController {
                     'csv_export_email' => ['type' => 'string', 'format' => 'email'],
                     'csv_export_enabled' => ['type' => 'boolean'],
                     'csv_export_time' => ['type' => 'string', 'pattern' => '^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$'],
+                    
+                    // Onboarding
+                    'onboarding_completed' => ['type' => 'boolean'],
                 ],
             ],
         ]);
@@ -122,14 +125,6 @@ class SettingsController extends RestController {
             ],
         ]);
 
-        // Force add payment options (for migration)
-        register_rest_route($this->namespace, '/' . $this->rest_base . '/force-add-payment-options', [
-            [
-                'methods' => 'POST',
-                'callback' => [$this, 'force_add_payment_options'],
-                'permission_callback' => [$this, 'check_permission'],
-            ],
-        ]);
 
         // Notifications delivery log
         register_rest_route($this->namespace, '/' . $this->rest_base . '/notifications-log', [
@@ -236,6 +231,9 @@ class SettingsController extends RestController {
             'csv_export_email' => (string) get_option('mikroplaneta_csv_export_email', get_option('admin_email')),
             'csv_export_enabled' => (bool) get_option('mikroplaneta_csv_export_enabled', false),
             'csv_export_time' => (string) get_option('mikroplaneta_csv_export_time', '08:00'),
+            
+            // Onboarding
+            'onboarding_completed' => (bool) get_option('mikroplaneta_onboarding_completed', false),
         ];
         
         return $this->success($settings);
@@ -389,6 +387,11 @@ class SettingsController extends RestController {
         if (isset($params['csv_export_time'])) {
             update_option('mikroplaneta_csv_export_time', sanitize_text_field($params['csv_export_time']));
         }
+        
+        // Onboarding
+        if (isset($params['onboarding_completed'])) {
+            update_option('mikroplaneta_onboarding_completed', (bool) $params['onboarding_completed']);
+        }
 
         // Reschedule related cron events when delivery settings change
         if (class_exists('\\MikroPlaneta\\Booking\\Core\\CronHandler')) {
@@ -411,7 +414,7 @@ class SettingsController extends RestController {
             if ($task === 'reminders') {
                 do_action('mikroplaneta_booking_send_reminders');
                 return $this->success([
-                    'message' => 'Uruchomiono wysyłkę przypomnień (check-in / check-out). Sprawdź log powiadomień i skrzynkę email.',
+                    'message' => __('Reminders sending triggered (check-in / check-out). Check notification log and email inbox.', 'mikroplaneta-booking'),
                     'task' => 'reminders',
                 ]);
             }
@@ -420,7 +423,7 @@ class SettingsController extends RestController {
             do_action('mikroplaneta_booking_expire_reservations');
 
             return $this->success([
-                'message' => 'Uruchomiono sprawdzanie wygasania rezerwacji. Sprawdź logi lub kalendarz.',
+                'message' => __('Reservation expiry check triggered. Check logs or calendar.', 'mikroplaneta-booking'),
                 'task' => 'expiry',
             ]);
         } catch (\Exception $e) {
@@ -470,14 +473,14 @@ class SettingsController extends RestController {
         $has_phpmailer_hook = function_exists('has_action') && has_action('phpmailer_init');
 
         $status = 'ok';
-        $message = 'Transport poczty wygląda poprawnie.';
+        $message = __('Mail transport looks correct.', 'mikroplaneta-booking');
 
         if (!$has_wp_mail || !$email_valid) {
             $status = 'error';
-            $message = 'Brak poprawnej konfiguracji podstawowej poczty (wp_mail/admin_email).';
+            $message = __('No correct basic email configuration (wp_mail/admin_email).', 'mikroplaneta-booking');
         } elseif (!$has_phpmailer_hook) {
             $status = 'warning';
-            $message = 'Nie wykryto niestandardowego transportu SMTP. Sprawdź konfigurację pluginu SMTP.';
+            $message = __('No custom SMTP transport detected. Check SMTP plugin configuration.', 'mikroplaneta-booking');
         }
 
         return [
@@ -569,11 +572,11 @@ class SettingsController extends RestController {
         $upload_error = (string) ($upload_dir['error'] ?? '');
 
         $status = 'ok';
-        $message = 'Katalogi tymczasowe są gotowe do zapisu.';
+        $message = __('Temporary directories are ready for writing.', 'mikroplaneta-booking');
 
         if ($upload_error !== '') {
             $status = 'error';
-            $message = 'WordPress zgłasza błąd katalogu upload.';
+            $message = __('WordPress reports an upload directory error.', 'mikroplaneta-booking');
         }
 
         $upload_writable = is_dir((string) ($upload_dir['basedir'] ?? '')) && is_writable((string) ($upload_dir['basedir'] ?? ''));
@@ -582,7 +585,7 @@ class SettingsController extends RestController {
 
         if ($status !== 'error' && (!$upload_writable || !$base_writable)) {
             $status = 'error';
-            $message = 'Brak uprawnień zapisu do katalogów tymczasowych pluginu.';
+            $message = __('No write permissions to plugin temporary directories.', 'mikroplaneta-booking');
         }
 
         return [
@@ -615,14 +618,14 @@ class SettingsController extends RestController {
     public function update_email_templates(WP_REST_Request $request): WP_REST_Response {
         $templates = $request->get_param('templates');
         if (!is_array($templates)) {
-            return $this->error('Nieprawidłowe dane templates', 400);
+            return $this->error(__('Invalid templates data', 'mikroplaneta-booking'), 400);
         }
 
         $service = new NotificationService();
         $service->saveTemplateDefinitions($templates);
 
         return $this->success([
-            'message' => 'Szablony wiadomości zapisane.',
+            'message' => __('Email templates saved.', 'mikroplaneta-booking'),
             'templates' => $service->getTemplateDefinitions(),
         ]);
     }
@@ -645,17 +648,17 @@ class SettingsController extends RestController {
         $to_email = sanitize_email((string) $request->get_param('to_email'));
 
         if (!$to_email || !is_email($to_email)) {
-            return $this->error('Nieprawidłowy adres email', 400);
+            return $this->error(__('Invalid email address', 'mikroplaneta-booking'), 400);
         }
 
         $service = new NotificationService();
         $sent = $service->sendTestEmail($template_key, $to_email);
 
         if (!$sent) {
-            return $this->error('Nie udało się wysłać maila testowego', 500);
+            return $this->error(__('Failed to send test email', 'mikroplaneta-booking'), 500);
         }
 
-        return $this->success(['message' => 'Wysłano mail testowy.']);
+        return $this->success(['message' => __('Test email sent.', 'mikroplaneta-booking')]);
     }
 
     /**
@@ -668,7 +671,7 @@ class SettingsController extends RestController {
         update_option('mikroplaneta_booking_privacy_policy_page_id', $privacy_policy_page_id);
         update_option('mikroplaneta_booking_terms_page_id', $terms_page_id);
 
-        return $this->success(['message' => 'Ustawienia RODO zapisane']);
+        return $this->success(['message' => __('GDPR settings saved', 'mikroplaneta-booking')]);
     }
 
     /**
@@ -683,47 +686,6 @@ class SettingsController extends RestController {
         return $this->success($settings);
     }
 
-    /**
-     * Force add payment options to database
-     */
-    public function force_add_payment_options(WP_REST_Request $request): WP_REST_Response {
-        // Check if already added
-        if (get_option('mikroplaneta_booking_payment_options_added')) {
-            return $this->success([
-                'already_added' => true,
-                'message' => 'Ustawienia płatności zostały już dodane.',
-                'options' => [
-                    'deposit_enabled' => get_option('mikroplaneta_booking_deposit_enabled'),
-                    'deposit_percent' => get_option('mikroplaneta_booking_deposit_percent'),
-                    'payment_account' => get_option('mikroplaneta_booking_payment_account'),
-                    'payment_bank_name' => get_option('mikroplaneta_booking_payment_bank_name'),
-                    'payment_additional_info' => get_option('mikroplaneta_booking_payment_additional_info'),
-                ]
-            ]);
-        }
-
-        // Add payment options
-        add_option('mikroplaneta_booking_deposit_enabled', false);
-        add_option('mikroplaneta_booking_deposit_percent', 30);
-        add_option('mikroplaneta_booking_payment_account', '');
-        add_option('mikroplaneta_booking_payment_bank_name', '');
-        add_option('mikroplaneta_booking_payment_additional_info', '');
-
-        // Mark as added
-        update_option('mikroplaneta_booking_payment_options_added', true);
-
-        return $this->success([
-            'already_added' => false,
-            'message' => 'Dodano ustawienia płatności.',
-            'options' => [
-                'deposit_enabled' => get_option('mikroplaneta_booking_deposit_enabled'),
-                'deposit_percent' => get_option('mikroplaneta_booking_deposit_percent'),
-                'payment_account' => get_option('mikroplaneta_booking_payment_account'),
-                'payment_bank_name' => get_option('mikroplaneta_booking_payment_bank_name'),
-                'payment_additional_info' => get_option('mikroplaneta_booking_payment_additional_info'),
-            ]
-        ]);
-    }
 
     /**
      * Check if user has permission to manage settings

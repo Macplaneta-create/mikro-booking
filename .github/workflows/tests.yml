@@ -150,7 +150,7 @@ jobs:
       
       - name: Check required files
         run: |
-          files=("README.md" "QUICK_START.md" "PRODUCTION_READY.md" "SECURITY_AUDIT.md")
+          files=("README.md" "SZYBKI_START.md" "PRODUCTION_READY.md" "ROADMAP.md")
           for f in "${files[@]}"; do
             if [[ ! -f "$f" ]]; then
               echo "❌ Missing: $f"

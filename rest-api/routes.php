@@ -137,6 +137,11 @@ function register_routes(): void {
     // Backup Controller
     $backup_controller = new \MikroPlaneta\Booking\RestApi\Controllers\BackupController();
     $backup_controller->register_routes();
+
+    // Google Calendar Controller (BYOK OAuth + sync)
+    $gcal_service    = new \MikroPlaneta\Booking\Core\Services\GoogleCalendarService();
+    $gcal_controller = new \MikroPlaneta\Booking\RestApi\Controllers\GoogleCalendarController($gcal_service);
+    $gcal_controller->register_routes();
 }
 
 add_action('rest_api_init', __NAMESPACE__ . '\\register_routes');

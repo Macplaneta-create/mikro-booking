@@ -13,13 +13,20 @@ import GuestsView from './components/GuestsView';
 import PricingView from './components/PricingView';
 import ExtrasManager from '@/components/ExtrasManager';
 import Settings from './components/Settings';
+import Onboarding from './components/Onboarding';
 
 const App: React.FC = () => {
     // Determine current view based on URL parameter 'page'
     // Format: mikroplaneta-booking-[view] or just mikroplaneta-booking (dashboard)
     const [currentView, setCurrentView] = useState('dashboard');
+    const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
     useEffect(() => {
+        // Check onboarding status from global config
+        if (!(window as any).mikroplanetaBooking?.isOnboardingCompleted) {
+            setNeedsOnboarding(true);
+        }
+
         const params = new URLSearchParams(window.location.search);
         let page = params.get('page') || '';
 
@@ -67,7 +74,16 @@ const App: React.FC = () => {
     };
 
     return (
-        <div className="mikroplaneta-app min-h-screen bg-gray-50/50 p-6 md:p-8">
+        <div className="mikroplaneta-app min-h-screen bg-gray-50/50 p-6 md:p-8 relative">
+            {needsOnboarding && (
+                <Onboarding onComplete={() => {
+                    setNeedsOnboarding(false);
+                    if ((window as any).mikroplanetaBooking) {
+                        (window as any).mikroplanetaBooking.isOnboardingCompleted = true;
+                    }
+                }} />
+            )}
+
             <header className="mb-8 flex items-center justify-between">
                 <div>
                     {/* Dynamic Header */}

@@ -88,6 +88,7 @@ class Plugin {
         require_once $dir . 'core/services/class-extra-service-service.php';
         require_once $dir . 'core/services/class-ical-service.php';
         require_once $dir . 'core/services/class-backup-service.php';
+        require_once $dir . 'core/services/class-google-calendar-service.php';
         
         // 5. REST API Controllers
         require_once $dir . 'rest-api/controllers/class-rooms-controller.php';
@@ -101,6 +102,7 @@ class Plugin {
         require_once $dir . 'rest-api/controllers/class-logs-controller.php';
         require_once $dir . 'rest-api/controllers/class-extras-controller.php';
         require_once $dir . 'rest-api/controllers/class-backup-controller.php';
+        require_once $dir . 'rest-api/controllers/class-google-calendar-controller.php';
         
         // 6. Routes
         require_once $dir . 'rest-api/routes.php';
@@ -121,6 +123,9 @@ class Plugin {
      * Register WordPress hooks
      */
     private function define_hooks(): void {
+        // Load text domain for i18n
+        add_action('plugins_loaded', [$this, 'load_textdomain']);
+
         // Initialize admin
         if (is_admin()) {
             new \MikroPlaneta\Booking\Core\Admin();
@@ -147,6 +152,23 @@ class Plugin {
         add_action('wp_ajax_mikroplaneta_export_csv', [$this, 'handle_export_csv']);
         add_action('wp_ajax_mikroplaneta_export_sql', [$this, 'handle_export_sql']);
         add_action('wp_ajax_mikroplaneta_send_daily_backup', [$this, 'handle_send_daily_backup']);
+
+        // Google Calendar integration (BYOK) – hooks into reservation lifecycle
+        $gcal = new \MikroPlaneta\Booking\Core\Services\GoogleCalendarService();
+        add_action('mikroplaneta_booking_reservation_created',   [$gcal, 'onReservationCreated'],   10, 2);
+        add_action('mikroplaneta_booking_reservation_updated',   [$gcal, 'onReservationUpdated'],   10, 2);
+        add_action('mikroplaneta_booking_reservation_cancelled', [$gcal, 'onReservationCancelled'], 10, 2);
+    }
+
+    /**
+     * Load plugin text domain for translations.
+     */
+    public function load_textdomain(): void {
+        load_plugin_textdomain(
+            'mikroplaneta-booking',
+            false,
+            dirname(plugin_basename(MIKROPLANETA_BOOKING_PLUGIN_FILE)) . '/languages/'
+        );
     }
 
     /**
