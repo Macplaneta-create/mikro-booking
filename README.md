@@ -1,86 +1,81 @@
 # MikroPlaneta Booking
 
-Advanced hotel booking system with AI-powered bed allocation for WordPress.
+WordPress plugin do obsługi rezerwacji pokoi i miejsc noclegowych, z panelem admina w React, kalendarzem dostępności, iCal oraz integracją Google Calendar w modelu BYOK.
 
-## 📚 Documentation
+## Najważniejsze funkcje
 
-- **[Architecture](ARCHITECTURE.md)** - Complete system architecture and design
-- **[API Documentation](docs/API.md)** - REST API endpoints reference
-- **[Database Schema](docs/DATABASE.md)** - Database structure and relationships
-- **[Development Guide](DEVELOPMENT.md)** - Setup and development workflow
-- **[Quick Start (PL)](SZYBKI_START.md)** - Quick start guide in Polish
+- Zarządzanie pokojami i łóżkami, w tym rezerwacje grupowe.
+- Cennik per room i per bed, ceny weekendowe oraz mnożniki dla dzieci.
+- Publiczny widget rezerwacji i karta pokoju z modalem.
+- Powiadomienia email, pliki `.ics`, cron i logi notyfikacji.
+- Backup i eksport CSV/SQL z panelu administratora.
+- Health Check, onboarding i przygotowanie pod i18n / WordPress.org.
+- Google Calendar eksport rezerwacji przez OAuth 2.0 BYOK.
 
-## ✨ Features
+## Wymagania
 
-- 🏨 **Room & Bed Management** - Flexible room types and bed configurations
-- 💰 **Dynamic Pricing** - Per-room and per-bed pricing modes
-- 📅 **Real-time Availability** - Live calendar and availability checking
-- 💳 **Deposit Payments** - Configurable deposit system with payment info
-- 🛏️ **AI Bed Allocation** - Smart bed assignment for group bookings
-- 📧 **Email Notifications** - Automated reservation confirmations
-- 🔒 **GDPR Compliant** - Built-in consent management
-- 🌐 **Multi-language** - WordPress i18n ready
-
-## 🚀 Quick Start
-
-### Prerequisites
 - PHP 8.0+
 - WordPress 6.0+
 - Node.js 18+
 - Composer
 
-### Installation
+## Szybki start
 
-1. **Install PHP dependencies:**
+1. Zainstaluj zależności PHP:
    ```bash
    composer install
    ```
-
-2. **Install Node dependencies:**
+2. Zainstaluj zależności panelu admina:
    ```bash
    cd admin
    npm install
    ```
-
-3. **Activate plugin in WordPress:**
-   ```bash
-   wp plugin activate mikroplaneta-booking
-   ```
-
-4. **Start development server:**
+3. Aktywuj wtyczkę w WordPressie.
+4. W trybie developerskim uruchom frontend admina:
    ```bash
    cd admin
    npm run dev
    ```
 
-## 📁 Project Structure
+## Dokumentacja
 
+- [SZYBKI_START.md](SZYBKI_START.md) - skrócony start po polsku
+- [DEVELOPMENT.md](DEVELOPMENT.md) - workflow developerski
+- [ARCHITECTURE.md](ARCHITECTURE.md) - architektura i warstwy systemu
+- [ROADMAP.md](ROADMAP.md) - plan produktu i priorytety
+- [STATUS.md](STATUS.md) - główny stan projektu między sesjami
+- [NEXT_SESSION.md](NEXT_SESSION.md) - najbliższe konkretne zadania
+- [DOCUMENTATION_WORKFLOW.md](DOCUMENTATION_WORKFLOW.md) - proces utrzymania dokumentacji między sesjami
+- [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) - główna checklista operacyjna release / wdrożenia
+- [QA_CHECKLIST.md](QA_CHECKLIST.md) - aktywna checklista ręcznych testów
+- [docs/API.md](docs/API.md) - REST API
+- [docs/DATABASE.md](docs/DATABASE.md) - baza danych
+- [docs/GOOGLE_CALENDAR_SETUP.md](docs/GOOGLE_CALENDAR_SETUP.md) - konfiguracja Google Calendar
+- [docs/WPORG_RELEASE_CHECKLIST.md](docs/WPORG_RELEASE_CHECKLIST.md) - checklista release pod WordPress.org
+- [docs/WP_REPO_REQUIREMENTS.md](docs/WP_REPO_REQUIREMENTS.md) - zgodność z WordPress.org
+
+## Struktura repozytorium
+
+```text
+mikro-booking/
+├── core/          # logika backendowa, serwisy, repozytoria, migracje
+├── rest-api/      # kontrolery i trasy REST API
+├── public/        # frontend publiczny widgetów
+├── admin/         # źródła React/TypeScript dla panelu admina
+├── assets/        # zbudowane assety frontendu i admina
+├── docs/          # dokumentacja techniczna
+├── tests/         # testy integracyjne
+└── tools/         # narzędzia serwisowe i maintenance
 ```
-mikroplaneta-booking/
-├── core/              # Backend (PHP)
-├── ai/                # AI Engine
-├── notifications/     # Notification System
-├── rest-api/          # REST API
-├── admin/             # React Admin Panel
-├── public/            # Public Frontend
-├── integrations/      # External Services
-├── tests/             # Tests
-└── docs/              # Documentation
-```
 
-## 🎯 Features
+## Status
 
-- **Bed-Level Reservations** - Reserve individual beds, not just rooms
-- **AI-Powered Allocation** - Smart bed assignment using bin packing algorithm
-- **Guest Management** - Track guest preferences and history
-- **Multi-Channel Notifications** - Email, SMS, Push notifications
-- **Change Tracking** - Complete audit log of all changes
-- **Learning System** - AI improves based on feedback
+Stan repozytorium po marcowych zmianach 2026:
 
-## 📝 License
+- stabilizacja operacyjna jest domknięta,
+- Google Calendar eksport działa na branchu roboczym,
+- kolejne priorytety to testy zewnętrzne, płatności MVP i synchronizacja iCal.
+
+## Licencja
 
 GPL v3 or later
-
-## 👨‍💻 Author
-
-MikroPlaneta - [https://mikroplaneta.pl](https://mikroplaneta.pl)

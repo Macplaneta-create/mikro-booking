@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "bash ./.github/hooks/doc-reminder.sh",
+        "windows": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.github/hooks/doc-reminder.ps1",
+        "linux": "bash ./.github/hooks/doc-reminder.sh",
+        "osx": "bash ./.github/hooks/doc-reminder.sh",
+        "timeout": 10
+      }
+    ]
+  }
+}

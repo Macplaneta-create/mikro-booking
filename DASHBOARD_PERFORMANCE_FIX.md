@@ -25,7 +25,7 @@ Dashboard ładował się bardzo długo, wyświetlając tylko spinner. Użytkowni
 - Każde zapytanie jest obsługiwane osobno - jeśli jedno się nie uda, inne działają
 
 ### 3. ✅ Skrypt Optymalizacyjny
-**Plik:** `optimize-dashboard.php`
+**Plik:** `tools/optimize-dashboard.php`
 
 Dodano skrypt, który dodaje brakujące indeksy do bazy danych:
 - `idx_created_at` na tabeli `reservations`
@@ -37,13 +37,13 @@ Dodano skrypt, który dodaje brakujące indeksy do bazy danych:
 
 **Opcja A - Przez przeglądarkę:**
 ```
-http://gorytajemnic/wp-content/plugins/mikro-booking/optimize-dashboard.php
+http://gorytajemnic/wp-content/plugins/mikro-booking/tools/optimize-dashboard.php
 ```
 
 **Opcja B - Przez CLI:**
 ```bash
 cd c:\laragon\www\gorytajemnic\wp-content\plugins\mikro-booking
-php optimize-dashboard.php
+php tools/optimize-dashboard.php
 ```
 
 **Oczekiwany output:**
@@ -162,7 +162,7 @@ LIMIT 5;
 
 - `rest-api/controllers/class-dashboard-controller.php` - Backend API
 - `admin/src/components/DashboardContent.tsx` - Frontend Component
-- `optimize-dashboard.php` - Optimization Script
+- `tools/optimize-dashboard.php` - Optimization Script
 - `core/database/migrations/011-create-reservation-beds.php` - Table Schema
 
 ---

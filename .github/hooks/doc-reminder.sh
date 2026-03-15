@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+echo '{"continue":true,"systemMessage":"Documentation reminder: after substantial coding, update STATUS.md and NEXT_SESSION.md, then check whether ROADMAP.md or checklists also need changes."}'

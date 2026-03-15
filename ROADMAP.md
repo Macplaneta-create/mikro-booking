@@ -1,8 +1,8 @@
 # 🗺️ MikroPlaneta Booking - Roadmap 2026
 
-**Wersja:** 1.2.7  
-**Data ostatniej aktualizacji:** 2026-03-04  
-**Status:** ✅ **PRODUKCYJNY**
+**Stan dokumentu:** marzec 2026  
+**Status produktu:** aktywnie rozwijany, gotowy do testów zewnętrznych  
+**Cel dokumentu:** plan średnioterminowy, bez duplikowania checklist release i notatek sesyjnych
 
 ---
 
@@ -31,22 +31,23 @@
 | **Admin** | Dashboard ze statystykami | ✅ |
 | **Admin** | Zarządzanie gośćmi | ✅ |
 | **Admin** | Ustawienia systemu | ✅ |
+| **Integracje** | Google Calendar - Eksport (BYOK) | ✅ |
 
 ---
 
 ## 🎯 ROADMAP - Plan Rozwoju
 
-### **Strategia wykonania (żeby nie blokować rozwoju) - NOWE**
+### **Strategia wykonania**
 
 **Założenie:** Najpierw mały fundament operacyjny, potem szybkie MVP płatności i AI jako moduły niezależne.
 
-#### Etap A (1 tydzień): Stabilność operacyjna
-- [ ] Health Check w panelu admina (SMTP, WP-Cron, REST, uprawnienia zapisu)
-- [ ] Retry + backoff dla wysyłki email (awarie transportu)
-- [ ] Idempotencja Cron (blokady i ochrona przed duplikatami)
-- [ ] E2E smoke testy krytycznych flow (backup/export, cron, potwierdzenie rezerwacji)
+#### Etap A (zrealizowany): Stabilność operacyjna
+- [x] Health Check w panelu admina (SMTP, WP-Cron, REST, uprawnienia zapisu)
+- [x] Retry + backoff dla wysyłki email (awarie transportu)
+- [x] Idempotencja Cron (blokady i ochrona przed duplikatami)
+- [x] Smoke testy krytycznych flow w warstwie integracyjnej
 
-**Cel:** Bezpiecznie i szybko wdrażać kolejne funkcje biznesowe.
+**Cel:** Domknięty fundament pod dalszy rozwój biznesowy.
 
 #### Etap B (1-2 tygodnie): Płatności MVP
 - [ ] Jedna bramka na start (Przelewy24) + webhook statusów
@@ -123,10 +124,13 @@
 
 ### **Priorytet 2: Integracje (Q2 2026)**
 
-#### 2.0 Channel Manager MVP (Booking.com + OTA) 🔴 NOWE
+#### 2.0 Channel Manager MVP (Booking.com + Integracje) 🔴 NOWE
 **Opis:** Integracja kanałów etapami, zaczynając od bezpiecznej synchronizacji dostępności i cen.
 
-**Etap 1 (najbezpieczniejszy):**
+**Etap 1 (Zrealizowano):**
+- [x] Google Calendar (Eksport) z użyciem modelu BYOK
+
+**Etap 2 (najbezpieczniejszy, iCal):**
 - [ ] iCal import/export dla Booking.com i Airbnb (synchronizacja kalendarza)
 - [ ] Oznaczanie rezerwacji źródłem (`direct`, `booking`, `airbnb`)
 - [ ] Anty-overbooking: blokady miejsc natychmiast po imporcie
@@ -148,27 +152,29 @@ Dostęp do pełnego API Booking.com zależy od warunków partnerstwa i środowis
 - Etap 1 (iCal): 8-12 godzin
 - Etap 2 (API): 20-35 godzin (zależnie od zakresu i dostępu API)
 
-#### 2.1 Google Calendar - Eksport rezerwacji 🔴 NOWE
+#### 2.1 Google Calendar - Eksport rezerwacji
 **Opis:** Każda rezerwacja automatycznie trafia do kalendarza Google.
 
 **Wymagania:**
-- [ ] Autoryzacja OAuth 2.0 z Google
-- [ ] Wybór kalendarza (może być więcej obiektów)
-- [ ] Event: "Rezerwacja #123 - Jan Kowalski"
-- [ ] Data: check-in → check-out (całodniowe)
-- [ ] Opis: Gość, łóżka, cena, status
+- [x] Autoryzacja OAuth 2.0 z Google
+- [x] Wybór kalendarza docelowego
+- [x] Event: "Rezerwacja #123 - Jan Kowalski"
+- [x] Data: check-in → check-out
+- [x] Opis: gość, cena, status
 - [ ] Opcja: wyłącz dla konkretnych rezerwacji
 
 **Tech Stack:**
 - Google Calendar API v3
 - PHP Google API Client
 
-**Pliki do zmiany:**
-- `core/services/class-reservation-service.php` (hook po utworzeniu)
-- `admin/src/components/Settings.tsx` (konfiguracja)
-- Nowy: `integrations/class-google-calendar.php`
+**Stan:** eksport BYOK wdrożony, dalsze prace dotyczą dopracowania UX i rozszerzeń.
 
-**Estimacja:** 8-12 godzin
+**Główne pliki:**
+- `core/services/class-google-calendar-service.php`
+- `rest-api/controllers/class-google-calendar-controller.php`
+- `admin/src/components/Settings.tsx`
+
+**Następny krok:** doprecyzowanie logów, mapowania danych i ewentualnego sync dwukierunkowego.
 
 ---
 
@@ -185,24 +191,23 @@ Dostęp do pełnego API Booking.com zależy od warunków partnerstwa i środowis
 
 ---
 
-#### 2.3 iCalendar (.ics) dla klienta 🔴 NOWE
+#### 2.3 iCalendar (.ics) dla klienta
 **Opis:** Klient dostaje plik .ics do zapisania w kalendarzu (Google, Apple, Outlook).
 
-**Wymagania:**
-- [ ] Generowanie pliku .ics po rezerwacji
-- [ ] Załącznik w emailu potwierdzającym
-- [ ] Link do pobrania: "Dodaj do kalendarza"
-- [ ] Event: check-in → check-out
-- [ ] Lokalizacja: nazwa obiektu + adres
+**Stan:** podstawowy flow iCal dla gościa jest wdrożony. Dalsze prace dotyczą rozszerzeń i integracji OTA.
 
-**Tech Stack:**
-- PHP: `eluceo/ical` lub ręczna generacja
+**Wdrożone:**
+- [x] Generowanie pliku .ics po rezerwacji
+- [x] Załącznik w emailu potwierdzającym
+- [x] Link CTA do pobrania iCal
+- [x] Event: check-in → check-out
 
-**Pliki do zmiany:**
-- `core/services/class-email-service.php`
-- Nowy: `core/services/class-ical-service.php`
+**Następny krok:**
+- [ ] dopracowanie mapowania danych i logów pod integracje iCal import / OTA
 
-**Estimacja:** 4-6 godzin
+**Główne pliki:**
+- `core/services/class-ical-service.php`
+- `core/services/class-notification-service.php`
 
 ---
 

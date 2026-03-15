@@ -1,5 +1,7 @@
 # WP.org Release Checklist
 
+Uzupełnienie do `RELEASE_CHECKLIST.md` z naciskiem na wymagania repozytorium WordPress.org.
+
 ## Security hardening
 - [ ] Ensure no maintenance/emergency scripts are auto-loaded in runtime.
 - [ ] Remove or gate debug endpoints and local repair scripts from release package.
