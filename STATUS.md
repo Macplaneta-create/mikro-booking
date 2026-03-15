@@ -22,7 +22,7 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 | Health Check | Zaimplementowane, do potwierdzenia | średni | test w środowisku zewnętrznym |
 | Retry maili i locki cron | Zaimplementowane, do potwierdzenia | średni | regresja notyfikacji i brak duplikatów |
 | Onboarding | Zaimplementowane, do potwierdzenia | niski | przejść wizard na czystej instalacji |
-| i18n / WordPress.org | W trakcie stabilizacji | niski | sprawdzić tłumaczenia i paczkę release |
+| i18n / WordPress.org | W trakcie | niski | sprawdzić tłumaczenia i paczkę release |
 | Google Calendar BYOK eksport | Zaimplementowane, do potwierdzenia | niski | autoryzacja, sync i test callbacku |
 | Płatności online | Planowane | wysoki | rozpocząć MVP od jednego providera |
 | iCal import / OTA | Planowane | wysoki | po testach zewnętrznych |
@@ -47,6 +47,7 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - nie traktować samego istnienia kodu jako potwierdzenia gotowości,
 - nie mieszać backlogu produktu z checklistą release,
 - każdą większą funkcję oznaczać osobno jako zaimplementowaną i osobno jako zweryfikowaną,
+- utrzymać aktualność dokumentów technicznych po większych zmianach w architekturze,
 - po każdej sesji dopisać co faktycznie sprawdzono, a nie tylko co zmieniono.
 
 ## Plan najbliższy

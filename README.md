@@ -73,7 +73,7 @@ mikro-booking/
 Stan repozytorium po marcowych zmianach 2026:
 
 - stabilizacja operacyjna jest domknięta,
-- Google Calendar eksport działa na branchu roboczym,
+- Google Calendar eksport jest w gałęzi main (wymaga testu zewnętrznego),
 - kolejne priorytety to testy zewnętrzne, płatności MVP i synchronizacja iCal.
 
 ## Licencja

@@ -344,6 +344,4 @@ Frontend sends human-readable types; repository normalises before persisting:
 
 **Migration fails:** check that the DB user has `ALTER TABLE` permissions. Review errors in WP debug log. Run `tools/force-repair-db.php` as a last resort.
 
-**PHP fatal — undefined constant `MIKROPLANETA_BOOKING_FILE`:** the correct constant is `MIKROPLANETA_BOOKING_PLUGIN_FILE` (defined in `mikroplaneta-booking.php`). Check `class-plugin.php` `load_textdomain()` call if this occurs.
-
 **Google Calendar OAuth callback fails:** confirm `MIKROPLANETA_GCAL_CLIENT_ID` and `MIKROPLANETA_GCAL_CLIENT_SECRET` are set (via `wp-config.php` or Settings), and that the redirect URI in Google Cloud Console matches `<site_url>/wp-json/mikroplaneta/v1/gcal/callback`.
