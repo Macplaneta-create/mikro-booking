@@ -2,6 +2,24 @@
 
 Aktualna checklista ręcznej regresji przed releasem lub testami zewnętrznymi.
 
+## 0a) Ekspres 5 min (minimum przed publikacją)
+
+- [ ] Strona z `mikroplaneta_availability_calendar` ładuje siatkę miesiąca bez błędu.
+- [ ] `Rezerwuj` z kalendarza otwiera formularz i kończy się sukcesem testowej rezerwacji.
+- [ ] Mail potwierdzający ma poprawną treść PL i załącznik `.ics`.
+- [ ] `Testuj przypomnienia (Cron)` działa i nie generuje duplikatów po drugim kliknięciu.
+- [ ] Brak nowych błędów krytycznych w `wp-content/debug.log`.
+
+## 0) Szybka regresja 20-30 min (smoke)
+
+- [ ] W Ustawieniach sprawdź działanie wszystkich przycisków `Kopiuj` (shortcode główny, kalendarz dostępności, generator pokoju, Redirect URI).
+- [ ] Na stronie z shortcode `mikroplaneta_availability_calendar` wybierz miesiąc i kliknij `Odśwież kalendarz`.
+- [ ] Potwierdź, że siatka miesięczna pokazuje dostępność w formacie `X/Y` dla pokoi/domków.
+- [ ] Kliknij `Rezerwuj` przy wybranym obiekcie i potwierdź otwarcie formularza z poprawnym pokojem.
+- [ ] Dokończ rezerwację z frontu i potwierdź zapis + mail + wpis `sent` w historii notyfikacji.
+- [ ] W adminie edytuj daty istniejącej rezerwacji i potwierdź poprawne odświeżenie dashboardu.
+- [ ] Uruchom `Testuj przypomnienia (Cron)` i potwierdź czytelny komunikat z detalami oraz brak duplikatów przy drugim uruchomieniu.
+
 ## 1) Dashboard: Backup & Export
 
 - [ ] Klik `Eksport CSV` i potwierdź pobranie pliku bez błędu `rest_no_route`.

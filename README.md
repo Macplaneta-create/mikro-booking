@@ -7,6 +7,7 @@ WordPress plugin do obsługi rezerwacji pokoi i miejsc noclegowych, z panelem ad
 - Zarządzanie pokojami i łóżkami, w tym rezerwacje grupowe.
 - Cennik per room i per bed, ceny weekendowe oraz mnożniki dla dzieci.
 - Publiczny widget rezerwacji i karta pokoju z modalem.
+- Publiczny kalendarz dostępności miesięcznej: `mikroplaneta_availability_calendar`.
 - Powiadomienia email, pliki `.ics`, cron i logi notyfikacji.
 - Backup i eksport CSV/SQL z panelu administratora.
 - Health Check, onboarding i przygotowanie pod i18n / WordPress.org.

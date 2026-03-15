@@ -2,6 +2,17 @@
 
 Jedna operacyjna checklista przed testami zewnętrznymi, release candidate i wdrożeniem.
 
+## 0. 5 minut przed publikacją (GO/NO-GO)
+
+Skrót: uruchom `tools/release-go-nogo.ps1` (albo `tools/release-go-nogo.ps1 -NonInteractive`) i zapisz decyzję z raportu.
+
+- [ ] Na froncie działa `mikroplaneta_availability_calendar` (siatka ładuje się bez błędów).
+- [ ] Przycisk `Rezerwuj` z kalendarza otwiera formularz i pozwala utworzyć testową rezerwację.
+- [ ] Mail po rezerwacji dochodzi i ma spójną treść PL + załącznik `.ics`.
+- [ ] W adminie `Testuj przypomnienia (Cron)` zwraca czytelny komunikat i nie tworzy duplikatów przy drugim uruchomieniu.
+- [ ] W Ustawieniach działają przyciski `Kopiuj` (minimum: shortcode główny i kalendarz dostępności).
+- [ ] `wp-content/debug.log` nie pokazuje nowych błędów krytycznych po smoke teście.
+
 ## 1. Preflight
 
 - [ ] `git status` jest zrozumiały i wiadomo, które zmiany wchodzą do releasu.

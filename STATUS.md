@@ -24,6 +24,8 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 | Onboarding | Zaimplementowane, do potwierdzenia | niski | przejść wizard na czystej instalacji |
 | i18n / WordPress.org | W trakcie | niski | sprawdzić tłumaczenia i paczkę release |
 | Google Calendar BYOK eksport | Zaimplementowane, do potwierdzenia | niski | autoryzacja, sync i test callbacku |
+| Kalendarz dostępności (publiczny shortcode) | Zaimplementowane, do potwierdzenia | średni | regresja frontu: siatka miesięczna + CTA Rezerwuj + responsywność |
+| Ustawienia admina (czytelność + kopiowanie) | Zaimplementowane, do potwierdzenia | średni | potwierdzić komunikaty i działanie wszystkich przycisków Kopiuj na różnych przeglądarkach |
 | Płatności online | Planowane | wysoki | rozpocząć MVP od jednego providera |
 | iCal import / OTA | Planowane | wysoki | po testach zewnętrznych |
 | AI FAQ | Planowane | wysoki | dopiero po płatnościach i integracjach |
@@ -33,6 +35,8 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - uporządkowano dokumentację i rozdzielono: status, plan, QA, release,
 - zarchiwizowano snapshoty wersji 1.2.7,
 - główne checklisty są aktywne i mają jasne role.
+- wykonano testy na żywej instalacji zewnętrznej i zebrano listę problemów UX/komunikatów.
+- dodano skrócony proces GO/NO-GO i runbook `tools/release-go-nogo.ps1` z raportem decyzji.
 
 ## Zaimplementowane, ale wymagają potwierdzenia
 
@@ -41,6 +45,13 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - tłumaczenia w interfejsie admina i frontendu,
 - cron i notyfikacje mailowe w środowisku zewnętrznym,
 - Google Calendar OAuth i synchronizacja podstawowa.
+- doprecyzowane opisy ustawień API rate limiting i Health Check SMTP,
+- rozszerzone komunikaty po ręcznym teście Cron (więcej danych operacyjnych),
+- ukrycie menu Migrations w produkcji (domyślnie widoczne tylko przy WP_DEBUG lub filtrze),
+- polonizacja domyślnych tematów i głównych treści wiadomości email,
+- dashboard: korekta liczników przyjazdów/wyjazdów (status pending + confirmed + checked_in) i wyłączenie cache odpowiedzi statystyk.
+- nowy shortcode/widget frontendu z kalendarzem/listą dostępności pokoi i domków oraz CTA „Rezerwuj”, bazujący na tych samych publicznych endpointach co istniejący widget.
+- widoczna sekcja shortcode dostępności w Ustawieniach + poprawki przycisków `Kopiuj` (clipboard + fallback).
 
 ## Do dopracowania / naprawy
 
@@ -49,11 +60,14 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - każdą większą funkcję oznaczać osobno jako zaimplementowaną i osobno jako zweryfikowaną,
 - utrzymać aktualność dokumentów technicznych po większych zmianach w architekturze,
 - po każdej sesji dopisać co faktycznie sprawdzono, a nie tylko co zmieniono.
+- ponownie potwierdzić odświeżanie dashboardu po edycji dat rezerwacji na środowisku zewnętrznym,
+- doprecyzować UX konfiguracji adresu odbiorcy dla recepcji i czytelny status dostarczenia emaila (sent/failed + kontekst).
+- potwierdzić stabilność miesięcznej siatki dostępności przy większej liczbie pokoi i w widoku mobilnym.
 
 ## Plan najbliższy
 
-1. Testy zewnętrzne i regresja.
-2. Poprawki po testach.
+1. Regresja po wdrożonych poprawkach UX/mail/dashboard/widget.
+2. Decyzja GO/NO-GO na stagingu z użyciem runbooka release.
 3. Płatności MVP.
 
 ## Zasada aktualizacji po każdej sesji
