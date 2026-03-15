@@ -3,7 +3,7 @@
  * Plugin Name: MikroPlaneta Booking
  * Plugin URI: https://mikroplaneta.pl/booking
  * Description: Advanced hotel booking system with AI-powered bed allocation
- * Version: 1.2.7
+ * Version: 1.2.8
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: MikroPlaneta
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('MIKROPLANETA_BOOKING_VERSION', '1.2.7');
+define('MIKROPLANETA_BOOKING_VERSION', '1.2.8');
 define('MIKROPLANETA_BOOKING_PLUGIN_FILE', __FILE__);
 define('MIKROPLANETA_BOOKING_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MIKROPLANETA_BOOKING_PLUGIN_URL', plugin_dir_url(__FILE__));

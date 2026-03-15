@@ -4,7 +4,7 @@
 
 Professional WordPress booking plugin with group reservation support, built with modern architecture patterns and best practices.
 
-**Current version:** 1.2.7  
+**Current version:** 1.2.8  
 **Last updated:** 2026-03-15
 
 ---

@@ -4,7 +4,7 @@ Tags: booking, hotel, reservations, calendar, rooms
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 8.0
-Stable tag: 1.2.7
+Stable tag: 1.2.8
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -47,6 +47,12 @@ Users with `manage_options` capability.
 
 == Changelog ==
 
+= 1.2.8 =
+* Publiczny shortcode kalendarza dostępności miesięcznej (`[mikroplaneta_availability_calendar]`) z CTA `Rezerwuj`.
+* Usprawnienia UX w Ustawieniach (czytelniejsze opisy i sekcja shortcode) oraz poprawki przycisków `Kopiuj`.
+* Ulepszone komunikaty testów Cron/SMTP i dopracowanie liczników dashboardu.
+* Aktualizacja checklist QA/release oraz runbook GO/NO-GO dla szybszej decyzji publikacji.
+
 = 1.2.7 =
 * Security hardening for temporary exports, iCal delivery and maintenance endpoints.
 * New retention settings for backup and iCal files with scheduled cleanup cron.
@@ -56,6 +62,9 @@ Users with `manage_options` capability.
 * WordPress.org packaging and release pipeline validation improvements.
 
 == Upgrade Notice ==
+
+= 1.2.8 =
+Public release with monthly availability calendar, admin UX/message improvements and release workflow updates.
 
 = 1.2.7 =
 Security, reliability and UX consistency update recommended for all installations.
