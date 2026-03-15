@@ -73,6 +73,8 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
     useEffect(() => {
         if (isOpen) {
             const bedIds = initialData?.bedIds || (initialData?.bedId ? [initialData.bedId] : []);
+            const preselectedCapacity = getBedsCapacity(bedIds);
+            const defaultAdults = bedIds.length > 0 ? Math.max(1, preselectedCapacity) : 1;
 
             setFormData(prev => ({
                 ...prev,
@@ -80,7 +82,7 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                 room_id: initialData?.roomId || 0,
                 check_in: initialData?.checkIn || format(new Date(), 'yyyy-MM-dd'),
                 check_out: initialData?.checkOut || format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'),
-                adults: 1, // Start with 1 adult, user can adjust based on actual guest count
+                adults: defaultAdults,
                 children: 0
             }));
             setLocalBedIds(bedIds);
