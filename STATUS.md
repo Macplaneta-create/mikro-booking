@@ -52,6 +52,7 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - dashboard: korekta liczników przyjazdów/wyjazdów (status pending + confirmed + checked_in) i wyłączenie cache odpowiedzi statystyk.
 - nowy shortcode/widget frontendu z kalendarzem/listą dostępności pokoi i domków oraz CTA „Rezerwuj”, bazujący na tych samych publicznych endpointach co istniejący widget.
 - widoczna sekcja shortcode dostępności w Ustawieniach + poprawki przycisków `Kopiuj` (clipboard + fallback).
+- poprawka modala rezerwacji grupowej w adminie: domyślna liczba gości startuje od pojemności zaznaczonych łóżek (zamiast 1), aby wycena startowa była spójna z wyborem wielu łóżek.
 
 ## Do dopracowania / naprawy
 
@@ -63,10 +64,11 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - ponownie potwierdzić odświeżanie dashboardu po edycji dat rezerwacji na środowisku zewnętrznym,
 - doprecyzować UX konfiguracji adresu odbiorcy dla recepcji i czytelny status dostarczenia emaila (sent/failed + kontekst).
 - potwierdzić stabilność miesięcznej siatki dostępności przy większej liczbie pokoi i w widoku mobilnym.
+- potwierdzić regresyjnie scenariusz „Ctrl+klik wiele łóżek” w adminie: zgodność domyślnej liczby osób i ceny startowej.
 
 ## Plan najbliższy
 
-1. Regresja po wdrożonych poprawkach UX/mail/dashboard/widget.
+1. Regresja po wdrożonych poprawkach UX/mail/dashboard/widget oraz wyceny grupowej w adminie.
 2. Decyzja GO/NO-GO na stagingu z użyciem runbooka release.
 3. Płatności MVP.
 

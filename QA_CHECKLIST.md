@@ -18,6 +18,7 @@ Aktualna checklista ręcznej regresji przed releasem lub testami zewnętrznymi.
 - [ ] Kliknij `Rezerwuj` przy wybranym obiekcie i potwierdź otwarcie formularza z poprawnym pokojem.
 - [ ] Dokończ rezerwację z frontu i potwierdź zapis + mail + wpis `sent` w historii notyfikacji.
 - [ ] W adminie edytuj daty istniejącej rezerwacji i potwierdź poprawne odświeżenie dashboardu.
+- [ ] W adminie wybierz `Ctrl+klik` kilka łóżek (np. 10), kliknij `Rezerwuj` i potwierdź: domyślna liczba osób = pojemność zaznaczonych łóżek oraz cena nie jest liczona jak dla 1 osoby.
 - [ ] Uruchom `Testuj przypomnienia (Cron)` i potwierdź czytelny komunikat z detalami oraz brak duplikatów przy drugim uruchomieniu.
 
 ## 1) Dashboard: Backup & Export

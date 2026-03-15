@@ -10,6 +10,7 @@ Status: po wdrożeniu poprawek i widgetu miesięcznego, gotowe do finalnej regre
 - [ ] potwierdzić, że opisy w Ustawieniach (Rate Limiting, SMTP Health Check) są zrozumiałe dla operatora,
 - [ ] uruchomić test Cron reminders i sprawdzić nowe komunikaty + wpisy sent/failed w historii,
 - [ ] potwierdzić aktualizację dashboardu po edycji dat rezerwacji,
+- [ ] potwierdzić scenariusz admin „Ctrl+klik wiele łóżek -> Rezerwuj”: domyślna liczba osób = pojemność zaznaczonych miejsc i poprawna cena startowa,
 - [ ] sprawdzić polski język wiadomości email do klienta (bez miksu PL/EN),
 - [ ] ponowić sanity check Google Calendar po autoryzacji,
 - [ ] sprawdzić mobilny i desktopowy widok shortcode `mikroplaneta_availability_calendar` (siatka + CTA `Rezerwuj`).
