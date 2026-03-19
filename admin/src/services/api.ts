@@ -96,6 +96,9 @@ export interface Bed {
     bed_number: number;
     bed_type: string;
     is_active: boolean;
+    capacity?: number;
+    available_places?: number;
+    occupied_places?: number;
 }
 
 export interface Reservation {

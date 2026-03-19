@@ -10,6 +10,13 @@ Aktualna checklista ręcznej regresji przed releasem lub testami zewnętrznymi.
 - [ ] `Testuj przypomnienia (Cron)` działa i nie generuje duplikatów po drugim kliknięciu.
 - [ ] Brak nowych błędów krytycznych w `wp-content/debug.log`.
 
+## 0b) Alokacja miejsc (nowy mechanizm) — szybki gate
+
+- [ ] Na instalacji aktualizowanej uruchomiona migracja `025-create-reservation-places.php` (status migracji bez pozycji pending dla 025).
+- [ ] Publiczne `/public/availability/beds` zwraca pola `capacity`, `available_places`, `occupied_places`.
+- [ ] Adminowe `/availability/beds` i `/availability/group-search` zwracają te same pola dla łóżek.
+- [ ] Dla łóżka piętrowego częściowo zajętego API pokazuje `available_places = 1` (zamiast blokowania całego łóżka).
+
 ## 0) Szybka regresja 20-30 min (smoke)
 
 - [ ] W Ustawieniach sprawdź działanie wszystkich przycisków `Kopiuj` (shortcode główny, kalendarz dostępności, generator pokoju, Redirect URI).
@@ -49,6 +56,13 @@ Aktualna checklista ręcznej regresji przed releasem lub testami zewnętrznymi.
 - [ ] Potwierdź wysyłkę maila po potwierdzeniu rezerwacji.
 - [ ] Potwierdź, że mail `confirmed` zawiera załącznik `.ics`.
 - [ ] Sprawdź historię zmian rezerwacji i log notyfikacji.
+
+## 4b) Rezerwacja miejsca (place-based) — scenariusze krytyczne
+
+- [ ] Utwórz rezerwację 1 osoby na łóżku piętrowym i potwierdź, że druga osoba może zarezerwować to samo łóżko (drugie miejsce) w tym samym zakresie dat.
+- [ ] Edytuj rezerwację grupową i zmniejsz liczbę osób: potwierdź, że zwolnione miejsca wracają do dostępności w API oraz w widoku publicznym.
+- [ ] W check-in ustaw mniejszą liczbę gości i wybierz zwolnienie nadmiarowych łóżek: potwierdź poprawny przelicznik miejsc po zapisie.
+- [ ] W widgetach publicznych i adminie pojemność/wybór bazuje na `capacity`/`available_places`, a nie na samym `bed_type`.
 
 ## 5) Przypomnienia mailowe
 

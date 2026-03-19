@@ -18,6 +18,7 @@ class Reservation {
     
     public int $id;
     public array $bed_ids = [];
+    public array $place_ids = [];
     public int $guest_id;
     public string $check_in;
     public string $check_out;
@@ -59,6 +60,7 @@ class Reservation {
         $this->id = (int) ($data['id'] ?? 0);
         $this->guest_id = (int) ($data['guest_id'] ?? 0);
         $this->bed_ids = isset($data['bed_ids']) && is_array($data['bed_ids']) ? $data['bed_ids'] : [];
+        $this->place_ids = isset($data['place_ids']) && is_array($data['place_ids']) ? $data['place_ids'] : [];
         $this->check_in = (string) ($data['check_in'] ?? '');
         $this->check_out = (string) ($data['check_out'] ?? '');
         $this->status = (string) ($data['status'] ?? self::STATUS_PENDING);
@@ -89,6 +91,7 @@ class Reservation {
         return [
             'id' => $this->id,
             'bed_ids' => $this->bed_ids,
+            'place_ids' => $this->place_ids,
             'guest_id' => $this->guest_id,
             'check_in' => $this->check_in,
             'check_out' => $this->check_out,

@@ -14,6 +14,7 @@ use MikroPlaneta\Booking\RestApi\RestController;
 use MikroPlaneta\Booking\Core\Services\ReservationService;
 use MikroPlaneta\Booking\Core\Services\GuestService;
 use MikroPlaneta\Booking\Core\Services\AvailabilityService;
+use MikroPlaneta\Booking\Core\Models\Bed;
 use MikroPlaneta\Booking\Core\Models\Reservation;
 use WP_REST_Response;
 
@@ -190,7 +191,7 @@ class PublicReservationsController extends RestController {
                 'message' => 'Rezerwacja została utworzona pomyślnie.',
             ], 201);
         } catch (\Exception $e) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
+            if (\defined('WP_DEBUG') && \constant('WP_DEBUG')) {
                 error_log('[MikroBooking] Public reservation error: ' . $e->getMessage());
             }
             return $this->error('Nie udało się utworzyć rezerwacji. Spróbuj ponownie lub skontaktuj się z recepcją.', 400);
@@ -228,7 +229,7 @@ class PublicReservationsController extends RestController {
     private function verify_recaptcha(string $token): bool {
         $secret_key = trim((string) get_option('mikroplaneta_booking_recaptcha_secret_key', ''));
         if ($secret_key === '') {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
+            if (\defined('WP_DEBUG') && \constant('WP_DEBUG')) {
                 error_log('[MikroBooking] CAPTCHA verification failed: missing recaptcha secret key.');
             }
             return false;
@@ -249,7 +250,7 @@ class PublicReservationsController extends RestController {
         ]);
 
         if (is_wp_error($response)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
+            if (\defined('WP_DEBUG') && \constant('WP_DEBUG')) {
                 error_log('[MikroBooking] CAPTCHA verification HTTP error: ' . $response->get_error_message());
             }
             return false;
@@ -257,7 +258,7 @@ class PublicReservationsController extends RestController {
 
         $status_code = (int) wp_remote_retrieve_response_code($response);
         if ($status_code < 200 || $status_code >= 300) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
+            if (\defined('WP_DEBUG') && \constant('WP_DEBUG')) {
                 error_log('[MikroBooking] CAPTCHA verification HTTP status: ' . $status_code);
             }
             return false;
@@ -283,7 +284,7 @@ class PublicReservationsController extends RestController {
     private function verify_hcaptcha(string $token): bool {
         $secret_key = trim((string) get_option('mikroplaneta_booking_hcaptcha_secret_key', ''));
         if ($secret_key === '') {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
+            if (\defined('WP_DEBUG') && \constant('WP_DEBUG')) {
                 error_log('[MikroBooking] CAPTCHA verification failed: missing hCaptcha secret key.');
             }
             return false;
@@ -304,7 +305,7 @@ class PublicReservationsController extends RestController {
         ]);
 
         if (is_wp_error($response)) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
+            if (\defined('WP_DEBUG') && \constant('WP_DEBUG')) {
                 error_log('[MikroBooking] hCaptcha verification HTTP error: ' . $response->get_error_message());
             }
             return false;
@@ -312,7 +313,7 @@ class PublicReservationsController extends RestController {
 
         $status_code = (int) wp_remote_retrieve_response_code($response);
         if ($status_code < 200 || $status_code >= 300) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
+            if (\defined('WP_DEBUG') && \constant('WP_DEBUG')) {
                 error_log('[MikroBooking] hCaptcha verification HTTP status: ' . $status_code);
             }
             return false;
@@ -373,22 +374,34 @@ class PublicReservationsController extends RestController {
             $beds = $room_id > 0
                 ? $this->availability_service->findAvailableBedsByRoom($room_id, $check_in, $check_out)
                 : $this->availability_service->findAvailableBeds($check_in, $check_out);
-            $payload = array_map(static function($bed) {
-                return [
-                    'id' => (int) ($bed->id ?? 0),
-                    'room_id' => (int) ($bed->room_id ?? 0),
-                    'bed_number' => (int) ($bed->bed_number ?? 0),
-                    'bed_type' => (string) ($bed->bed_type ?? 'single'),
-                    'is_active' => (bool) ($bed->is_active ?? true),
-                ];
-            }, $beds);
+            $payload = array_map(fn($bed) => $this->serialize_bed($bed, $check_in, $check_out), $beds);
 
             return $this->success($payload);
         } catch (\Throwable $e) {
-            if (defined('WP_DEBUG') && WP_DEBUG) {
+            if (\defined('WP_DEBUG') && \constant('WP_DEBUG')) {
                 error_log('[MikroBooking] Public availability error: ' . $e->getMessage());
             }
             return $this->error('Unable to fetch available beds', 400);
         }
+    }
+
+    private function serialize_bed(Bed $bed, string $check_in, string $check_out): array {
+        $capacity = $this->availability_service
+            ? $this->availability_service->getBedCapacityById((int) $bed->id)
+            : (((string) ($bed->bed_type ?? 'single')) === 'bunk' ? 2 : 1);
+        $available_places = $this->availability_service
+            ? $this->availability_service->getAvailablePlacesForBed((int) $bed->id, $check_in, $check_out)
+            : $capacity;
+
+        return [
+            'id' => (int) ($bed->id ?? 0),
+            'room_id' => (int) ($bed->room_id ?? 0),
+            'bed_number' => (int) ($bed->bed_number ?? 0),
+            'bed_type' => (string) ($bed->bed_type ?? 'single'),
+            'is_active' => (bool) ($bed->is_active ?? true),
+            'capacity' => $capacity,
+            'available_places' => $available_places,
+            'occupied_places' => max(0, $capacity - $available_places),
+        ];
     }
 }

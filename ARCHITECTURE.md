@@ -25,8 +25,9 @@ Professional WordPress booking plugin with group reservation support, built with
 
 ### Frontend (Public)
 - PHP shortcodes rendered as server-side HTML with light vanilla JS
-- `[mikro_booking]` — full booking form (`class-frontend.php`)
-- `[mikro_room_card]` — single room card (`class-room-card-shortcode.php`)
+- `[mikroplaneta_booking]` — full booking form (`class-frontend.php`)
+- `[mikroplaneta_room_card]` — single room card (`class-room-card-shortcode.php`)
+- `[mikroplaneta_availability_calendar]` — monthly availability grid + CTA (`class-frontend.php`)
 
 ---
 
@@ -73,7 +74,7 @@ mikro-booking/
 │   └── database/
 │       ├── class-database.php      # Migration runner
 │       ├── class-schema.php        # Schema helpers
-│       └── migrations/             # 001–024 sequential SQL migrations
+│       └── migrations/             # 001–025 sequential SQL migrations
 ├── rest-api/
 │   ├── routes.php                  # Wires repos → services → controllers, registers routes
 │   ├── controllers/                # One controller per resource
@@ -146,6 +147,7 @@ mikro-booking/
 | `GuestRepository` | `guests` |
 | `ReservationRepository` | `reservations` |
 | `ReservationBedRepository` | `reservation_beds` |
+| `ReservationPlaceRepository` | `reservation_places` |
 | `ReservationExtraRepository` | `reservation_extras` |
 | `ExtraServiceRepository` | `extra_services` |
 | `PricingRepository` | `pricing_rules` |
@@ -163,7 +165,8 @@ mikro-booking/
 | `/reservations` | `ReservationsController` | admin nonce |
 | `/reservations/public` | `PublicReservationsController` | rate-limited, nonce |
 | `/guests` | `GuestsController` | admin nonce |
-| `/availability` | `AvailabilityController` | public |
+| `/availability` | `AvailabilityController` | admin nonce |
+| `/public/availability/beds` | `PublicReservationsController` | public |
 | `/pricing` | `PricingController` | admin nonce |
 | `/dashboard` | `DashboardController` | admin nonce |
 | `/settings` | `SettingsController` | admin nonce |
@@ -192,7 +195,25 @@ POST /wp-json/mikroplaneta/v1/reservations
 3. `ReservationRepository::create()` — inserts reservation row
 4. `ReservationBedRepository::setBedsForReservation()` — links beds
 5. `NotificationService` — sends confirmation email
-6. `do_action('mikroplaneta_booking_reservation_created', $reservation, $bed_ids)`
+6. `ReservationPlaceRepository::setPlacesForReservation()` — persists concrete place assignment
+7. `do_action('mikroplaneta_booking_reservation_created', $reservation, $bed_ids)`
+
+### Place-based availability contract
+
+`AvailabilityController` and `PublicReservationsController` return per-bed fields:
+
+```json
+{
+  "id": 12,
+  "room_id": 4,
+  "bed_type": "bunk",
+  "capacity": 2,
+  "available_places": 1,
+  "occupied_places": 1
+}
+```
+
+Frontend and admin selection logic must use `available_places` / `capacity` as source of truth. Bed type is fallback only.
 
 ---
 
@@ -226,6 +247,17 @@ UNIQUE (reservation_id, bed_id)
 
 **Design decision:** all bed assignments go through `reservation_beds`; the `reservations` table has no `bed_id` column. Enables group reservations natively.
 
+#### `reservation_places` (junction)
+```sql
+id              BIGINT UNSIGNED PRIMARY KEY
+reservation_id  BIGINT UNSIGNED NOT NULL
+place_id        BIGINT UNSIGNED NOT NULL
+created_at      DATETIME
+UNIQUE (reservation_id, place_id)
+```
+
+**Design decision:** `reservation_beds` keeps selected beds, while `reservation_places` is the place-level source of truth for occupancy and partial bunk-bed usage.
+
 ### Migration History
 
 Migrations run sequentially on activation and via the admin Migrations page:
@@ -255,6 +287,7 @@ Migrations run sequentially on activation and via the admin Migrations page:
 022 add-cabin-room-type
 023 normalize-double-bed-place-capacity
 024 add-payment-settings
+025 create-reservation-places
 ```
 
 ---

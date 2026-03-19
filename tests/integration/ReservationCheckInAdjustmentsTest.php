@@ -10,6 +10,8 @@ use MikroPlaneta\Booking\Core\Repositories\BedRepository;
 use MikroPlaneta\Booking\Core\Repositories\GuestRepository;
 use MikroPlaneta\Booking\Core\Repositories\RoomRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationBedRepository;
+use MikroPlaneta\Booking\Core\Repositories\ReservationPlaceRepository;
+use MikroPlaneta\Booking\Core\Repositories\BedPlaceRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationRepository;
 use MikroPlaneta\Booking\Core\Services\AvailabilityService;
 use MikroPlaneta\Booking\Core\Services\NotificationService;
@@ -29,6 +31,8 @@ class ReservationCheckInAdjustmentsTest extends TestCase {
         $availabilityService = $this->createMock(AvailabilityService::class);
         $pricingService = $this->createMock(PricingService::class);
         $reservationBedRepository = $this->createMock(ReservationBedRepository::class);
+        $reservationPlaceRepository = $this->createMock(ReservationPlaceRepository::class);
+        $bedPlaceRepository = $this->createMock(BedPlaceRepository::class);
         $notificationService = $this->createMock(NotificationService::class);
         $roomRepository = $this->createMock(RoomRepository::class);
 
@@ -39,6 +43,8 @@ class ReservationCheckInAdjustmentsTest extends TestCase {
             $availabilityService,
             $pricingService,
             $reservationBedRepository,
+            $reservationPlaceRepository,
+            $bedPlaceRepository,
             $notificationService,
             $roomRepository
         );
@@ -67,6 +73,9 @@ class ReservationCheckInAdjustmentsTest extends TestCase {
 
         $bed3 = Bed::fromArray(['id' => 3, 'is_active' => true]);
         $bed4 = Bed::fromArray(['id' => 4, 'is_active' => true]);
+
+        $place31 = (object) ['id' => 31, 'is_active' => true];
+        $place41 = (object) ['id' => 41, 'is_active' => true];
 
         $reservationRepository
             ->expects($this->exactly(2))
@@ -106,6 +115,37 @@ class ReservationCheckInAdjustmentsTest extends TestCase {
             ->method('setBedsForReservation')
             ->with(21, [3, 4]);
 
+        $bedPlaceRepository
+            ->expects($this->atLeast(1))
+            ->method('ensureDefaultPlacesForBed');
+
+        $bedPlaceRepository
+            ->expects($this->atLeast(2))
+            ->method('findByBed')
+            ->willReturnCallback(static function(int $bedId) use ($place31, $place41) {
+                if ($bedId === 3) {
+                    return [$place31];
+                }
+                if ($bedId === 4) {
+                    return [$place41];
+                }
+                return [];
+            });
+
+        $bedPlaceRepository
+            ->expects($this->atLeast(2))
+            ->method('isPlaceAvailable')
+            ->willReturn(true);
+
+        $bedPlaceRepository
+            ->method('getBedCapacity')
+            ->willReturn(0);
+
+        $reservationPlaceRepository
+            ->expects($this->once())
+            ->method('setPlacesForReservation')
+            ->with(21, [31, 41]);
+
         $result = $service->checkIn(21, [
             'adults' => 2,
             'children' => 0,
@@ -122,6 +162,8 @@ class ReservationCheckInAdjustmentsTest extends TestCase {
         $availabilityService = $this->createMock(AvailabilityService::class);
         $pricingService = $this->createMock(PricingService::class);
         $reservationBedRepository = $this->createMock(ReservationBedRepository::class);
+        $reservationPlaceRepository = $this->createMock(ReservationPlaceRepository::class);
+        $bedPlaceRepository = $this->createMock(BedPlaceRepository::class);
         $notificationService = $this->createMock(NotificationService::class);
         $roomRepository = $this->createMock(RoomRepository::class);
 
@@ -132,6 +174,8 @@ class ReservationCheckInAdjustmentsTest extends TestCase {
             $availabilityService,
             $pricingService,
             $reservationBedRepository,
+            $reservationPlaceRepository,
+            $bedPlaceRepository,
             $notificationService,
             $roomRepository
         );
@@ -160,6 +204,18 @@ class ReservationCheckInAdjustmentsTest extends TestCase {
         $reservationBedRepository
             ->expects($this->never())
             ->method('setBedsForReservation');
+
+        $reservationPlaceRepository
+            ->expects($this->never())
+            ->method('setPlacesForReservation');
+
+        $bedPlaceRepository
+            ->expects($this->atLeast(1))
+            ->method('ensureDefaultPlacesForBed');
+
+        $bedPlaceRepository
+            ->method('getBedCapacity')
+            ->willReturn(0);
 
         $bedRepository
             ->expects($this->atLeast(1))

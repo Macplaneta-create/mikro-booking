@@ -65,8 +65,7 @@
 
             if (data.success && Array.isArray(data.data)) {
                 const availableCapacity = data.data.reduce((sum, bed) => {
-                    const bedType = bed.bed_type || 'single';
-                    return sum + ((bedType === 'bunk') ? 2 : 1);
+                    return sum + bedCapacity(bed);
                 }, 0);
 
                 return {
@@ -108,9 +107,7 @@
             for (const bed of availData.data) {
                 if (capacitySum >= guests) break;
                 bedIds.push(bed.id);
-                const bedType = bed.bed_type || 'single';
-                const bedCapacity = (bedType === 'bunk') ? 2 : 1;
-                capacitySum += bedCapacity;
+                capacitySum += bedCapacity(bed);
             }
 
             if (bedIds.length === 0) {
@@ -158,6 +155,11 @@
      * Get bed capacity
      */
     function bedCapacity(bed) {
+        const explicit = Number(bed && typeof bed.available_places !== 'undefined' ? bed.available_places : bed && typeof bed.capacity !== 'undefined' ? bed.capacity : 0);
+        if (Number.isFinite(explicit) && explicit > 0) {
+            return explicit;
+        }
+
         return bed && (bed.bed_type === 'bunk') ? 2 : 1;
     }
 

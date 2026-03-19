@@ -17,6 +17,8 @@ use MikroPlaneta\Booking\Core\Models\Reservation;
 use MikroPlaneta\Booking\Core\Services\PricingService;
 use MikroPlaneta\Booking\Core\Services\NotificationService;
 use MikroPlaneta\Booking\Core\Repositories\ReservationBedRepository;
+use MikroPlaneta\Booking\Core\Repositories\ReservationPlaceRepository;
+use MikroPlaneta\Booking\Core\Repositories\BedPlaceRepository;
 use MikroPlaneta\Booking\Core\Repositories\RoomRepository;
 
 if (!defined('ABSPATH')) {
@@ -31,6 +33,8 @@ class ReservationService {
     private AvailabilityService $availability_service;
     private PricingService $pricing_service;
     private ReservationBedRepository $reservation_bed_repository;
+    private ReservationPlaceRepository $reservation_place_repository;
+    private BedPlaceRepository $bed_place_repository;
     private NotificationService $notification_service;
     private RoomRepository $room_repository;
     private ?LoggerService $logger_service;
@@ -45,6 +49,8 @@ class ReservationService {
         AvailabilityService $availability_service,
         PricingService $pricing_service,
         ReservationBedRepository $reservation_bed_repository,
+        ReservationPlaceRepository $reservation_place_repository,
+        BedPlaceRepository $bed_place_repository,
         NotificationService $notification_service,
         RoomRepository $room_repository,
         ?LoggerService $logger_service = null
@@ -55,6 +61,8 @@ class ReservationService {
         $this->availability_service = $availability_service;
         $this->pricing_service = $pricing_service;
         $this->reservation_bed_repository = $reservation_bed_repository;
+        $this->reservation_place_repository = $reservation_place_repository;
+        $this->bed_place_repository = $bed_place_repository;
         $this->notification_service = $notification_service;
         $this->room_repository = $room_repository;
         $this->logger_service = $logger_service;
@@ -110,6 +118,14 @@ class ReservationService {
                 $beds_by_room[$bed->room_id][] = $bed;
             }
 
+            $place_ids = $this->allocateReservationPlaces(
+                $bed_ids,
+                $data['check_in'],
+                $data['check_out'],
+                (int) ($data['adults'] ?? 1),
+                (int) ($data['children'] ?? 0)
+            );
+
             // Calculate price per room (not per bed) for per_room pricing mode
             foreach ($beds_by_room as $room_id => $beds) {
                 $room = $this->room_repository->find($room_id);
@@ -145,6 +161,7 @@ class ReservationService {
 
             $reservation = $this->reservation_repository->create($reservation_data);
             $this->reservation_bed_repository->setBedsForReservation($reservation->id, $bed_ids);
+            $this->reservation_place_repository->setPlacesForReservation($reservation->id, $place_ids);
 
             $reloaded = $this->reservation_repository->find($reservation->id);
             if (!$reloaded) {
@@ -238,6 +255,17 @@ class ReservationService {
                 $children = isset($data['children']) ? max(0, (int) $data['children']) : (int) $reservation->children;
                 $effective_bed_ids = $normalized_bed_ids ?? $this->expandBedsForExclusiveRooms($this->normalizeBedIds($reservation->bed_ids));
                 $this->assertGuestCountFitsCapacity($adults, $children, $effective_bed_ids);
+
+                $allocated_place_ids = $this->allocateReservationPlaces(
+                    $effective_bed_ids,
+                    $check_in,
+                    $check_out,
+                    $adults,
+                    $children,
+                    $id
+                );
+
+                $this->reservation_place_repository->setPlacesForReservation($id, $allocated_place_ids);
             }
 
             $old_data = $reservation->toArray();
@@ -389,6 +417,15 @@ class ReservationService {
                 $effective_children = $update_data['children'] ?? $reservation->children;
                 $this->assertGuestCountFitsCapacity($effective_adults, $effective_children, $effective_bed_ids);
 
+                $allocated_place_ids = $this->allocateReservationPlaces(
+                    $effective_bed_ids,
+                    $reservation->check_in,
+                    $reservation->check_out,
+                    $effective_adults,
+                    $effective_children,
+                    $id
+                );
+
                 if (!empty($update_data)) {
                     $this->reservation_repository->update($id, $update_data);
                 }
@@ -412,6 +449,8 @@ class ReservationService {
 
                     $this->reservation_bed_repository->setBedsForReservation($id, $effective_bed_ids);
                 }
+
+                $this->reservation_place_repository->setPlacesForReservation($id, $allocated_place_ids);
 
                 do_action(
                     'mikroplaneta_booking_reservation_adjusted_during_checkin',
@@ -555,6 +594,13 @@ class ReservationService {
                 continue;
             }
 
+            $this->bed_place_repository->ensureDefaultPlacesForBed((int) $bed->id, (string) $bed->bed_type);
+            $places_capacity = $this->bed_place_repository->getBedCapacity((int) $bed->id);
+            if ($places_capacity > 0) {
+                $capacity += $places_capacity;
+                continue;
+            }
+
             switch ((string) $bed->bed_type) {
                 case 'bunk':
                     $capacity += 2;
@@ -568,6 +614,59 @@ class ReservationService {
         }
 
         return $capacity;
+    }
+
+    private function allocateReservationPlaces(
+        array $bed_ids,
+        string $check_in,
+        string $check_out,
+        int $adults,
+        int $children,
+        ?int $exclude_reservation_id = null
+    ): array {
+        $total_guests = max(1, $adults + $children);
+        $beds = [];
+
+        foreach ($bed_ids as $bed_id) {
+            $bed = $this->bed_repository->find((int) $bed_id);
+            if (!$bed || !$bed->is_active) {
+                continue;
+            }
+
+            $this->bed_place_repository->ensureDefaultPlacesForBed((int) $bed->id, (string) $bed->bed_type);
+            $places = array_filter(
+                $this->bed_place_repository->findByBed((int) $bed->id),
+                function($place) use ($check_in, $check_out, $exclude_reservation_id) {
+                    return $place->is_active && $this->bed_place_repository->isPlaceAvailable(
+                        (int) $place->id,
+                        $check_in,
+                        $check_out,
+                        $exclude_reservation_id
+                    );
+                }
+            );
+
+            $beds[] = [
+                'bed' => $bed,
+                'places' => array_values($places),
+            ];
+        }
+
+        usort($beds, static function($left, $right) {
+            return count($right['places']) <=> count($left['places']);
+        });
+
+        $selected_place_ids = [];
+        foreach ($beds as $entry) {
+            foreach ($entry['places'] as $place) {
+                $selected_place_ids[] = (int) $place->id;
+                if (count($selected_place_ids) >= $total_guests) {
+                    return $selected_place_ids;
+                }
+            }
+        }
+
+        throw new \Exception('Selected beds do not have enough free places for the requested guest count');
     }
 
     /**

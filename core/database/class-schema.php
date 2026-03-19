@@ -277,4 +277,27 @@ class Schema {
             INDEX idx_active (is_active)
         ) {$charset};";
     }
+
+    /**
+     * Reservation places table schema
+     * Maps reservations to concrete places within beds.
+     */
+    public static function reservation_places_table(): string {
+        $table = self::get_table_name('reservation_places');
+        $reservations_table = self::get_table_name('reservations');
+        $places_table = self::get_table_name('bed_places');
+        $charset = self::get_charset_collate();
+
+        return "CREATE TABLE {$table} (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            reservation_id BIGINT UNSIGNED NOT NULL,
+            place_id BIGINT UNSIGNED NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (reservation_id) REFERENCES {$reservations_table}(id) ON DELETE CASCADE,
+            FOREIGN KEY (place_id) REFERENCES {$places_table}(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_reservation_place (reservation_id, place_id),
+            INDEX idx_reservation (reservation_id),
+            INDEX idx_place (place_id)
+        ) {$charset};";
+    }
 }

@@ -12,6 +12,7 @@ namespace MikroPlaneta\Booking\RestApi\Controllers;
 
 use MikroPlaneta\Booking\RestApi\RestController;
 use MikroPlaneta\Booking\Core\Services\AvailabilityService;
+use MikroPlaneta\Booking\Core\Models\Bed;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -104,7 +105,7 @@ class AvailabilityController extends RestController {
             $beds = $this->availability_service->findAvailableBeds($check_in, $check_out);
         }
         
-        $data = array_map(fn($bed) => $bed->toArray(), $beds);
+        $data = array_map(fn($bed) => $this->serialize_bed($bed, $check_in, $check_out), $beds);
         return $this->success($data);
     }
     
@@ -123,8 +124,8 @@ class AvailabilityController extends RestController {
         );
         
         // Need to serialize Bed objects inside results
-        $data = array_map(function($option) {
-            $option['beds'] = array_map(fn($bed) => $bed->toArray(), $option['beds']);
+        $data = array_map(function($option) use ($check_in, $check_out) {
+            $option['beds'] = array_map(fn($bed) => $this->serialize_bed($bed, $check_in, $check_out), $option['beds']);
             return $option;
         }, $results);
         
@@ -155,5 +156,17 @@ class AvailabilityController extends RestController {
         
         $stats = $this->availability_service->getOccupancyRate($start_date, $end_date);
         return $this->success($stats);
+    }
+
+    private function serialize_bed(Bed $bed, string $check_in, string $check_out): array {
+        $data = $bed->toArray();
+        $capacity = $this->availability_service->getBedCapacityById((int) $bed->id);
+        $available_places = $this->availability_service->getAvailablePlacesForBed((int) $bed->id, $check_in, $check_out);
+
+        $data['capacity'] = $capacity;
+        $data['available_places'] = $available_places;
+        $data['occupied_places'] = max(0, $capacity - $available_places);
+
+        return $data;
     }
 }

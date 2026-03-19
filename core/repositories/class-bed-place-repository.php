@@ -21,6 +21,7 @@ class BedPlaceRepository implements RepositoryInterface {
 
     private string $table;
     private string $beds_table;
+    private static ?bool $table_exists = null;
 
     /**
      * Constructor
@@ -30,11 +31,27 @@ class BedPlaceRepository implements RepositoryInterface {
         $this->beds_table = Schema::get_table_name('beds');
     }
 
+    public function exists(): bool {
+        if (self::$table_exists !== null) {
+            return self::$table_exists;
+        }
+
+        global $wpdb;
+        $result = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $this->table));
+        self::$table_exists = $result === $this->table;
+
+        return self::$table_exists;
+    }
+
     /**
      * Find bed place by ID
      */
     public function find(int $id): ?BedPlace {
         global $wpdb;
+
+        if (!$this->exists()) {
+            return null;
+        }
 
         $sql = "SELECT p.*, b.room_id, b.bed_type, b.bed_number
                 FROM {$this->table} p
@@ -43,7 +60,7 @@ class BedPlaceRepository implements RepositoryInterface {
 
         $row = $wpdb->get_row(
             $wpdb->prepare($sql, $id),
-            ARRAY_A
+            'ARRAY_A'
         );
 
         return $row ? BedPlace::fromArray($row) : null;
@@ -54,6 +71,10 @@ class BedPlaceRepository implements RepositoryInterface {
      */
     public function all(array $args = []): array {
         global $wpdb;
+
+        if (!$this->exists()) {
+            return [];
+        }
 
         $where = '1=1';
         $params = [];
@@ -93,7 +114,7 @@ class BedPlaceRepository implements RepositoryInterface {
             $sql = $wpdb->prepare($sql, $params);
         }
 
-        $rows = $wpdb->get_results($sql, ARRAY_A);
+        $rows = $wpdb->get_results($sql, 'ARRAY_A');
 
         return array_map(function($row) {
             return BedPlace::fromArray($row);
@@ -105,6 +126,10 @@ class BedPlaceRepository implements RepositoryInterface {
      */
     public function create(array $data): BedPlace {
         global $wpdb;
+
+        if (!$this->exists()) {
+            throw new \Exception('Bed places table does not exist');
+        }
 
         $insert_data = [
             'bed_id' => (int) $data['bed_id'],
@@ -203,6 +228,10 @@ class BedPlaceRepository implements RepositoryInterface {
     public function getBedCapacity(int $bed_id): int {
         global $wpdb;
 
+        if (!$this->exists()) {
+            return 0;
+        }
+
         $sql = "SELECT SUM(max_persons) as total_capacity
                 FROM {$this->table}
                 WHERE bed_id = %d AND is_active = 1";
@@ -218,6 +247,10 @@ class BedPlaceRepository implements RepositoryInterface {
     public function getRoomCapacity(int $room_id): int {
         global $wpdb;
 
+        if (!$this->exists()) {
+            return 0;
+        }
+
         $sql = "SELECT SUM(p.max_persons) as total_capacity
                 FROM {$this->table} p
                 INNER JOIN {$this->beds_table} b ON p.bed_id = b.id
@@ -232,33 +265,32 @@ class BedPlaceRepository implements RepositoryInterface {
      * Check if place is available for given dates
      */
     public function isPlaceAvailable(int $place_id, string $check_in, string $check_out, ?int $exclude_reservation_id = null): bool {
-        global $wpdb;
+        $reservation_place_repo = new ReservationPlaceRepository();
 
-        $reservation_places_table = Schema::get_table_name('reservation_places');
-        $reservations_table = Schema::get_table_name('reservations');
-
-        // Check if place is booked for overlapping dates
-        $sql = "SELECT COUNT(*) FROM {$reservation_places_table} rp
-                INNER JOIN {$reservations_table} r ON rp.reservation_id = r.id
-                WHERE rp.place_id = %d
-                AND r.status IN ('pending', 'confirmed', 'checked_in')
-                AND r.check_in < %s
-                AND r.check_out > %s";
-
-        $params = [
-            $place_id,
-            $check_out,
-            $check_in,
-        ];
-
-        if ($exclude_reservation_id) {
-            $sql .= ' AND r.id != %d';
-            $params[] = $exclude_reservation_id;
+        if (!$this->exists() || !$reservation_place_repo->exists()) {
+            return true;
         }
 
-        $count = $wpdb->get_var($wpdb->prepare($sql, $params));
+        $place = $this->find($place_id);
+        if (!$place) {
+            return false;
+        }
 
-        return $count == 0;
+        return $reservation_place_repo->countOccupiedPlacesForBed(
+            (int) $place->bed_id,
+            $check_in,
+            $check_out,
+            $exclude_reservation_id
+        ) < $this->getBedCapacity((int) $place->bed_id);
+    }
+
+    public function ensureDefaultPlacesForBed(int $bed_id, string $bed_type): array {
+        $existing = $this->findByBed($bed_id);
+        if (!empty($existing)) {
+            return $existing;
+        }
+
+        return $this->createDefaultPlacesForBed($bed_id, $bed_type);
     }
 
     /**

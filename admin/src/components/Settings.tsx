@@ -223,6 +223,35 @@ const Settings: React.FC = () => {
         return 'bg-red-100 text-red-700';
     };
 
+    const copyText = async (text: string): Promise<boolean> => {
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+                return true;
+            }
+        } catch (error) {
+            // Fallback below
+        }
+
+        try {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.setAttribute('readonly', 'true');
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+
+            const copied = document.execCommand('copy');
+            document.body.removeChild(textarea);
+            return copied;
+        } catch (error) {
+            return false;
+        }
+    };
+
     const loadSettings = async () => {
         try {
             setLoading(true);
@@ -442,7 +471,13 @@ const Settings: React.FC = () => {
 
         try {
             const res = await SettingsAPI.triggerCron(task);
-            alert(res?.data?.message || 'Operacja zakończona.');
+            const payload = res?.data || {};
+            const message = payload.message || 'Operacja zakończona.';
+            const details = payload.details || null;
+            const detailsLine = details
+                ? `\n\nSzczegóły:\n- test uruchomiono: ${details.triggered_at || '-'}\n- następne cron reminders: ${details.next_reminders || '-'}\n- następne cron expiry: ${details.next_expiry || '-'}\n- wysłane dziś (check-in): ${details.sent_today_checkin ?? '-'}\n- wysłane dziś (check-out): ${details.sent_today_checkout ?? '-'}\n\nNastępny krok: sprawdź Historię wysyłek oraz skrzynki odbiorcze.`
+                : '';
+            alert(`${message}${detailsLine}`);
         } catch (error) {
             alert(fallbackErrorMessage);
             console.error(error);
@@ -700,6 +735,9 @@ const Settings: React.FC = () => {
                                 Włącz powiadomienia email dla gości
                             </label>
                         </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                            Adresy odbiorców dla recepcji ustawisz niżej w sekcjach: Backup & Export oraz Automatyczny Eksport CSV (pole „Email odbiorcy”).
+                        </p>
 
                         {/* Save button */}
                         <div className="flex items-center gap-2 mt-6 pt-4 border-t border-gray-200">
@@ -768,6 +806,11 @@ const Settings: React.FC = () => {
                                     </span>
                                 </div>
                                 <p className="text-sm text-gray-600 mt-1">{check.message}</p>
+                                {check.key === 'smtp' && check.status !== 'ok' && (
+                                    <p className="text-xs text-amber-700 mt-2">
+                                        Co zrobić: zainstaluj i skonfiguruj plugin SMTP (np. WP Mail SMTP), wyślij test mail i potwierdź wpis „sent” w Historii wysyłek.
+                                    </p>
+                                )}
                                 {check.details && (
                                     <details className="mt-2">
                                         <summary className="text-xs text-gray-500 cursor-pointer">Szczegóły</summary>
@@ -1360,9 +1403,12 @@ const Settings: React.FC = () => {
                                     className="w-4 h-4 rounded text-brand-600 cursor-pointer"
                                 />
                                 <label htmlFor="rate_limit_enabled" className="text-sm font-medium text-gray-700 cursor-pointer">
-                                    Włącz globalny rate limiting dla `/mikroplaneta/v1/*`
+                                    Ogranicz liczbę żądań do API (rate limiting)
                                 </label>
                             </div>
+                            <p className="text-xs text-gray-500 -mt-2">
+                                Chroni API przed spamem i przeciążeniem. Gdy limit zostanie przekroczony, kolejne żądania są chwilowo blokowane.
+                            </p>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -1613,9 +1659,9 @@ const Settings: React.FC = () => {
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 flex items-center justify-between group">
                     <code className="text-brand-700 font-bold font-mono text-lg">[mikroplaneta_booking]</code>
                     <button
-                        onClick={() => {
-                            navigator.clipboard.writeText('[mikroplaneta_booking]');
-                            alert('Skopiowano do schowka!');
+                        onClick={async () => {
+                            const copied = await copyText('[mikroplaneta_booking]');
+                            alert(copied ? 'Skopiowano do schowka!' : 'Nie udało się skopiować. Skopiuj ręcznie shortcode.');
                         }}
                         className="text-xs bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-gray-500 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm"
                     >
@@ -1630,6 +1676,29 @@ const Settings: React.FC = () => {
                     <div className="flex items-center gap-1">
                         <div className="w-1.5 h-1.5 rounded-full bg-brand-400"></div>
                         Obsługuje Elementor
+                    </div>
+                </div>
+
+                <div className="mt-5 bg-sky-50 p-4 rounded-xl border border-sky-200">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <p className="text-sm font-semibold text-sky-900">Kalendarz dostępności pokoi/domków</p>
+                            <p className="text-xs text-sky-800 mt-1">
+                                Widok miesięczny z wolnymi miejscami (np. 3/7) i przyciskiem „Rezerwuj” dla każdego obiektu.
+                            </p>
+                        </div>
+                        <button
+                            onClick={async () => {
+                                const copied = await copyText('[mikroplaneta_availability_calendar]');
+                                alert(copied ? 'Skopiowano shortcode kalendarza dostępności!' : 'Nie udało się skopiować. Skopiuj ręcznie shortcode.');
+                            }}
+                            className="text-xs bg-white border border-sky-200 px-3 py-1.5 rounded-lg text-sky-700 hover:text-sky-900 hover:border-sky-300 transition-all shadow-sm shrink-0"
+                        >
+                            Kopiuj shortcode
+                        </button>
+                    </div>
+                    <div className="mt-3 bg-white/70 p-3 rounded-lg border border-sky-100">
+                        <code className="text-sky-900 font-bold font-mono text-sm break-all">[mikroplaneta_availability_calendar]</code>
                     </div>
                 </div>
 
@@ -1670,9 +1739,9 @@ const Settings: React.FC = () => {
                             <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex items-center justify-between">
                                 <code className="text-brand-700 font-bold font-mono text-sm break-all mr-3">{generatedShortcode}</code>
                                 <button
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(generatedShortcode);
-                                        alert('Skopiowano shortcode!');
+                                    onClick={async () => {
+                                        const copied = await copyText(generatedShortcode);
+                                        alert(copied ? 'Skopiowano shortcode!' : 'Nie udało się skopiować. Skopiuj ręcznie shortcode.');
                                     }}
                                     className="text-xs bg-white border border-gray-200 px-3 py-1.5 rounded-lg text-gray-500 hover:text-brand-600 hover:border-brand-200 transition-all shadow-sm shrink-0"
                                 >
@@ -1800,7 +1869,11 @@ const Settings: React.FC = () => {
                                         <div className="mt-1 flex items-center gap-2">
                                             <code className="bg-gray-100 border border-gray-300 rounded px-2 py-1 text-xs flex-1 break-all">{gcal.redirect_uri || '(ładowanie...)'}</code>
                                             <button
-                                                onClick={() => { navigator.clipboard.writeText(gcal.redirect_uri); setGcalMsg({type:'ok',text:'Skopiowano Redirect URI!'}); setTimeout(()=>setGcalMsg(null),3000); }}
+                                                onClick={async () => {
+                                                    const copied = await copyText(gcal.redirect_uri || '');
+                                                    setGcalMsg({ type: copied ? 'ok' : 'err', text: copied ? 'Skopiowano Redirect URI!' : 'Nie udało się skopiować Redirect URI.' });
+                                                    setTimeout(() => setGcalMsg(null), 3000);
+                                                }}
                                                 className="text-xs border border-gray-300 px-2 py-1 rounded hover:bg-gray-50 transition whitespace-nowrap"
                                             >Kopiuj</button>
                                         </div>

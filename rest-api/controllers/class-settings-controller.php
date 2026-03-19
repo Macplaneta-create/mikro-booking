@@ -411,11 +411,27 @@ class SettingsController extends RestController {
                 $task = 'expiry';
             }
 
+            $details = [
+                'triggered_at' => current_time('mysql'),
+                'next_expiry' => wp_next_scheduled('mikroplaneta_booking_expire_reservations'),
+                'next_reminders' => wp_next_scheduled('mikroplaneta_booking_send_reminders'),
+                'sent_today_checkin' => $this->get_sent_today_count('checkin_reminder'),
+                'sent_today_checkout' => $this->get_sent_today_count('checkout_reminder'),
+            ];
+
+            if (!empty($details['next_expiry'])) {
+                $details['next_expiry'] = gmdate('Y-m-d H:i:s', (int) $details['next_expiry']);
+            }
+            if (!empty($details['next_reminders'])) {
+                $details['next_reminders'] = gmdate('Y-m-d H:i:s', (int) $details['next_reminders']);
+            }
+
             if ($task === 'reminders') {
                 do_action('mikroplaneta_booking_send_reminders');
                 return $this->success([
-                    'message' => __('Reminders sending triggered (check-in / check-out). Check notification log and email inbox.', 'mikroplaneta-booking'),
+                    'message' => __('Uruchomiono test przypomnień (check-in/check-out). Sprawdź „Historię wysyłek” i skrzynki odbiorcze.', 'mikroplaneta-booking'),
                     'task' => 'reminders',
+                    'details' => $details,
                 ]);
             }
 
@@ -423,8 +439,9 @@ class SettingsController extends RestController {
             do_action('mikroplaneta_booking_expire_reservations');
 
             return $this->success([
-                'message' => __('Reservation expiry check triggered. Check logs or calendar.', 'mikroplaneta-booking'),
+                'message' => __('Uruchomiono test wygasania rezerwacji. Sprawdź kalendarz i logi zmian statusów.', 'mikroplaneta-booking'),
                 'task' => 'expiry',
+                'details' => $details,
             ]);
         } catch (\Exception $e) {
             return $this->error($e->getMessage());
@@ -468,19 +485,21 @@ class SettingsController extends RestController {
      */
     private function build_smtp_health_check(): array {
         $admin_email = (string) get_option('admin_email', '');
+        $backup_email = (string) get_option('mikroplaneta_backup_email', $admin_email);
+        $csv_export_email = (string) get_option('mikroplaneta_csv_export_email', $admin_email);
         $email_valid = is_email($admin_email);
         $has_wp_mail = function_exists('wp_mail');
         $has_phpmailer_hook = function_exists('has_action') && has_action('phpmailer_init');
 
         $status = 'ok';
-        $message = __('Mail transport looks correct.', 'mikroplaneta-booking');
+        $message = __('Konfiguracja transportu email wygląda poprawnie.', 'mikroplaneta-booking');
 
         if (!$has_wp_mail || !$email_valid) {
             $status = 'error';
-            $message = __('No correct basic email configuration (wp_mail/admin_email).', 'mikroplaneta-booking');
+            $message = __('Brak poprawnej podstawowej konfiguracji email (wp_mail/admin_email).', 'mikroplaneta-booking');
         } elseif (!$has_phpmailer_hook) {
             $status = 'warning';
-            $message = __('No custom SMTP transport detected. Check SMTP plugin configuration.', 'mikroplaneta-booking');
+            $message = __('Nie wykryto zewnętrznego transportu SMTP. Skonfiguruj plugin SMTP (np. WP Mail SMTP).', 'mikroplaneta-booking');
         }
 
         return [
@@ -491,10 +510,37 @@ class SettingsController extends RestController {
             'details' => [
                 'admin_email' => $admin_email,
                 'admin_email_valid' => (bool) $email_valid,
+                'backup_email' => $backup_email,
+                'csv_export_email' => $csv_export_email,
                 'wp_mail_available' => $has_wp_mail,
                 'phpmailer_hook_detected' => (bool) $has_phpmailer_hook,
+                'recommended_action' => $has_phpmailer_hook
+                    ? __('Wykonaj test wysyłki i potwierdź status sent w historii.', 'mikroplaneta-booking')
+                    : __('Zainstaluj i skonfiguruj plugin SMTP, potem wykonaj test wysyłki.', 'mikroplaneta-booking'),
             ],
         ];
+    }
+
+    /**
+     * Count sent notifications for a template on current day.
+     */
+    private function get_sent_today_count(string $template_name): int {
+        global $wpdb;
+
+        $table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('notifications');
+        $found = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        if ($found !== $table) {
+            return 0;
+        }
+
+        $today = (string) current_time('Y-m-d');
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE template_name = %s AND status = %s AND DATE(sent_at) = %s",
+            $template_name,
+            'sent',
+            $today
+        ));
     }
 
     /**

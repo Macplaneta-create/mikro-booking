@@ -31,6 +31,7 @@ Skrót: uruchom `tools/release-go-nogo.ps1` (albo `tools/release-go-nogo.ps1 -No
 - [ ] instalacja z wygenerowanej paczki ZIP na świeżym WordPressie
 - [ ] aktywacja wtyczki bez błędów PHP
 - [ ] migracje wykonane poprawnie
+- [ ] potwierdzona migracja `025-create-reservation-places.php` na instalacji aktualizowanej
 - [ ] onboarding przechodzi bez blockerów
 
 ## 4. Regresja funkcjonalna
@@ -39,6 +40,7 @@ Skrót: uruchom `tools/release-go-nogo.ps1` (albo `tools/release-go-nogo.ps1 -No
 - [ ] cron: test wygasania i test przypomnień bez duplikatów
 - [ ] frontend: rezerwacja, walidacja dat, CAPTCHA, `.ics`
 - [ ] admin: potwierdzenie rezerwacji, email, historia zmian, log notyfikacji
+- [ ] place-based flow: częściowo zajęte łóżko piętrowe pozostawia dostępne drugie miejsce w adminie i na froncie
 - [ ] Google Calendar: autoryzacja, wybór kalendarza, synchronizacja podstawowa
 
 Źródło szczegółowych kroków: `QA_CHECKLIST.md`

@@ -59,6 +59,11 @@
     }
 
     function bedCapacity(bed) {
+        const explicit = Number(bed && typeof bed.available_places !== 'undefined' ? bed.available_places : bed && typeof bed.capacity !== 'undefined' ? bed.capacity : 0);
+        if (Number.isFinite(explicit) && explicit > 0) {
+            return explicit;
+        }
+
         return bed && bed.bed_type === 'bunk' ? 2 : 1;
     }
 
@@ -219,8 +224,11 @@
 
         bedsContainer.innerHTML = beds.map((bed) => {
             const bedType = bed.bed_type || 'single';
-            const bedCapacity = (bedType === 'bunk') ? 2 : 1;
-            const placesLabel = bedCapacity > 1 ? `${bedCapacity} miejsca` : `${bedCapacity} miejsce`;
+            const totalCapacity = Number(bed.capacity) > 0 ? Number(bed.capacity) : bedCapacity(bed);
+            const freePlaces = Number(bed.available_places) > 0 ? Number(bed.available_places) : totalCapacity;
+            const placesLabel = freePlaces === totalCapacity
+                ? (totalCapacity > 1 ? `${totalCapacity} miejsca` : `${totalCapacity} miejsce`)
+                : `${freePlaces}/${totalCapacity} wolnych miejsc`;
             const bedNumber = bed.bed_number || '?';
             const roomId = bed.room_id || '?';
             const label = `#${bed.id} • Pokój ${roomId} • Łóżko ${bedNumber} (${bedType}) • ${placesLabel}`;
@@ -385,8 +393,7 @@
 
                     if (data.data.beds && Array.isArray(data.data.beds)) {
                         roomCapacity = data.data.beds.reduce((sum, bed) => {
-                            const bedType = bed.bed_type || 'single';
-                            return sum + ((bedType === 'bunk') ? 2 : 1);
+                            return sum + bedCapacity(bed);
                         }, 0);
                     }
 
@@ -1155,8 +1162,7 @@
 
                             if (data.data.beds && Array.isArray(data.data.beds)) {
                                 capacity = data.data.beds.reduce((sum, bed) => {
-                                    const bedType = bed.bed_type || 'single';
-                                    return sum + ((bedType === 'bunk') ? 2 : 1);
+                                    return sum + bedCapacity(bed);
                                 }, 0);
                             }
 

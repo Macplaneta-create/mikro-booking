@@ -93,13 +93,13 @@ class DashboardController extends RestController {
 
         // 3. Arrivals Today
         $stats['arrivals_today'] = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$reservations_table} WHERE check_in = %s AND status IN ('confirmed', 'checked_in')",
+            "SELECT COUNT(*) FROM {$reservations_table} WHERE check_in = %s AND status IN ('pending', 'confirmed', 'checked_in')",
             $today
         ));
 
         // 4. Departures Today
         $stats['departures_today'] = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$reservations_table} WHERE check_out = %s AND status IN ('confirmed', 'checked_in')",
+            "SELECT COUNT(*) FROM {$reservations_table} WHERE check_out = %s AND status IN ('pending', 'confirmed', 'checked_in')",
             $today
         ));
 
@@ -166,6 +166,10 @@ class DashboardController extends RestController {
                 'created_at' => $res['created_at']
             ];
         }, $recent ?: []);
+
+        if (function_exists('nocache_headers')) {
+            nocache_headers();
+        }
 
         return $this->success($stats);
     }

@@ -1,0 +1,6 @@
+{
+  "rules": [
+    "Use WordPress coding standards",
+    "Prefer functional PHP instead of classes"
+  ]
+}

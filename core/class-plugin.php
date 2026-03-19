@@ -60,6 +60,7 @@ class Plugin {
         require_once $dir . 'core/models/class-guest.php';
         require_once $dir . 'core/models/class-reservation.php';
         require_once $dir . 'core/models/class-reservation-bed.php';
+        require_once $dir . 'core/models/class-reservation-place.php';
         require_once $dir . 'core/models/class-pricing.php';
         require_once $dir . 'core/models/class-extra-service.php';
         require_once $dir . 'core/models/class-reservation-extra.php';
@@ -71,6 +72,7 @@ class Plugin {
         require_once $dir . 'core/repositories/class-guest-repository.php';
         require_once $dir . 'core/repositories/class-reservation-repository.php';
         require_once $dir . 'core/repositories/class-reservation-bed-repository.php';
+        require_once $dir . 'core/repositories/class-reservation-place-repository.php';
         require_once $dir . 'core/repositories/class-pricing-repository.php';
         require_once $dir . 'core/repositories/class-changes-log-repository.php';
         require_once $dir . 'core/repositories/class-extra-service-repository.php';

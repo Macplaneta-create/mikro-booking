@@ -65,6 +65,33 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
         }
     }, [isOpen, reservation.id, reservation.bed_ids, reservation.check_in, reservation.check_out, reservation.adults, reservation.children, refreshTrigger]);
 
+    const getBedCapacity = (bedId: number): number => {
+        const allBeds = rooms.flatMap(room => room.beds || []);
+        const bed = allBeds.find(item => item.id === bedId);
+        const explicitCapacity = Number(bed?.capacity ?? 0);
+        if (explicitCapacity > 0) {
+            return explicitCapacity;
+        }
+
+        return String(bed?.bed_type || 'single') === 'bunk' ? 2 : 1;
+    };
+
+    const chooseBedsForGuests = (bedIds: number[], guestCount: number): number[] => {
+        const sorted = [...bedIds].sort((leftId, rightId) => getBedCapacity(rightId) - getBedCapacity(leftId));
+        const picked: number[] = [];
+        let covered = 0;
+
+        for (const bedId of sorted) {
+            picked.push(bedId);
+            covered += getBedCapacity(bedId);
+            if (covered >= guestCount) {
+                break;
+            }
+        }
+
+        return covered >= guestCount ? picked : bedIds;
+    };
+
     if (!isOpen) return null;
 
     const handleConfirm = async () => {
@@ -94,7 +121,7 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
                 const releaseBeds = window.confirm(`Przyjechało mniej osób (${newCount} z ${totalGuests}). Czy chcesz zwolnić nadmiarowe łóżka, aby były dostępne dla innych gości?`);
 
                 if (releaseBeds) {
-                    const bedsToKeep = reservation.bed_ids?.slice(0, newCount) || [];
+                    const bedsToKeep = chooseBedsForGuests(reservation.bed_ids || [], newCount);
                     adjustment = {
                         adults: Math.min(newCount, reservation.adults || 0),
                         children: Math.max(0, newCount - (reservation.adults || 0)),

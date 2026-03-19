@@ -17,6 +17,8 @@ use MikroPlaneta\Booking\Core\Repositories\ReservationRepository;
 use MikroPlaneta\Booking\Core\Repositories\GuestRepository;
 use MikroPlaneta\Booking\Core\Repositories\PricingRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationBedRepository;
+use MikroPlaneta\Booking\Core\Repositories\ReservationPlaceRepository;
+use MikroPlaneta\Booking\Core\Repositories\BedPlaceRepository;
 
 // Services
 use MikroPlaneta\Booking\Core\Services\AvailabilityService;
@@ -52,13 +54,15 @@ function register_routes(): void {
     $guest_repo = new GuestRepository();
     $pricing_repo = new PricingRepository();
     $res_bed_repo = new ReservationBedRepository();
+    $res_place_repo = new ReservationPlaceRepository();
+    $bed_place_repo = new BedPlaceRepository();
     $logs_repo = new \MikroPlaneta\Booking\Core\Repositories\ChangesLogRepository();
     $extra_service_repo = new \MikroPlaneta\Booking\Core\Repositories\ExtraServiceRepository();
     $res_extra_repo = new \MikroPlaneta\Booking\Core\Repositories\ReservationExtraRepository();
     
     // 2. Initialize Services
     // Availability Service needs BedRepo & ReservationRepo
-    $availability_service = new AvailabilityService($bed_repo, $reservation_repo);
+    $availability_service = new AvailabilityService($bed_repo, $reservation_repo, $bed_place_repo, $res_place_repo);
     
     // Pricing Service needs PricingRepo, BedRepo & RoomRepo
     $pricing_service = new PricingService($pricing_repo, $bed_repo, $room_repo);
@@ -87,6 +91,8 @@ function register_routes(): void {
         $availability_service,
         $pricing_service,
         $res_bed_repo,
+        $res_place_repo,
+        $bed_place_repo,
         $notification_service,
         $room_repo,
         $logger_service
@@ -95,7 +101,7 @@ function register_routes(): void {
     // 3. Initialize Controllers & Register Routes
     
     // Rooms Controller
-    $rooms_controller = new RoomsController($room_repo, $bed_repo);
+    $rooms_controller = new RoomsController($room_repo, $bed_repo, $bed_place_repo);
     $rooms_controller->register_routes();
     
     // Reservations Controller

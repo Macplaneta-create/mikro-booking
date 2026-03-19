@@ -11,6 +11,8 @@
 namespace MikroPlaneta\Booking\Core\Services;
 
 use MikroPlaneta\Booking\Core\Repositories\BedRepository;
+use MikroPlaneta\Booking\Core\Repositories\BedPlaceRepository;
+use MikroPlaneta\Booking\Core\Repositories\ReservationPlaceRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationRepository;
 use MikroPlaneta\Booking\Core\Models\Bed;
 use MikroPlaneta\Booking\Core\Models\Reservation;
@@ -24,16 +26,22 @@ class AvailabilityService {
     
     private BedRepository $bed_repository;
     private ReservationRepository $reservation_repository;
+    private BedPlaceRepository $bed_place_repository;
+    private ReservationPlaceRepository $reservation_place_repository;
     
     /**
      * Constructor
      */
     public function __construct(
         BedRepository $bed_repository,
-        ReservationRepository $reservation_repository
+        ReservationRepository $reservation_repository,
+        ?BedPlaceRepository $bed_place_repository = null,
+        ?ReservationPlaceRepository $reservation_place_repository = null
     ) {
         $this->bed_repository = $bed_repository;
         $this->reservation_repository = $reservation_repository;
+        $this->bed_place_repository = $bed_place_repository ?? new BedPlaceRepository();
+        $this->reservation_place_repository = $reservation_place_repository ?? new ReservationPlaceRepository();
     }
     
     /**
@@ -45,7 +53,7 @@ class AvailabilityService {
         
         // Filter out unavailable beds
         $available_beds = array_filter($all_beds, function(Bed $bed) use ($check_in, $check_out) {
-            return $this->reservation_repository->isBedAvailable($bed->id, $check_in, $check_out);
+            return $this->getAvailablePlacesForBed((int) $bed->id, $check_in, $check_out) > 0;
         });
         
         return array_values($available_beds);
@@ -76,7 +84,7 @@ class AvailabilityService {
         
         $total_capacity = 0;
         foreach ($available_beds as $bed) {
-            $total_capacity += $this->getBedCapacity($bed);
+            $total_capacity += $this->getAvailablePlacesForBed((int) $bed->id, $check_in, $check_out);
         }
 
         if ($total_capacity < $group_size) {
@@ -96,19 +104,19 @@ class AvailabilityService {
         foreach ($beds_by_room as $room_id => $beds) {
             $room_capacity = 0;
             foreach ($beds as $bed) {
-                $room_capacity += $this->getBedCapacity($bed);
+                $room_capacity += $this->getAvailablePlacesForBed((int) $bed->id, $check_in, $check_out);
             }
 
             if ($room_capacity >= $group_size) {
-                usort($beds, function(Bed $a, Bed $b) {
-                    return $this->getBedCapacity($b) <=> $this->getBedCapacity($a);
+                usort($beds, function(Bed $a, Bed $b) use ($check_in, $check_out) {
+                    return $this->getAvailablePlacesForBed((int) $b->id, $check_in, $check_out) <=> $this->getAvailablePlacesForBed((int) $a->id, $check_in, $check_out);
                 });
 
                 $picked_beds = [];
                 $capacity_left = $group_size;
                 foreach ($beds as $bed) {
                     $picked_beds[] = $bed;
-                    $capacity_left -= $this->getBedCapacity($bed);
+                    $capacity_left -= $this->getAvailablePlacesForBed((int) $bed->id, $check_in, $check_out);
                     if ($capacity_left <= 0) {
                         break;
                     }
@@ -126,15 +134,15 @@ class AvailabilityService {
         // If no single room fits, try multiple rooms
         if (empty($combinations)) {
             // Simple algorithm: take beds with highest capacity from multiple rooms
-            usort($available_beds, function(Bed $a, Bed $b) {
-                return $this->getBedCapacity($b) <=> $this->getBedCapacity($a);
+            usort($available_beds, function(Bed $a, Bed $b) use ($check_in, $check_out) {
+                return $this->getAvailablePlacesForBed((int) $b->id, $check_in, $check_out) <=> $this->getAvailablePlacesForBed((int) $a->id, $check_in, $check_out);
             });
 
             $selected_beds = [];
             $capacity_left = $group_size;
             foreach ($available_beds as $bed) {
                 $selected_beds[] = $bed;
-                $capacity_left -= $this->getBedCapacity($bed);
+                $capacity_left -= $this->getAvailablePlacesForBed((int) $bed->id, $check_in, $check_out);
                 if ($capacity_left <= 0) {
                     break;
                 }
@@ -161,33 +169,21 @@ class AvailabilityService {
      * Get availability calendar for bed
      */
     public function getBedAvailabilityCalendar(int $bed_id, string $start_date, string $end_date): array {
-        $reservations = $this->reservation_repository->findByBed($bed_id);
-        
         $calendar = [];
         $current = new \DateTime($start_date);
         $end = new \DateTime($end_date);
+        $capacity = $this->getBedCapacityById($bed_id);
         
         while ($current <= $end) {
             $date_str = $current->format('Y-m-d');
-            $is_available = true;
-            
-            foreach ($reservations as $reservation) {
-                if ($reservation->isCancelled()) {
-                    continue;
-                }
-                
-                $res_start = new \DateTime($reservation->check_in);
-                $res_end = new \DateTime($reservation->check_out);
-                
-                if ($current >= $res_start && $current < $res_end) {
-                    $is_available = false;
-                    break;
-                }
-            }
+            $next_date = (clone $current)->modify('+1 day')->format('Y-m-d');
+            $available_places = $this->getAvailablePlacesForBed($bed_id, $date_str, $next_date);
             
             $calendar[$date_str] = [
                 'date' => $date_str,
-                'available' => $is_available,
+                'available' => $available_places > 0,
+                'available_places' => $available_places,
+                'capacity' => $capacity,
             ];
             
             $current->modify('+1 day');
@@ -327,7 +323,7 @@ class AvailabilityService {
                 continue;
             }
 
-            $occupied_places += $this->getOccupiedPlacesForReservationOnBed($reservation, (int) $bed->id);
+            $occupied_places += $this->getOccupiedPlacesForReservationOnBed($reservation, (int) $bed->id, $check_in, $check_out, $exclude_reservation_id);
             if ($occupied_places >= $capacity) {
                 return false;
             }
@@ -340,7 +336,16 @@ class AvailabilityService {
      * Estimate how many places of target bed are used by this reservation.
      * Guests are greedily assigned to selected beds by capacity (largest first).
      */
-    private function getOccupiedPlacesForReservationOnBed(Reservation $reservation, int $target_bed_id): int {
+    private function getOccupiedPlacesForReservationOnBed(Reservation $reservation, int $target_bed_id, string $check_in, string $check_out, ?int $exclude_reservation_id = null): int {
+        if ($this->reservation_place_repository->exists()) {
+            return $this->reservation_place_repository->countOccupiedPlacesForBed(
+                $target_bed_id,
+                $check_in,
+                $check_out,
+                $exclude_reservation_id
+            );
+        }
+
         $guest_count = max(1, (int) $reservation->adults + (int) $reservation->children);
         $bed_ids = is_array($reservation->bed_ids) ? array_values(array_unique(array_map('intval', $reservation->bed_ids))) : [];
         if (empty($bed_ids)) {
@@ -384,6 +389,14 @@ class AvailabilityService {
     }
 
     private function getBedCapacity(Bed $bed): int {
+        if ($this->bed_place_repository->exists()) {
+            $this->bed_place_repository->ensureDefaultPlacesForBed((int) $bed->id, (string) $bed->bed_type);
+            $capacity = $this->bed_place_repository->getBedCapacity((int) $bed->id);
+            if ($capacity > 0) {
+                return $capacity;
+            }
+        }
+
         switch ((string) $bed->bed_type) {
             case 'bunk':
                 return 2;
@@ -412,6 +425,47 @@ class AvailabilityService {
 
     private function isExclusiveRoom(int $room_id): bool {
         return !$this->isPlaceBasedRoom($room_id);
+    }
+
+    public function getAvailablePlacesForBed(int $bed_id, string $check_in, string $check_out, ?int $exclude_reservation_id = null): int {
+        $bed = $this->bed_repository->find($bed_id);
+        if (!$bed || !$bed->is_active) {
+            return 0;
+        }
+
+        if ($this->isExclusiveRoom((int) $bed->room_id)) {
+            return $this->reservation_repository->isBedAvailable($bed_id, $check_in, $check_out, $exclude_reservation_id)
+                ? $this->getBedCapacity($bed)
+                : 0;
+        }
+
+        $this->bed_place_repository->ensureDefaultPlacesForBed((int) $bed->id, (string) $bed->bed_type);
+        $capacity = $this->getBedCapacity($bed);
+        if ($capacity <= 0) {
+            return 0;
+        }
+
+        if (!$this->reservation_place_repository->exists()) {
+            return $this->isBedAvailableByCapacity($bed, $check_in, $check_out, $exclude_reservation_id) ? $capacity : 0;
+        }
+
+        $occupied = $this->reservation_place_repository->countOccupiedPlacesForBed(
+            (int) $bed->id,
+            $check_in,
+            $check_out,
+            $exclude_reservation_id
+        );
+
+        return max(0, $capacity - $occupied);
+    }
+
+    public function getBedCapacityById(int $bed_id): int {
+        $bed = $this->bed_repository->find($bed_id);
+        if (!$bed || !$bed->is_active) {
+            return 0;
+        }
+
+        return $this->getBedCapacity($bed);
     }
 
     private function isRoomAvailableExclusive(

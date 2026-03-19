@@ -13,6 +13,8 @@ namespace MikroPlaneta\Booking\RestApi\Controllers;
 use MikroPlaneta\Booking\RestApi\RestController;
 use MikroPlaneta\Booking\Core\Repositories\RoomRepository;
 use MikroPlaneta\Booking\Core\Repositories\BedRepository;
+use MikroPlaneta\Booking\Core\Repositories\BedPlaceRepository;
+use MikroPlaneta\Booking\Core\Models\Bed;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -25,16 +27,19 @@ class RoomsController extends RestController {
     
     private RoomRepository $room_repository;
     private BedRepository $bed_repository;
+    private BedPlaceRepository $bed_place_repository;
     
     /**
      * Constructor
      */
     public function __construct(
         RoomRepository $room_repository,
-        BedRepository $bed_repository
+        BedRepository $bed_repository,
+        ?BedPlaceRepository $bed_place_repository = null
     ) {
         $this->room_repository = $room_repository;
         $this->bed_repository = $bed_repository;
+        $this->bed_place_repository = $bed_place_repository ?? new BedPlaceRepository();
         $this->rest_base = 'rooms';
     }
     
@@ -181,7 +186,7 @@ class RoomsController extends RestController {
         $data = $room->toArray();
         // Add beds to detail view
         $beds = $this->bed_repository->findByRoom($id);
-        $data['beds'] = array_map(fn($bed) => $bed->toArray(), $beds);
+        $data['beds'] = array_map(fn($bed) => $this->serialize_bed($bed), $beds);
         
         return $this->success($data);
     }
@@ -245,7 +250,7 @@ class RoomsController extends RestController {
         $room_id = (int) $request['room_id'];
         $beds = $this->bed_repository->findByRoom($room_id);
         
-        $data = array_map(fn($bed) => $bed->toArray(), $beds);
+        $data = array_map(fn($bed) => $this->serialize_bed($bed), $beds);
         return $this->success($data);
     }
     
@@ -260,7 +265,7 @@ class RoomsController extends RestController {
             return $this->error('Bed not found', 404);
         }
         
-        return $this->success($bed->toArray());
+        return $this->success($this->serialize_bed($bed));
     }
     
     /**
@@ -280,7 +285,8 @@ class RoomsController extends RestController {
         
         try {
             $bed = $this->bed_repository->create($params);
-            return $this->success($bed->toArray(), 201);
+            $this->bed_place_repository->ensureDefaultPlacesForBed((int) $bed->id, (string) $bed->bed_type);
+            return $this->success($this->serialize_bed($bed), 201);
         } catch (\Exception $e) {
             return $this->error($e->getMessage());
         }
@@ -294,7 +300,8 @@ class RoomsController extends RestController {
         
         try {
             $bed = $this->bed_repository->update($id, $request->get_params());
-            return $this->success($bed->toArray());
+            $this->bed_place_repository->ensureDefaultPlacesForBed((int) $bed->id, (string) $bed->bed_type);
+            return $this->success($this->serialize_bed($bed));
         } catch (\Exception $e) {
             return $this->error($e->getMessage());
         }
@@ -314,5 +321,23 @@ class RoomsController extends RestController {
         } catch (\Exception $e) {
             return $this->error($e->getMessage());
         }
+    }
+
+    private function serialize_bed(Bed $bed): array {
+        $data = $bed->toArray();
+        $capacity = 0;
+
+        if ($this->bed_place_repository->exists()) {
+            $this->bed_place_repository->ensureDefaultPlacesForBed((int) $bed->id, (string) $bed->bed_type);
+            $capacity = $this->bed_place_repository->getBedCapacity((int) $bed->id);
+        }
+
+        if ($capacity <= 0) {
+            $capacity = ((string) ($bed->bed_type ?? 'single')) === 'bunk' ? 2 : 1;
+        }
+
+        $data['capacity'] = $capacity;
+
+        return $data;
     }
 }

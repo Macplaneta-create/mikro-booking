@@ -21,6 +21,7 @@ class ReservationRepository implements RepositoryInterface {
     
     private string $table;
     private string $guests_table;
+    private string $reservation_places_table;
     
     /**
      * Constructor
@@ -28,6 +29,7 @@ class ReservationRepository implements RepositoryInterface {
     public function __construct() {
         $this->table = Schema::get_table_name('reservations');
         $this->guests_table = Schema::get_table_name('guests');
+        $this->reservation_places_table = Schema::get_table_name('reservation_places');
     }
     
     /**
@@ -43,7 +45,7 @@ class ReservationRepository implements RepositoryInterface {
         
         $row = $wpdb->get_row(
             $wpdb->prepare($sql, $id),
-            ARRAY_A
+            'ARRAY_A'
         );
         
         if (!$row) {
@@ -58,6 +60,7 @@ class ReservationRepository implements RepositoryInterface {
         ));
         
         $row['bed_ids'] = array_map('intval', $bed_ids);
+        $row['place_ids'] = $this->get_place_ids($id);
         
         return Reservation::fromArray($row);
     }
@@ -86,7 +89,7 @@ class ReservationRepository implements RepositoryInterface {
             $params = array_merge($params, $statuses);
         }
         
-        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+        $rows = $wpdb->get_results($wpdb->prepare($sql, $params), 'ARRAY_A');
         
         return array_map(function($row) {
             return Reservation::fromArray($row);
@@ -160,9 +163,9 @@ class ReservationRepository implements RepositoryInterface {
         $sql .= ' ORDER BY r.check_in ASC';
 
         if (!empty($params)) {
-            $rows = $wpdb->get_results($wpdb->prepare($sql, $params), ARRAY_A);
+            $rows = $wpdb->get_results($wpdb->prepare($sql, $params), 'ARRAY_A');
         } else {
-            $rows = $wpdb->get_results($sql, ARRAY_A);
+            $rows = $wpdb->get_results($sql, 'ARRAY_A');
         }
 
         // Group beds by reservation ID
@@ -184,8 +187,38 @@ class ReservationRepository implements RepositoryInterface {
 
         // Convert to Model objects
         return array_map(function($row) {
+            $row['place_ids'] = $this->get_place_ids((int) $row['id']);
             return Reservation::fromArray($row);
         }, array_values($reservations_by_id));
+    }
+
+    private function get_place_ids(int $reservation_id): array {
+        global $wpdb;
+
+        if (!$this->reservation_places_table_exists()) {
+            return [];
+        }
+
+        $place_ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT place_id FROM {$this->reservation_places_table} WHERE reservation_id = %d ORDER BY place_id ASC",
+            $reservation_id
+        ));
+
+        return array_map('intval', $place_ids);
+    }
+
+    private function reservation_places_table_exists(): bool {
+        global $wpdb;
+
+        static $exists = null;
+        if ($exists !== null) {
+            return $exists;
+        }
+
+        $result = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $this->reservation_places_table));
+        $exists = $result === $this->reservation_places_table;
+
+        return $exists;
     }
     
     /**
@@ -203,7 +236,7 @@ class ReservationRepository implements RepositoryInterface {
             'adults' => $data['adults'] ?? 1,
             'children' => $data['children'] ?? 0,
             'notes' => $data['notes'] ?? null,
-            'created_by' => $data['created_by'] ?? get_current_user_id(),
+            'created_by' => isset($data['created_by']) ? (int) $data['created_by'] : 0,
         ];
         
         $wpdb->insert($this->table, $insert_data);

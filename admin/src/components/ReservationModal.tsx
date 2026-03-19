@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Save, Loader2, UserPlus, Users, Baby, Calendar as CalendarIcon, MapPin, CreditCard, Coins, BedDouble, Check, MousePointerClick } from 'lucide-react';
-import { AvailabilityAPI, GuestsAPI, ReservationsAPI, PricingAPI, ExtrasAPI, Guest, Room, ExtraService } from '../services/api';
+import { AvailabilityAPI, GuestsAPI, ReservationsAPI, PricingAPI, ExtrasAPI, Guest, Room, ExtraService, Bed } from '../services/api';
 import { format, parseISO } from 'date-fns';
 import { pl } from 'date-fns/locale';
 
@@ -55,10 +55,14 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
 
     const [localBedIds, setLocalBedIds] = useState<number[]>([]);
 
-    const getBedCapacity = (bed: any): number => {
+    const getBedCapacity = (bed?: Partial<Bed> | null): number => {
+        const explicitCapacity = Number(bed?.available_places ?? bed?.capacity ?? 0);
+        if (explicitCapacity > 0) {
+            return explicitCapacity;
+        }
+
         const type = String(bed?.bed_type || 'single');
-        if (type === 'bunk') return 2;
-        return 1;
+        return type === 'bunk' ? 2 : 1;
     };
 
     const getBedsCapacity = (bedIds: number[]): number => {

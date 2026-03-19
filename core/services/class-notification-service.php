@@ -449,17 +449,17 @@ class NotificationService {
     private function getDefaultSubject(string $template_key): string {
         switch ($template_key) {
             case 'reservation_confirmation':
-                return sprintf(__('Reservation Confirmed - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+                return sprintf(__('Potwierdzenie rezerwacji - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
             case 'reservation_pending':
-                return sprintf(__('Reservation Received - Waiting for Confirmation - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+                return sprintf(__('Rezerwacja przyjęta - oczekuje na potwierdzenie - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
             case 'reservation_cancellation':
-                return sprintf(__('Reservation Cancelled - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+                return sprintf(__('Anulowanie rezerwacji - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
             case 'checkin_reminder':
-                return sprintf(__('Check-in Reminder - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+                return sprintf(__('Przypomnienie o zameldowaniu - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
             case 'checkout_reminder':
-                return sprintf(__('Check-out Reminder - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+                return sprintf(__('Przypomnienie o wymeldowaniu - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
             default:
-                return sprintf(__('Reservation Message - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
+                return sprintf(__('Wiadomość dotycząca rezerwacji - %s', 'mikroplaneta-booking'), get_bloginfo('name'));
         }
     }
 
@@ -634,46 +634,46 @@ class NotificationService {
         <body>
             <div class="container">
                 <div class="header">
-                    <h1><?php _e('Reservation Confirmed', 'mikroplaneta-booking'); ?></h1>
+                    <h1><?php _e('Potwierdzenie rezerwacji', 'mikroplaneta-booking'); ?></h1>
                 </div>
                 
                 <div class="content">
-                    <p><?php printf(__('Dear %s,', 'mikroplaneta-booking'), esc_html($guest->getFullName())); ?></p>
+                    <p><?php printf(__('Dzień dobry %s,', 'mikroplaneta-booking'), esc_html($guest->getFullName())); ?></p>
                     
-                    <p><?php _e('Your reservation has been confirmed. Here are the details:', 'mikroplaneta-booking'); ?></p>
+                    <p><?php _e('Twoja rezerwacja została potwierdzona. Szczegóły:', 'mikroplaneta-booking'); ?></p>
                     
                     <div class="details">
-                        <p><strong><?php _e('Reservation ID:', 'mikroplaneta-booking'); ?></strong> #<?php echo esc_html($reservation->id); ?></p>
-                        <p><strong><?php _e('Check-in:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_in))); ?></p>
-                        <p><strong><?php _e('Check-out:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_out))); ?></p>
-                        <p><strong><?php _e('Nights:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html($reservation->getNights()); ?></p>
-                        <p><strong><?php _e('Total Price:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(number_format($reservation->total_price, 2)); ?> PLN</p>
+                        <p><strong><?php _e('Numer rezerwacji:', 'mikroplaneta-booking'); ?></strong> #<?php echo esc_html($reservation->id); ?></p>
+                        <p><strong><?php _e('Przyjazd:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_in))); ?></p>
+                        <p><strong><?php _e('Wyjazd:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_out))); ?></p>
+                        <p><strong><?php _e('Liczba nocy:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html($reservation->getNights()); ?></p>
+                        <p><strong><?php _e('Cena łączna:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(number_format($reservation->total_price, 2)); ?> PLN</p>
                     </div>
                     
                     <?php if ($reservation->notes): ?>
                     <div class="details">
-                        <p><strong><?php _e('Notes:', 'mikroplaneta-booking'); ?></strong></p>
+                        <p><strong><?php _e('Uwagi:', 'mikroplaneta-booking'); ?></strong></p>
                         <p><?php echo nl2br(esc_html($reservation->notes)); ?></p>
                     </div>
                     <?php endif; ?>
 
                     <div class="details" style="border-left-color: #28a745;">
-                        <p><strong><?php _e('GDPR Consents:', 'mikroplaneta-booking'); ?></strong></p>
+                        <p><strong><?php _e('Zgody RODO:', 'mikroplaneta-booking'); ?></strong></p>
                         <p style="font-size: 13px;">{{consents}}</p>
                         <p style="font-size: 11px; color: #666; margin-top: 10px;">
-                            <?php _e('By making this reservation, you have agreed to our', 'mikroplaneta-booking'); ?> 
-                            <a href="<?php echo esc_url(get_privacy_policy_url()); ?>"><?php _e('Privacy Policy', 'mikroplaneta-booking'); ?></a>.
+                            <?php _e('Dokonując rezerwacji, akceptujesz naszą', 'mikroplaneta-booking'); ?> 
+                            <a href="<?php echo esc_url(get_privacy_policy_url()); ?>"><?php _e('Politykę prywatności', 'mikroplaneta-booking'); ?></a>.
                         </p>
                     </div>
 
                     <div class="calendar-cta">
-                        <p><strong><?php _e('Add this stay to your calendar', 'mikroplaneta-booking'); ?></strong></p>
-                        <p><?php _e('The .ics calendar file is attached to this email. Open the attachment to add your reservation to Google Calendar, Apple Calendar or Outlook.', 'mikroplaneta-booking'); ?></p>
-                        <a href="<?php echo esc_url($calendar_download_url); ?>" class="button-like"><?php _e('Add to calendar', 'mikroplaneta-booking'); ?></a>
-                        <p style="font-size: 12px; color: #666; margin-top: 10px;"><?php _e('If your email client does not show the button, open the .ics attachment manually.', 'mikroplaneta-booking'); ?></p>
+                        <p><strong><?php _e('Dodaj pobyt do kalendarza', 'mikroplaneta-booking'); ?></strong></p>
+                        <p><?php _e('Plik .ics jest dołączony do tej wiadomości. Otwórz załącznik, aby dodać rezerwację do Google Calendar, Apple Calendar lub Outlook.', 'mikroplaneta-booking'); ?></p>
+                        <a href="<?php echo esc_url($calendar_download_url); ?>" class="button-like"><?php _e('Dodaj do kalendarza', 'mikroplaneta-booking'); ?></a>
+                        <p style="font-size: 12px; color: #666; margin-top: 10px;"><?php _e('Jeśli przycisk nie jest widoczny w kliencie poczty, otwórz ręcznie załącznik .ics.', 'mikroplaneta-booking'); ?></p>
                     </div>
 
-                    <p><?php _e('We look forward to welcoming you!', 'mikroplaneta-booking'); ?></p>
+                    <p><?php _e('Do zobaczenia na miejscu!', 'mikroplaneta-booking'); ?></p>
                 </div>
                 
                 <div class="footer">
@@ -731,39 +731,39 @@ class NotificationService {
         <body>
             <div class="container">
                 <div class="header">
-                    <h1><?php _e('Reservation Received', 'mikroplaneta-booking'); ?></h1>
-                    <p style="margin: 10px 0 0; font-size: 14px;"><?php _e('Waiting for confirmation', 'mikroplaneta-booking'); ?></p>
+                    <h1><?php _e('Rezerwacja przyjęta', 'mikroplaneta-booking'); ?></h1>
+                    <p style="margin: 10px 0 0; font-size: 14px;"><?php _e('Oczekuje na potwierdzenie', 'mikroplaneta-booking'); ?></p>
                 </div>
 
                 <div class="content">
-                    <p><?php printf(__('Dear %s,', 'mikroplaneta-booking'), esc_html($guest->getFullName())); ?></p>
+                    <p><?php printf(__('Dzień dobry %s,', 'mikroplaneta-booking'), esc_html($guest->getFullName())); ?></p>
 
-                    <p><?php _e('Thank you for your reservation request. We have received your booking and it is waiting for confirmation.', 'mikroplaneta-booking'); ?></p>
+                    <p><?php _e('Dziękujemy za zgłoszenie rezerwacji. Twoja rezerwacja została przyjęta i czeka na potwierdzenie.', 'mikroplaneta-booking'); ?></p>
 
                     <div class="details">
-                        <p><strong><?php _e('Reservation ID:', 'mikroplaneta-booking'); ?></strong> #<?php echo esc_html($reservation->id); ?></p>
-                        <p><strong><?php _e('Status:', 'mikroplaneta-booking'); ?></strong> <span class="highlight"><?php _e('Pending (waiting for confirmation)', 'mikroplaneta-booking'); ?></span></p>
-                        <p><strong><?php _e('Check-in:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_in))); ?></p>
-                        <p><strong><?php _e('Check-out:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_out))); ?></p>
-                        <p><strong><?php _e('Nights:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html($reservation->getNights()); ?></p>
-                        <p><strong><?php _e('Guests:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html($reservation->adults + $reservation->children); ?></p>
-                        <p><strong><?php _e('Total Price:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(number_format($reservation->total_price, 2)); ?> PLN</p>
+                        <p><strong><?php _e('Numer rezerwacji:', 'mikroplaneta-booking'); ?></strong> #<?php echo esc_html($reservation->id); ?></p>
+                        <p><strong><?php _e('Status:', 'mikroplaneta-booking'); ?></strong> <span class="highlight"><?php _e('Oczekuje na potwierdzenie', 'mikroplaneta-booking'); ?></span></p>
+                        <p><strong><?php _e('Przyjazd:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_in))); ?></p>
+                        <p><strong><?php _e('Wyjazd:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(date_i18n(get_option('date_format'), strtotime($reservation->check_out))); ?></p>
+                        <p><strong><?php _e('Liczba nocy:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html($reservation->getNights()); ?></p>
+                        <p><strong><?php _e('Goście:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html($reservation->adults + $reservation->children); ?></p>
+                        <p><strong><?php _e('Cena łączna:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html(number_format($reservation->total_price, 2)); ?> PLN</p>
                     </div>
 
                     <?php if ($deposit_enabled && $deposit_amount > 0): ?>
                     <div class="payment-info">
-                        <h2 style="margin: 0 0 15px; color: #d97706;"><?php _e('Deposit Required', 'mikroplaneta-booking'); ?></h2>
+                        <h2 style="margin: 0 0 15px; color: #d97706;"><?php _e('Wymagana zaliczka', 'mikroplaneta-booking'); ?></h2>
                         
-                        <p><?php _e('To confirm your reservation, please make a deposit payment:', 'mikroplaneta-booking'); ?></p>
+                        <p><?php _e('Aby potwierdzić rezerwację, opłać zaliczkę:', 'mikroplaneta-booking'); ?></p>
                         
                         <p style="font-size: 18px; text-align: center; margin: 20px 0;">
-                            <strong><?php _e('Deposit Amount:', 'mikroplaneta-booking'); ?></strong><br>
+                            <strong><?php _e('Kwota zaliczki:', 'mikroplaneta-booking'); ?></strong><br>
                             <span class="highlight" style="font-size: 24px;"><?php echo esc_html(number_format($deposit_amount, 2)); ?> PLN</span>
                             <span style="font-size: 14px; color: #666;">(<?php echo esc_html($deposit_percent); ?>%)</span>
                         </p>
 
                         <div style="background: white; padding: 15px; margin: 15px 0; border-radius: 8px;">
-                            <p style="margin: 10px 0;"><strong><?php _e('Bank Account Number:', 'mikroplaneta-booking'); ?></strong></p>
+                            <p style="margin: 10px 0;"><strong><?php _e('Numer konta:', 'mikroplaneta-booking'); ?></strong></p>
                             <p style="font-size: 18px; font-family: monospace; background: #f9f9f9; padding: 10px; text-align: center; letter-spacing: 2px;">
                                 <?php echo esc_html($payment_account ?: '---'); ?>
                             </p>
@@ -772,58 +772,58 @@ class NotificationService {
                             <p style="margin: 10px 0;"><strong><?php _e('Bank:', 'mikroplaneta-booking'); ?></strong> <?php echo esc_html($payment_bank_name); ?></p>
                             <?php endif; ?>
                             
-                            <p style="margin: 10px 0;"><strong><?php _e('Payment Title:', 'mikroplaneta-booking'); ?></strong> <?php printf(__('Reservation #%d', 'mikroplaneta-booking'), intval($reservation->id)); ?></p>
+                            <p style="margin: 10px 0;"><strong><?php _e('Tytuł przelewu:', 'mikroplaneta-booking'); ?></strong> <?php printf(__('Rezerwacja #%d', 'mikroplaneta-booking'), intval($reservation->id)); ?></p>
                             
                             <?php if ($payment_additional_info): ?>
-                            <p style="margin: 10px 0;"><strong><?php _e('Additional Information:', 'mikroplaneta-booking'); ?></strong></p>
+                            <p style="margin: 10px 0;"><strong><?php _e('Dodatkowe informacje:', 'mikroplaneta-booking'); ?></strong></p>
                             <p style="font-size: 13px; color: #666;"><?php echo nl2br(esc_html($payment_additional_info)); ?></p>
                             <?php endif; ?>
                         </div>
 
                         <p style="background: #fef3c7; padding: 10px; border-radius: 6px;">
-                            <strong><?php _e('Payment Deadline:', 'mikroplaneta-booking'); ?></strong><br>
+                            <strong><?php _e('Termin płatności:', 'mikroplaneta-booking'); ?></strong><br>
                             <?php printf(
-                                __('Please make the payment within %d hours (before %s).', 'mikroplaneta-booking'),
+                                __('Opłać zaliczkę w ciągu %d godzin (do %s).', 'mikroplaneta-booking'),
                                 intval($timeout_hours),
                                 esc_html($deadline)
                             ); ?>
                         </p>
 
                         <p style="font-size: 13px; color: #666;">
-                            <?php _e('Your reservation will be confirmed automatically after the deposit is received. If we do not receive the payment within the deadline, your reservation will be automatically cancelled.', 'mikroplaneta-booking'); ?>
+                            <?php _e('Rezerwacja zostanie potwierdzona automatycznie po zaksięgowaniu zaliczki. Jeśli płatność nie dotrze w terminie, rezerwacja może zostać anulowana automatycznie.', 'mikroplaneta-booking'); ?>
                         </p>
                     </div>
                     <?php else: ?>
                     <div class="payment-info" style="border-left-color: #10b981; background: #ecfdf5;">
-                        <h2 style="margin: 0 0 15px; color: #059669;"><?php _e('Waiting for Confirmation', 'mikroplaneta-booking'); ?></h2>
-                        <p><?php _e('Our team will review your reservation request and confirm it shortly. You will receive a confirmation email with further instructions.', 'mikroplaneta-booking'); ?></p>
+                        <h2 style="margin: 0 0 15px; color: #059669;"><?php _e('Oczekiwanie na potwierdzenie', 'mikroplaneta-booking'); ?></h2>
+                        <p><?php _e('Nasz zespół zweryfikuje zgłoszenie i potwierdzi rezerwację. Otrzymasz osobną wiadomość z dalszymi informacjami.', 'mikroplaneta-booking'); ?></p>
                     </div>
                     <?php endif; ?>
 
                     <?php if ($reservation->notes): ?>
                     <div class="details">
-                        <p><strong><?php _e('Your Notes:', 'mikroplaneta-booking'); ?></strong></p>
+                        <p><strong><?php _e('Twoje uwagi:', 'mikroplaneta-booking'); ?></strong></p>
                         <p><?php echo nl2br(esc_html($reservation->notes)); ?></p>
                     </div>
                     <?php endif; ?>
 
                     <div class="details" style="border-left-color: #28a745;">
-                        <p><strong><?php _e('GDPR Consents:', 'mikroplaneta-booking'); ?></strong></p>
+                        <p><strong><?php _e('Zgody RODO:', 'mikroplaneta-booking'); ?></strong></p>
                         <p style="font-size: 13px;">{{consents}}</p>
                         <p style="font-size: 11px; color: #666; margin-top: 10px;">
-                            <?php _e('By making this reservation, you have agreed to our', 'mikroplaneta-booking'); ?>
-                            <a href="<?php echo esc_url(get_privacy_policy_url()); ?>"><?php _e('Privacy Policy', 'mikroplaneta-booking'); ?></a>.
+                            <?php _e('Dokonując rezerwacji, akceptujesz naszą', 'mikroplaneta-booking'); ?>
+                            <a href="<?php echo esc_url(get_privacy_policy_url()); ?>"><?php _e('Politykę prywatności', 'mikroplaneta-booking'); ?></a>.
                         </p>
                     </div>
 
                     <div class="calendar-cta">
-                        <p><strong><?php _e('Add this stay to your calendar', 'mikroplaneta-booking'); ?></strong></p>
-                        <p><?php _e('The .ics calendar file is attached to this email. Open the attachment to add your reservation to Google Calendar, Apple Calendar or Outlook.', 'mikroplaneta-booking'); ?></p>
-                        <a href="<?php echo esc_url($calendar_download_url); ?>" class="button-like"><?php _e('Add to calendar', 'mikroplaneta-booking'); ?></a>
-                        <p style="font-size: 12px; color: #666; margin-top: 10px;"><?php _e('If your email client does not show the button, open the .ics attachment manually.', 'mikroplaneta-booking'); ?></p>
+                        <p><strong><?php _e('Dodaj pobyt do kalendarza', 'mikroplaneta-booking'); ?></strong></p>
+                        <p><?php _e('Plik .ics jest dołączony do tej wiadomości. Otwórz załącznik, aby dodać rezerwację do Google Calendar, Apple Calendar lub Outlook.', 'mikroplaneta-booking'); ?></p>
+                        <a href="<?php echo esc_url($calendar_download_url); ?>" class="button-like"><?php _e('Dodaj do kalendarza', 'mikroplaneta-booking'); ?></a>
+                        <p style="font-size: 12px; color: #666; margin-top: 10px;"><?php _e('Jeśli przycisk nie jest widoczny w kliencie poczty, otwórz ręcznie załącznik .ics.', 'mikroplaneta-booking'); ?></p>
                     </div>
 
-                    <p><?php _e('If you have any questions, please contact us.', 'mikroplaneta-booking'); ?></p>
+                    <p><?php _e('W razie pytań skontaktuj się z recepcją.', 'mikroplaneta-booking'); ?></p>
                 </div>
 
                 <div class="footer">

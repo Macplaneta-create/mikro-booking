@@ -383,17 +383,63 @@ if (!function_exists('current_time')) {
     }
 }
 
+if (!isset($GLOBALS['wpdb'])) {
+    $GLOBALS['wpdb'] = new class {
+        public string $prefix = 'wp_';
+
+        public function prepare($query, ...$args): string {
+            $flatArgs = [];
+            foreach ($args as $arg) {
+                if (is_array($arg)) {
+                    foreach ($arg as $nested) {
+                        $flatArgs[] = $nested;
+                    }
+                } else {
+                    $flatArgs[] = $arg;
+                }
+            }
+
+            if (empty($flatArgs)) {
+                return (string) $query;
+            }
+
+            return @vsprintf(str_replace(['%d', '%f', '%s'], ['%u', '%F', "'%s'"], (string) $query), $flatArgs) ?: (string) $query;
+        }
+
+        public function get_var($query) {
+            $queryText = (string) $query;
+            if (stripos($queryText, 'GET_LOCK(') !== false) {
+                return '1';
+            }
+            if (stripos($queryText, 'RELEASE_LOCK(') !== false) {
+                return '1';
+            }
+            return null;
+        }
+
+        public function query($query): bool {
+            return true;
+        }
+    };
+}
+
+require_once __DIR__ . '/../core/database/class-schema.php';
+
 require_once __DIR__ . '/../core/repositories/interface-repository.php';
 require_once __DIR__ . '/../core/models/class-reservation.php';
 require_once __DIR__ . '/../core/models/class-guest.php';
 require_once __DIR__ . '/../core/models/class-bed.php';
+require_once __DIR__ . '/../core/models/class-bed-place.php';
 require_once __DIR__ . '/../core/models/class-room.php';
+require_once __DIR__ . '/../core/models/class-reservation-place.php';
 require_once __DIR__ . '/../rest-api/class-rest-controller.php';
 require_once __DIR__ . '/../core/repositories/class-reservation-repository.php';
 require_once __DIR__ . '/../core/repositories/class-guest-repository.php';
 require_once __DIR__ . '/../core/repositories/class-bed-repository.php';
+require_once __DIR__ . '/../core/repositories/class-bed-place-repository.php';
 require_once __DIR__ . '/../core/repositories/class-room-repository.php';
 require_once __DIR__ . '/../core/repositories/class-reservation-bed-repository.php';
+require_once __DIR__ . '/../core/repositories/class-reservation-place-repository.php';
 require_once __DIR__ . '/../core/services/class-availability-service.php';
 require_once __DIR__ . '/../core/services/class-pricing-service.php';
 require_once __DIR__ . '/../core/services/class-notification-service.php';

@@ -133,14 +133,21 @@ class Admin {
             [$this, 'render_admin_page']
         );
         
-        add_submenu_page(
-            'mikroplaneta-booking',
-            __('Database Migrations', 'mikroplaneta-booking'),
-            __('Migrations', 'mikroplaneta-booking'),
-            'manage_options',
-            'mikroplaneta-booking-migrations',
-            [$this, 'render_migrations_page']
+        $show_migrations = (bool) apply_filters(
+            'mikroplaneta_booking_show_migrations_menu',
+            (defined('WP_DEBUG') && WP_DEBUG)
         );
+
+        if ($show_migrations) {
+            add_submenu_page(
+                'mikroplaneta-booking',
+                __('Database Migrations', 'mikroplaneta-booking'),
+                __('Migrations', 'mikroplaneta-booking'),
+                'manage_options',
+                'mikroplaneta-booking-migrations',
+                [$this, 'render_migrations_page']
+            );
+        }
     }
     
     /**

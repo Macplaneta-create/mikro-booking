@@ -11,7 +11,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2, Users, BedDouble, Calendar, Euro, Plus, Minus, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { ReservationsAPI, PricingAPI, ExtrasAPI, AvailabilityAPI, Reservation, ExtraService, Room } from '../../services/api';
+import { ReservationsAPI, PricingAPI, ExtrasAPI, AvailabilityAPI, Reservation, ExtraService, Room, Bed } from '../../services/api';
 
 interface EditReservationModalProps {
     reservation: Reservation;
@@ -30,10 +30,14 @@ const EditReservationModal: React.FC<EditReservationModalProps> = ({
 }) => {
     const [loading, setLoading] = useState(false);
 
-    const getBedCapacity = (bed: any): number => {
+    const getBedCapacity = (bed?: Partial<Bed> | null): number => {
+        const explicitCapacity = Number(bed?.available_places ?? bed?.capacity ?? 0);
+        if (explicitCapacity > 0) {
+            return explicitCapacity;
+        }
+
         const type = String(bed?.bed_type || 'single');
-        if (type === 'bunk') return 2;
-        return 1;
+        return type === 'bunk' ? 2 : 1;
     };
 
     const getBedsCapacity = (bedIds: number[]): number => {

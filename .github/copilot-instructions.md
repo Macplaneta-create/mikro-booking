@@ -11,6 +11,18 @@ This repository uses a fixed documentation split. Do not mix these roles.
 - `RELEASE_CHECKLIST.md` contains release and deployment readiness steps.
 - `docs/archive/` contains historical snapshots only.
 
+## Update Docs: skill vs prompt
+
+Two similarly named tools exist and they serve different purposes:
+
+- `update-project-docs` (skill): use as the agent workflow policy when docs must be synchronized after coding work.
+- `/update-docs` (prompt): use as a manual slash-command to run a one-off docs refresh in chat.
+
+Rule of thumb:
+
+- if you want the assistant to follow repository documentation policy, use the skill context,
+- if you want to trigger a quick manual docs update from chat, use the prompt command.
+
 ## When to update documentation
 
 After meaningful work, check whether documentation should change.
