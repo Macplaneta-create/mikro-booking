@@ -1,6 +1,6 @@
 # Status Projektu
 
-Ostatnia aktualizacja: 2026-03-15
+Ostatnia aktualizacja: 2026-03-19
 
 Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 
@@ -16,7 +16,7 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 
 | Obszar | Status | Poziom pewności | Następny krok |
 |---|---|---|---|
-| Rezerwacje podstawowe | Zaimplementowane, do potwierdzenia | średni | potwierdzić pełny flow na świeżym WordPressie |
+| Rezerwacje podstawowe | Zaimplementowane, do potwierdzenia | średni | sprawdzić przycisk „Rezerwacje” w widoku kalendarza, alokację grup oraz przeliczanie ceny w modalu |
 | Backup CSV / SQL | Zaimplementowane, do potwierdzenia | średni | test z paczki ZIP i test cronów |
 | iCal dla gości | Zaimplementowane, do potwierdzenia | średni | potwierdzić link CTA i logi audytowe |
 | Health Check | Zaimplementowane, do potwierdzenia | średni | test w środowisku zewnętrznym |
@@ -83,12 +83,15 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - potwierdzić wykonanie migracji `025-create-reservation-places.php` na aktualizowanej instalacji oraz zachowanie fallbacku dla starszych danych.
 - sprawdzić ręcznie scenariusze częściowego obłożenia łóżka piętrowego: nowa rezerwacja, edycja, check-in z mniejszą liczbą gości i widget publiczny.
 - potwierdzić klikany test recepcjonisty w realnym UI WordPressa, bo obecna weryfikacja tej części była integracyjna, nie manualna.
-
+- zbadać niedziałający przycisk „Rezerwacje” w widoku kalendarza admina.
+- sprawdzić algorytm alokacji grup: przy grupie 8 osób system rozrzucił gości po kilku pokojach mimo dostępnego pokoju wieloosobowego.
+- naprawić przeliczanie kosztu w modalu tworzenia rezerwacji, bo obecnie podlicza się tylko pościel / usługi dodatkowe, a nie cena noclegu.- naprawić nadpisywanie ręcznego wyboru miejsca w kalendarzu: kiedy recepcjonista wybiera konkretne miejsce (np. Dół lub Góra w łóżku piętrowym) klikając w kalendarz, system ignoruje ten wybór i stosuje algorytm optymalizacji — blokuje to weryfikację częściowego obłożenia łóżka piętrowego. Optymalizacja powinna działać tylko przy automatycznym trybie (przycisk „Rezerwuj"), a ręczny wybór z kalendarza musi być zachowany dokładnie tak, jak go wybrał recepcjonista.
 ## Plan najbliższy
 
-1. Uruchomić migrację `reservation_places` i zrobić ręczny test recepcjonisty 15 min na stagingu.
-2. Domknąć regresję front/mail/dashboard/widget po zmianach place-based.
-3. Podjąć decyzję GO/NO-GO na stagingu z użyciem runbooka release.
+1. Naprawić nadpisywanie ręcznego wyboru miejsca z kalendarza: backend musi respektować przekazane `place_ids` bez ponownej alokacji (priorytet — blokuje weryfikację częściowego obłożenia łóżka piętrowego).
+2. Zbadać i naprawić przycisk „Rezerwacje" w widoku kalendarza oraz przeliczanie ceny w modalu tworzenia rezerwacji.
+3. Zweryfikować i poprawić alokację grup, żeby preferowała pokój wieloosobowy przed rozrzucaniem grupy po kilku pokojach.
+4. Po poprawkach wrócić do ręcznego testu recepcjonisty i decyzji GO/NO-GO na stagingu.
 
 ## Zasada aktualizacji po każdej sesji
 

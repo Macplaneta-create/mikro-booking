@@ -6,7 +6,7 @@
 
 ---
 
-## 📊 Stan Obecny (v1.2.7)
+## 📊 Stan Obecny (v1.2.8)
 
 ### ✅ Działające funkcjonalności:
 

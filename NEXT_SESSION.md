@@ -1,28 +1,30 @@
 # Następna Sesja - MikroPlaneta Booking
 
-Data aktualizacji: 2026-03-15  
-Status: kod i testy integracyjne dla alokacji miejsc są gotowe; następny krok to stagingowy test ręczny recepcjonisty i końcowa decyzja release
+Data aktualizacji: 2026-03-19  
+Status: przed domknięciem stagingu trzeba naprawić problemy wykryte w realnym UI admina: przycisk „Rezerwacje”, alokację grup i przeliczanie ceny w modalu
 
-## Top 3 działania
+## Top 4 działania
 
-### 1. Test recepcjonisty na stagingu
+### 1. Ręczny wybór miejsca z kalendarza jest nadpisywany przez optymalizator (BLOKER)
 
-- [ ] uruchomić migrację `025-create-reservation-places.php` na stagingu / aktualizowanej instalacji,
-- [ ] przejść klikany test 15 min: częściowo zajęte łóżko piętrowe, edycja, check-in z mniejszą liczbą gości, widget publiczny,
-- [ ] potwierdzić payload `capacity` / `available_places` w adminie i na froncie po aktualizacji danych.
+- [ ] znaleźć w backendzie (`ReservationService` lub `AvailabilityService`) miejsce, gdzie `place_ids` przekazane przez frontend są ignorowane lub ponownie alokowane,
+- [ ] rozdzielić ścieżkę: jeśli request zawiera `place_ids` → zachować je bez zmian; jeśli brak `place_ids` → uruchomić algorytm optymalizacji (tryb automatyczny),
+- [ ] potwierdzić manualnie: wybrać konkretne „Dół" w łóżku piętrowym z kalendarza → zapis rezerwacji → ta sama alokacja widoczna w szczegółach.
 
-### 2. Regresja krytycznych flow
+### 2. Widok kalendarza i modal rezerwacji
 
-- [ ] potwierdzić, że opisy w Ustawieniach (Rate Limiting, SMTP Health Check) są zrozumiałe dla operatora,
-- [ ] uruchomić test Cron reminders i sprawdzić nowe komunikaty + wpisy sent/failed w historii,
-- [ ] potwierdzić aktualizację dashboardu po edycji dat rezerwacji,
-- [ ] potwierdzić scenariusz admin „Ctrl+klik wiele łóżek -> Rezerwuj”: domyślna liczba osób = pojemność zaznaczonych miejsc i poprawna cena startowa,
-- [ ] sprawdzić polski język wiadomości email do klienta (bez miksu PL/EN),
-- [ ] ponowić sanity check Google Calendar po autoryzacji,
-- [ ] sprawdzić mobilny i desktopowy widok shortcode `mikroplaneta_availability_calendar` (siatka + CTA `Rezerwuj`).
+- [ ] sprawdzić, dlaczego przycisk `Rezerwacje` w widoku kalendarza nie działa poprawnie,
+- [ ] naprawić modal tworzenia rezerwacji, aby podliczał cenę noclegu zamiast tylko pościeli / usług dodatkowych,
+- [ ] potwierdzić po poprawce pełny flow: wybór terminu w kalendarzu -> klik `Rezerwacje` -> poprawna cena w modalu.
 
-### 3. Decyzja release GO/NO-GO
+### 3. Alokacja grup
 
+- [ ] prześledzić algorytm doboru łóżek / pokoi dla grupy, bo przy grupie 8 osób system rozrzucił gości po kilku pokojach,
+- [ ] dodać lub poprawić regułę preferencji dla pokoju wieloosobowego, jeśli cały skład mieści się w jednym dormie,
+- [ ] potwierdzić to ręcznie scenariuszem grupy 8 osób i sprawdzić wynikową cenę.
+
+### 4. Powrót do stagingu
+
+- [ ] wrócić do ręcznego testu recepcjonisty po poprawkach z punktów 1-3,
 - [ ] uruchomić `tools/release-go-nogo.ps1` interaktywnie na stagingu,
-- [ ] uzupełnić brakujące punkty ręczne i zapisać raport decyzji,
 - [ ] przy NO-GO dopisać blocker do `STATUS.md` i poprawić przed publikacją.
