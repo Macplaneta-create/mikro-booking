@@ -128,4 +128,34 @@ class ReservationPlaceRepository {
 
         return (int) $wpdb->get_var($wpdb->prepare($sql, $params));
     }
+
+    public function isPlaceReserved(
+        int $place_id,
+        string $check_in,
+        string $check_out,
+        ?int $exclude_reservation_id = null
+    ): bool {
+        global $wpdb;
+
+        if (!$this->exists()) {
+            return false;
+        }
+
+        $sql = "SELECT COUNT(*)
+                FROM {$this->table} rp
+                INNER JOIN {$this->reservations_table} r ON rp.reservation_id = r.id
+                WHERE rp.place_id = %d
+                AND r.status IN ('pending', 'confirmed', 'checked_in')
+                AND r.check_in < %s
+                AND r.check_out > %s";
+
+        $params = [$place_id, $check_out, $check_in];
+
+        if ($exclude_reservation_id) {
+            $sql .= ' AND r.id != %d';
+            $params[] = $exclude_reservation_id;
+        }
+
+        return (int) $wpdb->get_var($wpdb->prepare($sql, $params)) > 0;
+    }
 }

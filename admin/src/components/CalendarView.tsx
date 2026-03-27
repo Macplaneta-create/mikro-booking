@@ -11,14 +11,23 @@
 
 import React, { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import { format, addDays, startOfWeek, addWeeks, subWeeks, isSameDay, parseISO, isAfter, isBefore, startOfDay } from 'date-fns';
-import { RoomsAPI, ReservationsAPI, Room, Reservation } from '../services/api';
+import { format, addDays, startOfWeek, addWeeks, subWeeks, isSameDay, parseISO, isBefore, startOfDay } from 'date-fns';
+import { RoomsAPI, ReservationsAPI, Room, Reservation, Bed, BedPlace } from '../services/api';
 
 import CalendarToolbar from './calendar/CalendarToolbar';
 import CalendarGrid, { SelectionState } from './calendar/CalendarGrid';
 import ReservationDetailsModal from './calendar/ReservationDetailsModal';
 import ReservationModal from './ReservationModal';
 import { getVisibleStats, getVisibleStatusLegend } from './calendar/calendarUtils';
+
+type ReservationModalData = {
+    bedId?: number;
+    bedIds?: number[];
+    placeIds?: number[];
+    roomId?: number;
+    checkIn?: string;
+    checkOut?: string;
+};
 
 const CalendarView: React.FC = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -29,7 +38,7 @@ const CalendarView: React.FC = () => {
 
     // Selection state
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalData, setModalData] = useState<{ bedId?: number; bedIds?: number[]; roomId?: number; checkIn?: string; checkOut?: string }>({});
+    const [modalData, setModalData] = useState<ReservationModalData>({});
     const [selection, setSelection] = useState<SelectionState | null>(null);
     const [selectedBeds, setSelectedBeds] = useState<Set<number>>(new Set());
 
@@ -121,6 +130,192 @@ const CalendarView: React.FC = () => {
         setExpandedRooms(prev => ({ ...prev, [roomId]: !prev[roomId] }));
     };
 
+    const getAllBeds = (): Bed[] => rooms.flatMap(room => room.beds || []);
+
+    const findBedById = (bedId: number): Bed | undefined => {
+        return getAllBeds().find(bed => bed.id === bedId);
+    };
+
+    const getSortedActivePlacesForBed = (bedId: number): BedPlace[] => {
+        const bed = findBedById(bedId);
+
+        return [...(bed?.places || [])]
+            .filter(place => place.id && place.is_active)
+            .sort((left, right) => left.place_number - right.place_number);
+    };
+
+    const getBedCapacity = (bedId: number): number => {
+        const bed = findBedById(bedId);
+        const explicitCapacity = Number(bed?.capacity ?? 0);
+        if (explicitCapacity > 0) {
+            return explicitCapacity;
+        }
+
+        const placesCapacity = (bed?.places || []).reduce((sum, place) => sum + Number(place.max_persons || 1), 0);
+        if (placesCapacity > 0) {
+            return placesCapacity;
+        }
+
+        return String(bed?.bed_type || 'single') === 'bunk' ? 2 : 1;
+    };
+
+    const isBlockingStatus = (status?: string): boolean => {
+        return status === 'pending' || status === 'confirmed' || status === 'checked_in';
+    };
+
+    const estimateOccupiedPlacesForReservationOnBed = (reservation: Reservation, targetBedId: number): number => {
+        const bedIds = Array.from(new Set((reservation.bed_ids || []).map(Number))).filter(id => id > 0);
+        if (bedIds.length === 0) {
+            return 0;
+        }
+
+        const guestCount = Math.max(1, Number(reservation.adults || 0) + Number(reservation.children || 0));
+        const sortedBeds = [...bedIds].sort((leftId, rightId) => {
+            const capacityDiff = getBedCapacity(rightId) - getBedCapacity(leftId);
+            if (capacityDiff !== 0) {
+                return capacityDiff;
+            }
+
+            return leftId - rightId;
+        });
+
+        let remaining = guestCount;
+        for (const currentBedId of sortedBeds) {
+            const assigned = Math.min(remaining, getBedCapacity(currentBedId));
+            if (currentBedId === targetBedId) {
+                return assigned;
+            }
+
+            remaining -= assigned;
+            if (remaining <= 0) {
+                break;
+            }
+        }
+
+        return 0;
+    };
+
+    const getOccupiedPlacesForReservationOnBed = (reservation: Reservation, bedId: number): number => {
+        if (!reservation.bed_ids?.includes(bedId)) {
+            return 0;
+        }
+
+        const bed = findBedById(bedId);
+        const capacity = getBedCapacity(bedId);
+
+        if (bed?.places?.length && reservation.place_ids?.length) {
+            const placeIds = new Set(reservation.place_ids);
+            const occupiedPlaces = bed.places.filter(place => place.id && placeIds.has(place.id)).length;
+            if (occupiedPlaces > 0) {
+                return occupiedPlaces;
+            }
+        }
+
+        const estimatedOccupiedPlaces = estimateOccupiedPlacesForReservationOnBed(reservation, bedId);
+        if (estimatedOccupiedPlaces > 0) {
+            return estimatedOccupiedPlaces;
+        }
+
+        return capacity;
+    };
+
+    const getOccupiedPlacesOnDate = (bedId: number, date: Date): number => {
+        return bookings.reduce((sum, booking) => {
+            if (!isBlockingStatus(booking.status) || !booking.bed_ids?.includes(bedId)) {
+                return sum;
+            }
+
+            const bookingCheckIn = parseISO(booking.check_in);
+            const bookingCheckOut = parseISO(booking.check_out);
+            if (date < bookingCheckIn || date >= bookingCheckOut) {
+                return sum;
+            }
+
+            return sum + getOccupiedPlacesForReservationOnBed(booking, bedId);
+        }, 0);
+    };
+
+    const getUnavailablePlaceIdsOnDate = (bedId: number, date: Date): Set<number> => {
+        const places = getSortedActivePlacesForBed(bedId);
+        if (places.length === 0) {
+            return new Set();
+        }
+
+        const unavailable = new Set<number>();
+
+        bookings.forEach((booking) => {
+            if (!isBlockingStatus(booking.status) || !booking.bed_ids?.includes(bedId)) {
+                return;
+            }
+
+            const bookingCheckIn = parseISO(booking.check_in);
+            const bookingCheckOut = parseISO(booking.check_out);
+            if (date < bookingCheckIn || date >= bookingCheckOut) {
+                return;
+            }
+
+            if (booking.place_ids?.length) {
+                const placeIds = new Set(booking.place_ids);
+                places.forEach((place) => {
+                    if (place.id && placeIds.has(place.id)) {
+                        unavailable.add(place.id);
+                    }
+                });
+                return;
+            }
+
+            const estimatedOccupied = Math.min(getOccupiedPlacesForReservationOnBed(booking, bedId), places.length);
+            places.forEach((place, index) => {
+                if (place.id && index < estimatedOccupied) {
+                    unavailable.add(place.id);
+                }
+            });
+        });
+
+        return unavailable;
+    };
+
+    const getAvailablePlaceIdsForRange = (bedId: number, start: Date, end: Date): number[] => {
+        const places = getSortedActivePlacesForBed(bedId);
+        if (places.length === 0) {
+            return [];
+        }
+
+        let availablePlaceIds = places
+            .map(place => place.id)
+            .filter((placeId): placeId is number => typeof placeId === 'number' && placeId > 0);
+
+        const cursor = new Date(start);
+        while (cursor < end && availablePlaceIds.length > 0) {
+            const unavailablePlaceIds = getUnavailablePlaceIdsOnDate(bedId, cursor);
+            availablePlaceIds = availablePlaceIds.filter(placeId => !unavailablePlaceIds.has(placeId));
+            cursor.setDate(cursor.getDate() + 1);
+        }
+
+        return availablePlaceIds;
+    };
+
+    const hasAvailablePlaceForRange = (bedId: number, start: Date, end: Date): boolean => {
+        if (!(start < end)) {
+            return true;
+        }
+
+        const capacity = getBedCapacity(bedId);
+        if (capacity <= 0) {
+            return false;
+        }
+
+        const cursor = new Date(start);
+        while (cursor < end) {
+            if (getOccupiedPlacesOnDate(bedId, cursor) >= capacity) {
+                return false;
+            }
+            cursor.setDate(cursor.getDate() + 1);
+        }
+
+        return true;
+    };
+
     // --- Multi-Bed Selection Logic ---
 
     const handleCellClick = (bedId: number, roomId: number, date: Date, event: React.MouseEvent) => {
@@ -130,20 +325,9 @@ const CalendarView: React.FC = () => {
         // Block past dates
         if (isBefore(cellDate, today)) return;
 
-        // Occupancy check
-        const isOccupied = bookings.some(b => {
-            if (!b.bed_ids?.includes(bedId) || b.status === 'cancelled') return false;
-            const bIn = parseISO(b.check_in);
-            const bOut = parseISO(b.check_out);
-
-            if (!selection) {
-                return !isBefore(date, bIn) && isBefore(date, bOut);
-            } else {
-                return isBefore(selection.start!, bOut) && isAfter(date, bIn);
-            }
-        });
-
-        if (isOccupied) return;
+        if (!selection && !hasAvailablePlaceForRange(bedId, cellDate, addDays(cellDate, 1))) {
+            return;
+        }
 
         // Ctrl+Click for multi-bed selection
         if (event.ctrlKey || event.metaKey) {
@@ -153,11 +337,7 @@ const CalendarView: React.FC = () => {
             if (newSelectedBeds.has(bedId)) {
                 newSelectedBeds.delete(bedId);
             } else {
-                const isAvailable = !bookings.some(b =>
-                    b.bed_ids?.includes(bedId) &&
-                    b.status !== 'cancelled' &&
-                    (parseISO(b.check_in) < selection.end! && parseISO(b.check_out) > selection.start!)
-                );
+                const isAvailable = hasAvailablePlaceForRange(bedId, selection.start, selection.end);
 
                 if (isAvailable) {
                     newSelectedBeds.add(bedId);
@@ -181,6 +361,11 @@ const CalendarView: React.FC = () => {
             } else if (isBefore(date, selection.start)) {
                 setSelection({ ...selection, start: date, end: null });
             } else {
+                if (!hasAvailablePlaceForRange(bedId, selection.start, date)) {
+                    alert(`Łóżko #${bedId} nie ma wolnego miejsca w całym wybranym terminie`);
+                    return;
+                }
+
                 setSelection({ ...selection, end: date });
                 setSelectedBeds(new Set([bedId]));
             }
@@ -197,16 +382,20 @@ const CalendarView: React.FC = () => {
 
         // Fallback: If no beds selected via Ctrl+click, use the primary bed
         const finalBedIds = bedIds.length > 0 ? bedIds : [selection.bedId];
+        const selectedPlaceIds = finalBedIds.flatMap((bedId) => getAvailablePlaceIdsForRange(bedId, selection.start!, selection.end!));
 
         setModalData({
             bedId: selection.bedId,
             bedIds: finalBedIds,
+            placeIds: selectedPlaceIds,
             roomId: selection.roomId,
             checkIn: format(selection.start, 'yyyy-MM-dd'),
             checkOut: format(selection.end, 'yyyy-MM-dd'),
         });
         setIsModalOpen(true);
     };
+
+    const canConfirmSelection = Boolean(selection?.start && selection?.end);
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
@@ -236,6 +425,8 @@ const CalendarView: React.FC = () => {
                 onNext={handleNext}
                 onToday={handleToday}
                 onNewReservation={handleNewReservation}
+                onConfirmSelection={handleConfirmSelection}
+                canConfirmSelection={canConfirmSelection}
                 stats={stats}
                 statusLegend={statusLegend}
             />

@@ -16,6 +16,8 @@ interface CalendarToolbarProps {
     onNext: () => void;
     onToday: () => void;
     onNewReservation: () => void;
+    onConfirmSelection: () => void;
+    canConfirmSelection: boolean;
     stats: { reservations: number; beds: number };
     statusLegend: StatusLegendItem[];
 }
@@ -26,6 +28,8 @@ const CalendarToolbar: React.FC<CalendarToolbarProps> = ({
     onNext,
     onToday,
     onNewReservation,
+    onConfirmSelection,
+    canConfirmSelection,
     stats,
     statusLegend,
 }) => {
@@ -64,6 +68,13 @@ const CalendarToolbar: React.FC<CalendarToolbarProps> = ({
             </div>
 
             <div className="flex gap-2">
+                <button
+                    onClick={onConfirmSelection}
+                    disabled={!canConfirmSelection}
+                    className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    Rezerwacje
+                </button>
                 <button
                     onClick={onNewReservation}
                     className="bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition shadow-md"

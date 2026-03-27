@@ -269,15 +269,13 @@ class ReservationRepository implements RepositoryInterface {
             $update_data['updated_at'] = $data['updated_at'];
         }
         
-        if (empty($update_data)) {
-            throw new \Exception('No data to update');
+        if (!empty($update_data)) {
+            $wpdb->update(
+                $this->table,
+                $update_data,
+                ['id' => $id]
+            );
         }
-        
-        $wpdb->update(
-            $this->table,
-            $update_data,
-            ['id' => $id]
-        );
         
         $reservation = $this->find($id);
         

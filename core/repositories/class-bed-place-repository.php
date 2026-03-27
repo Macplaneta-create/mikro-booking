@@ -276,21 +276,85 @@ class BedPlaceRepository implements RepositoryInterface {
             return false;
         }
 
-        return $reservation_place_repo->countOccupiedPlacesForBed(
-            (int) $place->bed_id,
+        return !$reservation_place_repo->isPlaceReserved(
+            (int) $place->id,
             $check_in,
             $check_out,
             $exclude_reservation_id
-        ) < $this->getBedCapacity((int) $place->bed_id);
+        );
     }
 
     public function ensureDefaultPlacesForBed(int $bed_id, string $bed_type): array {
         $existing = $this->findByBed($bed_id);
         if (!empty($existing)) {
-            return $existing;
+            return $this->normalizePlacesForBed($bed_id, $bed_type, $existing);
         }
 
         return $this->createDefaultPlacesForBed($bed_id, $bed_type);
+    }
+
+    /**
+     * Heal legacy place rows when bed type changed after initial place creation.
+     */
+    private function normalizePlacesForBed(int $bed_id, string $bed_type, array $existing): array {
+        $normalized_type = $bed_type ?: 'single';
+        $places_by_number = [];
+
+        foreach ($existing as $place) {
+            $places_by_number[(int) $place->place_number] = $place;
+        }
+
+        if ($normalized_type === 'bunk') {
+            if (!isset($places_by_number[1])) {
+                $this->create([
+                    'bed_id' => $bed_id,
+                    'place_number' => 1,
+                    'place_label' => 'Dół',
+                    'max_persons' => 1,
+                    'is_active' => true,
+                ]);
+            } elseif (($places_by_number[1]->place_label ?? '') !== 'Dół' || (int) ($places_by_number[1]->max_persons ?? 1) !== 1) {
+                $this->update((int) $places_by_number[1]->id, [
+                    'place_label' => 'Dół',
+                    'max_persons' => 1,
+                    'is_active' => true,
+                ]);
+            }
+
+            if (!isset($places_by_number[2])) {
+                $this->create([
+                    'bed_id' => $bed_id,
+                    'place_number' => 2,
+                    'place_label' => 'Góra',
+                    'max_persons' => 1,
+                    'is_active' => true,
+                ]);
+            } elseif (($places_by_number[2]->place_label ?? '') !== 'Góra' || (int) ($places_by_number[2]->max_persons ?? 1) !== 1) {
+                $this->update((int) $places_by_number[2]->id, [
+                    'place_label' => 'Góra',
+                    'max_persons' => 1,
+                    'is_active' => true,
+                ]);
+            }
+        } elseif ($normalized_type === 'double') {
+            if (isset($places_by_number[1]) && (($places_by_number[1]->place_label ?? '') !== 'Łóżko małżeńskie' || (int) ($places_by_number[1]->max_persons ?? 1) !== 1)) {
+                $this->update((int) $places_by_number[1]->id, [
+                    'place_label' => 'Łóżko małżeńskie',
+                    'max_persons' => 1,
+                    'is_active' => true,
+                ]);
+            }
+        } else {
+            if (isset($places_by_number[1]) && (($places_by_number[1]->place_label ?? '') !== 'Miejsce 1' || (int) ($places_by_number[1]->max_persons ?? 1) !== 1)) {
+                $this->update((int) $places_by_number[1]->id, [
+                    'place_label' => 'Miejsce 1',
+                    'max_persons' => 1,
+                    'is_active' => true,
+                ]);
+            }
+        }
+
+        return $this->findByBed($bed_id);
     }
 
     /**

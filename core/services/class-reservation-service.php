@@ -118,7 +118,8 @@ class ReservationService {
                 $beds_by_room[$bed->room_id][] = $bed;
             }
 
-            $place_ids = $this->allocateReservationPlaces(
+            $place_ids = $this->resolveReservationPlaceIds(
+                $data,
                 $bed_ids,
                 $data['check_in'],
                 $data['check_out'],
@@ -158,6 +159,7 @@ class ReservationService {
             }
             $reservation_data['status'] = Reservation::STATUS_PENDING;
             unset($reservation_data['bed_ids']);
+            unset($reservation_data['place_ids']);
 
             $reservation = $this->reservation_repository->create($reservation_data);
             $this->reservation_bed_repository->setBedsForReservation($reservation->id, $bed_ids);
@@ -217,10 +219,10 @@ class ReservationService {
             }
 
             $normalized_bed_ids = null;
+            $check_in = $data['check_in'] ?? $reservation->check_in;
+            $check_out = $data['check_out'] ?? $reservation->check_out;
 
             if (isset($data['check_in']) || isset($data['check_out']) || isset($data['bed_ids'])) {
-                $check_in = $data['check_in'] ?? $reservation->check_in;
-                $check_out = $data['check_out'] ?? $reservation->check_out;
                 $bed_ids = $this->expandBedsForExclusiveRooms($this->normalizeBedIds($data['bed_ids'] ?? $reservation->bed_ids));
 
                 if (isset($data['bed_ids'])) {
@@ -250,13 +252,16 @@ class ReservationService {
                 }
             }
 
-            if (isset($data['adults']) || isset($data['children']) || isset($data['bed_ids'])) {
+            if (isset($data['adults']) || isset($data['children']) || isset($data['bed_ids']) || isset($data['check_in']) || isset($data['check_out']) || array_key_exists('place_ids', $data)) {
                 $adults = isset($data['adults']) ? max(1, (int) $data['adults']) : (int) $reservation->adults;
                 $children = isset($data['children']) ? max(0, (int) $data['children']) : (int) $reservation->children;
                 $effective_bed_ids = $normalized_bed_ids ?? $this->expandBedsForExclusiveRooms($this->normalizeBedIds($reservation->bed_ids));
                 $this->assertGuestCountFitsCapacity($adults, $children, $effective_bed_ids);
 
-                $allocated_place_ids = $this->allocateReservationPlaces(
+                $resolved_place_ids = $this->resolveReservationPlaceIds(
+                    array_key_exists('place_ids', $data)
+                        ? $data
+                        : array_merge($data, ['place_ids' => $reservation->place_ids]),
                     $effective_bed_ids,
                     $check_in,
                     $check_out,
@@ -265,11 +270,13 @@ class ReservationService {
                     $id
                 );
 
-                $this->reservation_place_repository->setPlacesForReservation($id, $allocated_place_ids);
+                $this->reservation_place_repository->setPlacesForReservation($id, $resolved_place_ids);
             }
 
             $old_data = $reservation->toArray();
-            $updated_reservation = $this->reservation_repository->update($id, $data);
+            $reservation_update_data = $data;
+            unset($reservation_update_data['place_ids']);
+            $updated_reservation = $this->reservation_repository->update($id, $reservation_update_data);
 
             if ($normalized_bed_ids !== null) {
                 $this->reservation_bed_repository->setBedsForReservation($id, $normalized_bed_ids);
@@ -417,7 +424,10 @@ class ReservationService {
                 $effective_children = $update_data['children'] ?? $reservation->children;
                 $this->assertGuestCountFitsCapacity($effective_adults, $effective_children, $effective_bed_ids);
 
-                $allocated_place_ids = $this->allocateReservationPlaces(
+                $resolved_place_ids = $this->resolveReservationPlaceIds(
+                    array_key_exists('place_ids', $adjustment)
+                        ? $adjustment
+                        : array_merge($adjustment, ['place_ids' => $reservation->place_ids]),
                     $effective_bed_ids,
                     $reservation->check_in,
                     $reservation->check_out,
@@ -450,7 +460,7 @@ class ReservationService {
                     $this->reservation_bed_repository->setBedsForReservation($id, $effective_bed_ids);
                 }
 
-                $this->reservation_place_repository->setPlacesForReservation($id, $allocated_place_ids);
+                $this->reservation_place_repository->setPlacesForReservation($id, $resolved_place_ids);
 
                 do_action(
                     'mikroplaneta_booking_reservation_adjusted_during_checkin',
@@ -569,6 +579,19 @@ class ReservationService {
         return array_values(array_unique($normalized));
     }
 
+    private function normalizePlaceIds($place_ids): array {
+        if (!is_array($place_ids)) {
+            return [];
+        }
+
+        $normalized = array_map('intval', $place_ids);
+        $normalized = array_filter($normalized, static function($id) {
+            return $id > 0;
+        });
+
+        return array_values(array_unique($normalized));
+    }
+
     /**
      * Ensure selected beds can host total guests (capacity-aware validation)
      */
@@ -614,6 +637,76 @@ class ReservationService {
         }
 
         return $capacity;
+    }
+
+    private function resolveReservationPlaceIds(
+        array $data,
+        array $bed_ids,
+        string $check_in,
+        string $check_out,
+        int $adults,
+        int $children,
+        ?int $exclude_reservation_id = null
+    ): array {
+        $requested_place_ids = $this->normalizePlaceIds($data['place_ids'] ?? []);
+
+        if (!empty($requested_place_ids)) {
+            return $this->validateSelectedPlaceIds(
+                $requested_place_ids,
+                $bed_ids,
+                $check_in,
+                $check_out,
+                $adults,
+                $children,
+                $exclude_reservation_id
+            );
+        }
+
+        return $this->allocateReservationPlaces(
+            $bed_ids,
+            $check_in,
+            $check_out,
+            $adults,
+            $children,
+            $exclude_reservation_id
+        );
+    }
+
+    private function validateSelectedPlaceIds(
+        array $place_ids,
+        array $bed_ids,
+        string $check_in,
+        string $check_out,
+        int $adults,
+        int $children,
+        ?int $exclude_reservation_id = null
+    ): array {
+        $total_guests = max(1, $adults + $children);
+        $selected_bed_ids = array_fill_keys($bed_ids, true);
+        $validated_place_ids = [];
+
+        foreach ($place_ids as $place_id) {
+            $place = $this->bed_place_repository->find($place_id);
+            if (!$place || !$place->is_active) {
+                throw new \Exception("Selected place #{$place_id} does not exist or is inactive");
+            }
+
+            if (!isset($selected_bed_ids[(int) $place->bed_id])) {
+                throw new \Exception("Selected place #{$place_id} does not belong to the chosen beds");
+            }
+
+            if (!$this->bed_place_repository->isPlaceAvailable((int) $place->id, $check_in, $check_out, $exclude_reservation_id)) {
+                throw new \Exception("Selected place #{$place_id} is no longer available for the chosen dates");
+            }
+
+            $validated_place_ids[] = (int) $place->id;
+        }
+
+        if (count($validated_place_ids) < $total_guests) {
+            throw new \Exception('Selected places do not cover all guests for this reservation');
+        }
+
+        return array_slice($validated_place_ids, 0, $total_guests);
     }
 
     private function allocateReservationPlaces(

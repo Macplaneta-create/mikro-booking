@@ -326,10 +326,14 @@ class RoomsController extends RestController {
     private function serialize_bed(Bed $bed): array {
         $data = $bed->toArray();
         $capacity = 0;
+        $places = [];
 
         if ($this->bed_place_repository->exists()) {
             $this->bed_place_repository->ensureDefaultPlacesForBed((int) $bed->id, (string) $bed->bed_type);
             $capacity = $this->bed_place_repository->getBedCapacity((int) $bed->id);
+            $places = array_map(static function($place) {
+                return $place->toArray();
+            }, $this->bed_place_repository->findByBed((int) $bed->id));
         }
 
         if ($capacity <= 0) {
@@ -337,6 +341,7 @@ class RoomsController extends RestController {
         }
 
         $data['capacity'] = $capacity;
+        $data['places'] = $places;
 
         return $data;
     }

@@ -9,7 +9,7 @@ import React from 'react';
 import { BedDouble, ChevronDown, ChevronRight as ChevronRightIcon, Home, Check } from 'lucide-react';
 import { format, isSameDay, isAfter, isBefore, differenceInDays } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { Room, Reservation } from '../../services/api';
+import { Room, Reservation, Bed } from '../../services/api';
 import {
     getStatusColor,
     getStatusLabel,
@@ -197,7 +197,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
 // --- BedRow sub-component ---
 
 interface BedRowProps {
-    bed: { id?: number; bed_number: number; bed_type: string };
+    bed: Bed;
     room: Room;
     days: Date[];
     startDate: Date;
@@ -224,9 +224,119 @@ const BedRow: React.FC<BedRowProps> = ({
     onBookingClick,
 }) => {
     const isWeekendDay = (day: Date) => day.getDay() === 0 || day.getDay() === 6;
-    const bedBookings = bookings
-        .filter(b => bed.id && b.bed_ids?.includes(bed.id) && b.status !== 'cancelled')
-        .flatMap(booking => getBookingSlices(booking, startDate, dayCount));
+    const bedCapacity = Number(bed.capacity ?? 0) > 0
+        ? Number(bed.capacity)
+        : (bed.places || []).reduce((sum, place) => sum + Number(place.max_persons || 1), 0) || (String(bed.bed_type || 'single') === 'bunk' ? 2 : 1);
+    const sortedBedPlaces = [...(bed.places || [])].sort((left, right) => left.place_number - right.place_number);
+    const getBedCapacityById = (bedId: number): number => {
+        if (bed.id === bedId) {
+            return bedCapacity;
+        }
+
+        const roomBed = room.beds?.find(item => item.id === bedId);
+        const explicitCapacity = Number(roomBed?.capacity ?? 0);
+        if (explicitCapacity > 0) {
+            return explicitCapacity;
+        }
+
+        const placesCapacity = (roomBed?.places || []).reduce((sum, place) => sum + Number(place.max_persons || 1), 0);
+        if (placesCapacity > 0) {
+            return placesCapacity;
+        }
+
+        return String(roomBed?.bed_type || 'single') === 'bunk' ? 2 : 1;
+    };
+
+    const estimateOccupiedPlacesForReservationOnThisBed = (booking: Reservation): number => {
+        const bedIds = Array.from(new Set((booking.bed_ids || []).map(Number))).filter(id => id > 0);
+        if (!bed.id || bedIds.length === 0) {
+            return 0;
+        }
+
+        const guestCount = Math.max(1, Number(booking.adults || 0) + Number(booking.children || 0));
+        const sortedBeds = [...bedIds].sort((leftId, rightId) => {
+            const capacityDiff = getBedCapacityById(rightId) - getBedCapacityById(leftId);
+            if (capacityDiff !== 0) {
+                return capacityDiff;
+            }
+
+            return leftId - rightId;
+        });
+
+        let remaining = guestCount;
+        for (const currentBedId of sortedBeds) {
+            const assigned = Math.min(remaining, getBedCapacityById(currentBedId));
+            if (currentBedId === bed.id) {
+                return assigned;
+            }
+
+            remaining -= assigned;
+            if (remaining <= 0) {
+                break;
+            }
+        }
+
+        return 0;
+    };
+
+    const bookingSegments = bookings
+        .filter(b => bed.id && b.bed_ids?.includes(bed.id) && (b.status === 'pending' || b.status === 'confirmed' || b.status === 'checked_in'))
+        .flatMap(booking => {
+            const placeIds = new Set(booking.place_ids || []);
+            const occupiedSegments = sortedBedPlaces.length > 0 && placeIds.size > 0
+                ? sortedBedPlaces
+                    .filter(place => place.id && placeIds.has(place.id))
+                    .map(place => Math.max(0, place.place_number - 1))
+                : Array.from({ length: Math.max(0, estimateOccupiedPlacesForReservationOnThisBed(booking)) }, (_, index) => index);
+
+            return getBookingSlices(booking, startDate, dayCount).flatMap((slice) => {
+                const segmentHeight = bedCapacity <= 1 ? 48 : Math.max(10, Math.floor(40 / bedCapacity));
+                const segmentGap = bedCapacity <= 1 ? 0 : 2;
+
+                return occupiedSegments.map((segmentIndex, occupiedIndex) => ({
+                    key: `${slice.key}-seg-${segmentIndex}`,
+                    style: bedCapacity <= 1
+                        ? slice.style
+                        : {
+                            ...slice.style,
+                            top: `${4 + segmentIndex * (segmentHeight + segmentGap)}px`,
+                            height: `${segmentHeight}px`,
+                        },
+                    className: bedCapacity <= 1
+                        ? slice.className
+                        : slice.className.replace('top-1 bottom-1', ''),
+                    booking: slice.booking,
+                    showLabel: slice.showLabel && occupiedIndex === 0 && occupiedSegments.length === bedCapacity,
+                    labels: occupiedSegments
+                        .map(index => sortedBedPlaces[index]?.place_label || `Miejsce ${index + 1}`)
+                        .join(', '),
+                }));
+            });
+        });
+
+    const getOccupiedPlacesOnDate = (day: Date): number => {
+        return bookings.reduce((sum, booking) => {
+            if (!bed.id || !booking.bed_ids?.includes(bed.id) || !(booking.status === 'pending' || booking.status === 'confirmed' || booking.status === 'checked_in')) {
+                return sum;
+            }
+
+            const checkIn = new Date(`${booking.check_in}T00:00:00`);
+            const checkOut = new Date(`${booking.check_out}T00:00:00`);
+            if (day < checkIn || day >= checkOut) {
+                return sum;
+            }
+
+            if (sortedBedPlaces.length > 0 && booking.place_ids?.length) {
+                const placeIds = new Set(booking.place_ids);
+                const occupied = sortedBedPlaces.filter(place => place.id && placeIds.has(place.id)).length;
+                if (occupied > 0) {
+                    return sum + occupied;
+                }
+            }
+
+            return sum + estimateOccupiedPlacesForReservationOnThisBed(booking);
+        }, 0);
+    };
 
     const isSelected = selectedBeds.has(bed.id!);
     const showSelectionPreview = selection && (selection.bedId === bed.id || selectedBeds.has(bed.id!)) && selection.start;
@@ -240,7 +350,7 @@ const BedRow: React.FC<BedRowProps> = ({
                 </div>
                 <div className="flex flex-col">
                     <span className="text-[11px] font-medium text-gray-700">Miejsce {bed.bed_number}</span>
-                    <span className="text-[9px] text-gray-400 capitalize">{bed.bed_type}</span>
+                    <span className="text-[9px] text-gray-400 capitalize">{bed.bed_type} • {bedCapacity} {bedCapacity === 1 ? 'miejsce' : 'miejsca'}</span>
                 </div>
             </div>
 
@@ -260,6 +370,20 @@ const BedRow: React.FC<BedRowProps> = ({
                     >
                         {/* Noon marker */}
                         <div className="absolute left-1/2 top-1 bottom-1 w-px border-l border-dashed border-gray-300 pointer-events-none opacity-40" />
+                        {(() => {
+                            const occupiedPlaces = getOccupiedPlacesOnDate(day);
+                            if (occupiedPlaces <= 0 || bedCapacity <= 1) {
+                                return null;
+                            }
+
+                            const isFull = occupiedPlaces >= bedCapacity;
+
+                            return (
+                                <div className={`absolute top-1 right-1 rounded-full px-1.5 py-0.5 text-[9px] font-black leading-none pointer-events-none ${isFull ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                    {Math.min(occupiedPlaces, bedCapacity)}/{bedCapacity}
+                                </div>
+                            );
+                        })()}
                     </div>
                 ))}
 
@@ -328,12 +452,12 @@ const BedRow: React.FC<BedRowProps> = ({
                 )}
 
                 {/* Booking bars */}
-                {bedBookings.map(slice => (
+                {bookingSegments.map(slice => (
                     <div
                         key={slice.key}
                         className={slice.className}
                         style={slice.style}
-                        title={`${slice.booking.first_name} ${slice.booking.last_name} | Rezerwacja #${slice.booking.id}`}
+                        title={`${slice.booking.first_name} ${slice.booking.last_name} | Rezerwacja #${slice.booking.id}${slice.labels ? ` | ${slice.labels}` : ''}`}
                         onClick={(e) => {
                             e.stopPropagation();
                             onBookingClick(slice.booking);

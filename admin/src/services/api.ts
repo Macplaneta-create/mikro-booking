@@ -90,6 +90,15 @@ export interface Room {
     beds?: Bed[];
 }
 
+export interface BedPlace {
+    id?: number;
+    bed_id: number;
+    place_number: number;
+    place_label: string;
+    max_persons: number;
+    is_active: boolean;
+}
+
 export interface Bed {
     id?: number;
     room_id: number;
@@ -99,12 +108,14 @@ export interface Bed {
     capacity?: number;
     available_places?: number;
     occupied_places?: number;
+    places?: BedPlace[];
 }
 
 export interface Reservation {
     id?: number;
     guest_id: number;
     bed_ids: number[];
+    place_ids?: number[];
     check_in: string; // YYYY-MM-DD
     check_out: string; // YYYY-MM-DD
     status?: string;

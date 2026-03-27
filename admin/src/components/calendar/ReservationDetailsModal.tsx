@@ -65,9 +65,14 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
         }
     }, [isOpen, reservation.id, reservation.bed_ids, reservation.check_in, reservation.check_out, reservation.adults, reservation.children, refreshTrigger]);
 
+    const allBeds = rooms.flatMap(room => room.beds || []);
+
+    const getBedById = (bedId: number) => {
+        return allBeds.find(item => item.id === bedId);
+    };
+
     const getBedCapacity = (bedId: number): number => {
-        const allBeds = rooms.flatMap(room => room.beds || []);
-        const bed = allBeds.find(item => item.id === bedId);
+        const bed = getBedById(bedId);
         const explicitCapacity = Number(bed?.capacity ?? 0);
         if (explicitCapacity > 0) {
             return explicitCapacity;
@@ -75,6 +80,33 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
 
         return String(bed?.bed_type || 'single') === 'bunk' ? 2 : 1;
     };
+
+    const getAssignedPlaceLabels = (bedId: number): string[] => {
+        const bed = getBedById(bedId);
+        if (!bed?.places?.length || !reservation.place_ids?.length) {
+            return [];
+        }
+
+        const placeIds = new Set(reservation.place_ids);
+
+        return [...bed.places]
+            .filter(place => place.id && placeIds.has(place.id))
+            .sort((left, right) => left.place_number - right.place_number)
+            .map(place => place.place_label || `Miejsce ${place.place_number}`);
+    };
+
+    const bedAssignments = (reservation.bed_ids || []).map((bedId) => {
+        const bed = getBedById(bedId);
+        const labels = getAssignedPlaceLabels(bedId);
+        const capacity = getBedCapacity(bedId);
+
+        return {
+            bedId,
+            bedNumber: bed?.bed_number || bedId,
+            labels,
+            capacity,
+        };
+    });
 
     const chooseBedsForGuests = (bedIds: number[], guestCount: number): number[] => {
         const sorted = [...bedIds].sort((leftId, rightId) => getBedCapacity(rightId) - getBedCapacity(leftId));
@@ -281,6 +313,25 @@ const ReservationDetailsModal: React.FC<ReservationDetailsModalProps> = ({
                                         <span className="text-sm text-gray-600">Liczbą łóżek</span>
                                         <span className="text-sm font-bold text-gray-900">{reservation.bed_ids?.length || 0} łóżek</span>
                                     </div>
+                                    {bedAssignments.length > 0 && (
+                                        <div className="pt-2 border-t border-emerald-200 space-y-2">
+                                            <span className="text-sm text-gray-600">Przydział miejsc</span>
+                                            <div className="space-y-1.5">
+                                                {bedAssignments.map((assignment) => (
+                                                    <div key={assignment.bedId} className="flex items-center justify-between gap-3 text-sm">
+                                                        <span className="text-gray-700">Łóżko {assignment.bedNumber}</span>
+                                                        <span className="text-right font-bold text-gray-900">
+                                                            {assignment.labels.length > 0
+                                                                ? assignment.labels.join(', ')
+                                                                : assignment.capacity > 1
+                                                                    ? `${assignment.capacity}/${assignment.capacity} miejsc`
+                                                                    : 'Miejsce 1'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="flex justify-between items-center pt-2 border-t border-emerald-200">
                                         <span className="text-sm font-bold text-emerald-700">Cena za noclegi</span>
                                         <span className="text-lg font-black text-emerald-700">

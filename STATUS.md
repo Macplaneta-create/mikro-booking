@@ -1,6 +1,6 @@
 # Status Projektu
 
-Ostatnia aktualizacja: 2026-03-19
+Ostatnia aktualizacja: 2026-03-27
 
 Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 
@@ -42,6 +42,7 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - paczka release `1.2.8` została wygenerowana i przeszła walidację archiwum.
 - uaktualniono `ARCHITECTURE.md` i `QA_CHECKLIST.md` o model `reservation_places` oraz scenariusze regresji częściowo zajętych łóżek piętrowych.
 - przeszły testy integracyjne najbliższe pracy recepcji: update rezerwacji, check-in z korektami, endpoint update, public reservations, trigger cron i reschedule cron.
+- build admina oraz `php -l` dla zmienionych plików przeszły po dopięciu obsługi `place_ids` w kalendarzu i backendzie rezerwacji.
 
 ## Zaimplementowane, ale wymagają potwierdzenia
 
@@ -62,6 +63,9 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - `ReservationService` i `AvailabilityService` alokują oraz liczą realnie zajęte miejsca; endpointy availability zwracają teraz `capacity` i `available_places`.
 - publiczny widget, kalendarz miesięczny i kluczowe modale admina przestały zgadywać po `bed_type` i czytają pojemność / wolne miejsca z backendu.
 - tworzenie i odczyt łóżek inicjalizuje `bed_places`, a frontendowy shortcode dostępności liczy `total_places` z repozytorium miejsc.
+- kalendarz admina przekazuje do modala rezerwacji wyliczone `place_ids`, a `ReservationService` respektuje ręczny wybór miejsca, jeśli request zawiera poprawne i dostępne `place_ids`; tryb automatyczny nadal używa optymalizatora tylko przy ich braku.
+- modal tworzenia rezerwacji liczy podgląd ceny noclegu tą samą logiką doboru łóżek co finalny zapis, więc przy trybie automatycznym nie powinien już pokazywać samych usług dodatkowych bez ceny pobytu.
+- dodano dodatkowy przycisk akcji „Rezerwacje” w toolbarze kalendarza admina, podpięty pod ten sam flow co przycisk `ZAREZERWUJ` w siatce, aby domknąć przypadki problematycznego kliknięcia CTA w wierszu łóżka.
 
 ## Zweryfikowane testami, ale nadal wymagają regresji ręcznej
 
@@ -85,13 +89,13 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - potwierdzić klikany test recepcjonisty w realnym UI WordPressa, bo obecna weryfikacja tej części była integracyjna, nie manualna.
 - zbadać niedziałający przycisk „Rezerwacje” w widoku kalendarza admina.
 - sprawdzić algorytm alokacji grup: przy grupie 8 osób system rozrzucił gości po kilku pokojach mimo dostępnego pokoju wieloosobowego.
-- naprawić przeliczanie kosztu w modalu tworzenia rezerwacji, bo obecnie podlicza się tylko pościel / usługi dodatkowe, a nie cena noclegu.- naprawić nadpisywanie ręcznego wyboru miejsca w kalendarzu: kiedy recepcjonista wybiera konkretne miejsce (np. Dół lub Góra w łóżku piętrowym) klikając w kalendarz, system ignoruje ten wybór i stosuje algorytm optymalizacji — blokuje to weryfikację częściowego obłożenia łóżka piętrowego. Optymalizacja powinna działać tylko przy automatycznym trybie (przycisk „Rezerwuj"), a ręczny wybór z kalendarza musi być zachowany dokładnie tak, jak go wybrał recepcjonista.
+- potwierdzić ręcznie, że modal tworzenia rezerwacji po wyborze terminu w kalendarzu pokazuje poprawną cenę noclegu także przy automatycznym doborze łóżek.
+- potwierdzić ręcznie w realnym UI, że kalendarz zachowuje wybrane `place_ids` przy tworzeniu rezerwacji i nie wpada ponownie w automatyczną alokację dla ręcznie wskazanego miejsca.
 ## Plan najbliższy
 
-1. Naprawić nadpisywanie ręcznego wyboru miejsca z kalendarza: backend musi respektować przekazane `place_ids` bez ponownej alokacji (priorytet — blokuje weryfikację częściowego obłożenia łóżka piętrowego).
-2. Zbadać i naprawić przycisk „Rezerwacje" w widoku kalendarza oraz przeliczanie ceny w modalu tworzenia rezerwacji.
+1. Potwierdzić ręcznie na stagingu / w realnym UI WordPressa, że wybór konkretnego miejsca w kalendarzu zapisuje te same `place_ids` i działa dla częściowo zajętego łóżka piętrowego.
+2. Zbadać i naprawić przycisk „Rezerwacje" w widoku kalendarza oraz potwierdzić ręcznie poprawną cenę w modalu tworzenia rezerwacji.
 3. Zweryfikować i poprawić alokację grup, żeby preferowała pokój wieloosobowy przed rozrzucaniem grupy po kilku pokojach.
-4. Po poprawkach wrócić do ręcznego testu recepcjonisty i decyzji GO/NO-GO na stagingu.
 
 ## Zasada aktualizacji po każdej sesji
 

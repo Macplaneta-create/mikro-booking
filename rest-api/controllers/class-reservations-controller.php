@@ -163,7 +163,7 @@ class ReservationsController extends RestController {
                 'check_out' => $params['check_out'] ?? null,
                 'bed_ids_count' => isset($params['bed_ids']) && is_array($params['bed_ids']) ? count($params['bed_ids']) : null,
             ];
-            error_log('[MikroBooking] Create Reservation Error: ' . wp_json_encode($safe_context));
+            error_log('[MikroBooking] Create Reservation Error: ' . json_encode($safe_context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             return $this->error($e->getMessage());
         }
     }
@@ -218,6 +218,7 @@ class ReservationsController extends RestController {
         if (isset($request['adults'])) $adjustment['adults'] = $request['adults'];
         if (isset($request['children'])) $adjustment['children'] = $request['children'];
         if (isset($request['bed_ids'])) $adjustment['bed_ids'] = $request['bed_ids'];
+        if (isset($request['place_ids'])) $adjustment['place_ids'] = $request['place_ids'];
 
         try {
             $reservation = $this->reservation_service->checkIn($id, $adjustment);
