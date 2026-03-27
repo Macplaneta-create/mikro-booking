@@ -13,7 +13,7 @@ Status: ręczny wybór miejsca przez `place_ids`, podgląd ceny noclegu i fallba
 
 ### 2. Widok kalendarza i modal rezerwacji
 
-- [ ] sprawdzić, dlaczego przycisk `Rezerwacje` w widoku kalendarza nie działa poprawnie,
+- [ ] potwierdzić ręcznie działanie przycisku `Rezerwacje` zarówno z CTA w siatce, jak i z fallbacku w toolbarze,
 - [ ] potwierdzić manualnie, że modal tworzenia rezerwacji pokazuje cenę noclegu także przy automatycznym doborze łóżek,
 - [ ] potwierdzić po poprawce pełny flow: wybór terminu w kalendarzu -> klik `Rezerwacje` -> poprawna cena w modalu.
 

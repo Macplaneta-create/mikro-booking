@@ -16,7 +16,7 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 
 | Obszar | Status | Poziom pewności | Następny krok |
 |---|---|---|---|
-| Rezerwacje podstawowe | Zaimplementowane, do potwierdzenia | średni | sprawdzić przycisk „Rezerwacje” w widoku kalendarza, alokację grup oraz przeliczanie ceny w modalu |
+| Rezerwacje podstawowe | Zaimplementowane, do potwierdzenia | średni | potwierdzić manualnie flow kalendarza (CTA w siatce + toolbar), alokację grup oraz przeliczanie ceny w modalu |
 | Backup CSV / SQL | Zaimplementowane, do potwierdzenia | średni | test z paczki ZIP i test cronów |
 | iCal dla gości | Zaimplementowane, do potwierdzenia | średni | potwierdzić link CTA i logi audytowe |
 | Health Check | Zaimplementowane, do potwierdzenia | średni | test w środowisku zewnętrznym |
@@ -87,14 +87,14 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - potwierdzić wykonanie migracji `025-create-reservation-places.php` na aktualizowanej instalacji oraz zachowanie fallbacku dla starszych danych.
 - sprawdzić ręcznie scenariusze częściowego obłożenia łóżka piętrowego: nowa rezerwacja, edycja, check-in z mniejszą liczbą gości i widget publiczny.
 - potwierdzić klikany test recepcjonisty w realnym UI WordPressa, bo obecna weryfikacja tej części była integracyjna, nie manualna.
-- zbadać niedziałający przycisk „Rezerwacje” w widoku kalendarza admina.
+- potwierdzić ręcznie działanie CTA „Rezerwacje” w kalendarzu admina (przycisk w siatce i fallback w toolbarze).
 - sprawdzić algorytm alokacji grup: przy grupie 8 osób system rozrzucił gości po kilku pokojach mimo dostępnego pokoju wieloosobowego.
 - potwierdzić ręcznie, że modal tworzenia rezerwacji po wyborze terminu w kalendarzu pokazuje poprawną cenę noclegu także przy automatycznym doborze łóżek.
 - potwierdzić ręcznie w realnym UI, że kalendarz zachowuje wybrane `place_ids` przy tworzeniu rezerwacji i nie wpada ponownie w automatyczną alokację dla ręcznie wskazanego miejsca.
 ## Plan najbliższy
 
 1. Potwierdzić ręcznie na stagingu / w realnym UI WordPressa, że wybór konkretnego miejsca w kalendarzu zapisuje te same `place_ids` i działa dla częściowo zajętego łóżka piętrowego.
-2. Zbadać i naprawić przycisk „Rezerwacje" w widoku kalendarza oraz potwierdzić ręcznie poprawną cenę w modalu tworzenia rezerwacji.
+2. Potwierdzić ręcznie działanie CTA „Rezerwacje" w widoku kalendarza (siatka + toolbar) oraz poprawną cenę w modalu tworzenia rezerwacji.
 3. Zweryfikować i poprawić alokację grup, żeby preferowała pokój wieloosobowy przed rozrzucaniem grupy po kilku pokojach.
 
 ## Zasada aktualizacji po każdej sesji
