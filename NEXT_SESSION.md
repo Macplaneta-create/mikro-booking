@@ -22,5 +22,3 @@ Status: ręczny wybór miejsca przez `place_ids`, podgląd ceny noclegu, fallbac
 - [ ] potwierdzić ręcznie scenariusz grupy 8 osób po zmianie rankingu `groupSearch`,
 - [ ] sprawdzić, czy system wybiera wariant `single_room` (dorm), jeśli cały skład mieści się w jednym pokoju,
 - [ ] sprawdzić wynikową cenę i brak regresji względem mniejszych grup.
-
-- [ ] po domknięciu punktów 1-3 wrócić do `tools/release-go-nogo.ps1` na stagingu.
