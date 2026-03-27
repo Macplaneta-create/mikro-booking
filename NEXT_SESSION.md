@@ -1,7 +1,7 @@
 # Następna Sesja - MikroPlaneta Booking
 
 Data aktualizacji: 2026-03-27  
-Status: ręczny wybór miejsca przez `place_ids`, podgląd ceny noclegu i fallback przycisku „Rezerwacje” w toolbarze kalendarza są już dopięte w kodzie, ale przed domknięciem stagingu trzeba je kliknąć w realnym UI i zamknąć jeszcze alokację grup
+Status: ręczny wybór miejsca przez `place_ids`, podgląd ceny noclegu, fallback przycisku „Rezerwacje” i ranking alokacji grup (`groupSearch`) są już dopięte w kodzie, ale przed domknięciem stagingu trzeba je kliknąć i potwierdzić manualnie w realnym UI
 
 ## Top 3 działania
 
@@ -19,8 +19,8 @@ Status: ręczny wybór miejsca przez `place_ids`, podgląd ceny noclegu i fallba
 
 ### 3. Alokacja grup
 
-- [ ] prześledzić algorytm doboru łóżek / pokoi dla grupy, bo przy grupie 8 osób system rozrzucił gości po kilku pokojach,
-- [ ] dodać lub poprawić regułę preferencji dla pokoju wieloosobowego, jeśli cały skład mieści się w jednym dormie,
-- [ ] potwierdzić to ręcznie scenariuszem grupy 8 osób i sprawdzić wynikową cenę.
+- [ ] potwierdzić ręcznie scenariusz grupy 8 osób po zmianie rankingu `groupSearch`,
+- [ ] sprawdzić, czy system wybiera wariant `single_room` (dorm), jeśli cały skład mieści się w jednym pokoju,
+- [ ] sprawdzić wynikową cenę i brak regresji względem mniejszych grup.
 
 - [ ] po domknięciu punktów 1-3 wrócić do `tools/release-go-nogo.ps1` na stagingu.

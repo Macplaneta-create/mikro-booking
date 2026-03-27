@@ -16,7 +16,7 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 
 | Obszar | Status | Poziom pewności | Następny krok |
 |---|---|---|---|
-| Rezerwacje podstawowe | Zaimplementowane, do potwierdzenia | średni | potwierdzić manualnie flow kalendarza (CTA w siatce + toolbar), alokację grup oraz przeliczanie ceny w modalu |
+| Rezerwacje podstawowe | Zaimplementowane, do potwierdzenia | średni | potwierdzić manualnie flow kalendarza (CTA w siatce + toolbar), ranking alokacji grup oraz przeliczanie ceny w modalu |
 | Backup CSV / SQL | Zaimplementowane, do potwierdzenia | średni | test z paczki ZIP i test cronów |
 | iCal dla gości | Zaimplementowane, do potwierdzenia | średni | potwierdzić link CTA i logi audytowe |
 | Health Check | Zaimplementowane, do potwierdzenia | średni | test w środowisku zewnętrznym |
@@ -66,6 +66,7 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - kalendarz admina przekazuje do modala rezerwacji wyliczone `place_ids`, a `ReservationService` respektuje ręczny wybór miejsca, jeśli request zawiera poprawne i dostępne `place_ids`; tryb automatyczny nadal używa optymalizatora tylko przy ich braku.
 - modal tworzenia rezerwacji liczy podgląd ceny noclegu tą samą logiką doboru łóżek co finalny zapis, więc przy trybie automatycznym nie powinien już pokazywać samych usług dodatkowych bez ceny pobytu.
 - dodano dodatkowy przycisk akcji „Rezerwacje” w toolbarze kalendarza admina, podpięty pod ten sam flow co przycisk `ZAREZERWUJ` w siatce, aby domknąć przypadki problematycznego kliknięcia CTA w wierszu łóżka.
+- poprawiono ranking alokacji grup w `AvailabilityService`, aby preferował najlepiej dopasowany wariant `single_room` (w tym dorm) przed rozdzielaniem grupy na wiele pokoi; frontend dodatkowo sortuje odpowiedzi `groupSearch` deterministycznie przed wyborem pierwszej opcji.
 
 ## Zweryfikowane testami, ale nadal wymagają regresji ręcznej
 
@@ -88,14 +89,14 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - sprawdzić ręcznie scenariusze częściowego obłożenia łóżka piętrowego: nowa rezerwacja, edycja, check-in z mniejszą liczbą gości i widget publiczny.
 - potwierdzić klikany test recepcjonisty w realnym UI WordPressa, bo obecna weryfikacja tej części była integracyjna, nie manualna.
 - potwierdzić ręcznie działanie CTA „Rezerwacje” w kalendarzu admina (przycisk w siatce i fallback w toolbarze).
-- sprawdzić algorytm alokacji grup: przy grupie 8 osób system rozrzucił gości po kilku pokojach mimo dostępnego pokoju wieloosobowego.
+- potwierdzić ręcznie scenariusz grupy 8 osób po zmianie rankingu `groupSearch` (preferencja `single_room`) i sprawdzić, czy system nie rozrzuca grupy mimo dostępnego dormu.
 - potwierdzić ręcznie, że modal tworzenia rezerwacji po wyborze terminu w kalendarzu pokazuje poprawną cenę noclegu także przy automatycznym doborze łóżek.
 - potwierdzić ręcznie w realnym UI, że kalendarz zachowuje wybrane `place_ids` przy tworzeniu rezerwacji i nie wpada ponownie w automatyczną alokację dla ręcznie wskazanego miejsca.
 ## Plan najbliższy
 
 1. Potwierdzić ręcznie na stagingu / w realnym UI WordPressa, że wybór konkretnego miejsca w kalendarzu zapisuje te same `place_ids` i działa dla częściowo zajętego łóżka piętrowego.
 2. Potwierdzić ręcznie działanie CTA „Rezerwacje" w widoku kalendarza (siatka + toolbar) oraz poprawną cenę w modalu tworzenia rezerwacji.
-3. Zweryfikować i poprawić alokację grup, żeby preferowała pokój wieloosobowy przed rozrzucaniem grupy po kilku pokojach.
+3. Potwierdzić ręcznie alokację grup po zmianie rankingu `groupSearch` (preferencja `single_room`) i sprawdzić wynikową cenę.
 
 ## Zasada aktualizacji po każdej sesji
 

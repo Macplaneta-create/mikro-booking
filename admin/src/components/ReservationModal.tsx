@@ -92,8 +92,16 @@ const ReservationModal: React.FC<ReservationModalProps> = ({ isOpen, onClose, on
                     check_out: formData.check_out,
                 });
 
-                if (options.length > 0 && options[0].beds && options[0].beds.length > 0) {
-                    bedIds = options[0].beds
+                const sortedOptions = [...options].sort((left, right) => {
+                    if (left.type !== right.type) {
+                        return left.type === 'single_room' ? -1 : 1;
+                    }
+
+                    return (right.score || 0) - (left.score || 0);
+                });
+
+                if (sortedOptions.length > 0 && sortedOptions[0].beds && sortedOptions[0].beds.length > 0) {
+                    bedIds = sortedOptions[0].beds
                         .map((bed: any) => bed && bed.id ? parseInt(String(bed.id)) : null)
                         .filter((id: number | null): id is number => id !== null && !isNaN(id));
                     bedCapacity = getBedsCapacity(bedIds);

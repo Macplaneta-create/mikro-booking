@@ -14,6 +14,7 @@ use MikroPlaneta\Booking\Core\Repositories\BedRepository;
 use MikroPlaneta\Booking\Core\Repositories\BedPlaceRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationPlaceRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationRepository;
+use MikroPlaneta\Booking\Core\Repositories\RoomRepository;
 use MikroPlaneta\Booking\Core\Models\Bed;
 use MikroPlaneta\Booking\Core\Models\Reservation;
 use MikroPlaneta\Booking\Core\Database\Schema;
@@ -28,6 +29,7 @@ class AvailabilityService {
     private ReservationRepository $reservation_repository;
     private BedPlaceRepository $bed_place_repository;
     private ReservationPlaceRepository $reservation_place_repository;
+    private RoomRepository $room_repository;
     
     /**
      * Constructor
@@ -36,12 +38,14 @@ class AvailabilityService {
         BedRepository $bed_repository,
         ReservationRepository $reservation_repository,
         ?BedPlaceRepository $bed_place_repository = null,
-        ?ReservationPlaceRepository $reservation_place_repository = null
+        ?ReservationPlaceRepository $reservation_place_repository = null,
+        ?RoomRepository $room_repository = null
     ) {
         $this->bed_repository = $bed_repository;
         $this->reservation_repository = $reservation_repository;
         $this->bed_place_repository = $bed_place_repository ?? new BedPlaceRepository();
         $this->reservation_place_repository = $reservation_place_repository ?? new ReservationPlaceRepository();
+        $this->room_repository = $room_repository ?? new RoomRepository();
     }
     
     /**
@@ -126,7 +130,7 @@ class AvailabilityService {
                     'type' => 'single_room',
                     'room_id' => $room_id,
                     'beds' => $picked_beds,
-                    'score' => 100, // Highest score for single room
+                    'score' => $this->calculateSingleRoomScore($room_id, $picked_beds, $room_capacity, $group_size),
                 ];
             }
         }
@@ -152,17 +156,65 @@ class AvailabilityService {
                 $combinations[] = [
                     'type' => 'multiple_rooms',
                     'beds' => $selected_beds,
-                    'score' => 50, // Lower score for split
+                    'score' => $this->calculateMultipleRoomsScore($selected_beds, $group_size, $check_in, $check_out),
                 ];
             }
         }
         
-        // Sort by score
+        // Deterministic ordering: higher score first, then less waste, then fewer beds.
         usort($combinations, function($a, $b) {
-            return $b['score'] <=> $a['score'];
+            $score_cmp = ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
+            if ($score_cmp !== 0) {
+                return $score_cmp;
+            }
+
+            $waste_a = $a['waste'] ?? PHP_INT_MAX;
+            $waste_b = $b['waste'] ?? PHP_INT_MAX;
+            if ($waste_a !== $waste_b) {
+                return $waste_a <=> $waste_b;
+            }
+
+            return count($a['beds'] ?? []) <=> count($b['beds'] ?? []);
         });
         
         return $combinations;
+    }
+
+    private function calculateSingleRoomScore(int $room_id, array $picked_beds, int $room_capacity, int $group_size): int {
+        $room = $this->room_repository->find($room_id);
+        $is_dormitory = $room && (string) $room->room_type === 'dormitory';
+        $waste = max(0, $room_capacity - $group_size);
+        $used_beds = count($picked_beds);
+
+        // Prefer fitting the group in one dorm room, then minimize wasted places and used beds.
+        $base = 1000;
+        $dorm_bonus = $is_dormitory ? 200 : 0;
+        $waste_penalty = $waste * 10;
+        $beds_penalty = $used_beds * 3;
+
+        return $base + $dorm_bonus - $waste_penalty - $beds_penalty;
+    }
+
+    private function calculateMultipleRoomsScore(array $selected_beds, int $group_size, string $check_in, string $check_out): int {
+        $capacity = 0;
+        $room_ids = [];
+
+        foreach ($selected_beds as $bed) {
+            $capacity += $this->getAvailablePlacesForBed((int) $bed->id, $check_in, $check_out);
+            $room_ids[(int) $bed->room_id] = true;
+        }
+
+        $waste = max(0, $capacity - $group_size);
+        $rooms_used = count($room_ids);
+        $beds_used = count($selected_beds);
+
+        // Keep split options lower than single-room options, but still rank best split deterministically.
+        $base = 500;
+        $waste_penalty = $waste * 8;
+        $rooms_penalty = $rooms_used * 20;
+        $beds_penalty = $beds_used * 2;
+
+        return $base - $waste_penalty - $rooms_penalty - $beds_penalty;
     }
     
     /**

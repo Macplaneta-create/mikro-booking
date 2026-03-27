@@ -62,7 +62,7 @@ function register_routes(): void {
     
     // 2. Initialize Services
     // Availability Service needs BedRepo & ReservationRepo
-    $availability_service = new AvailabilityService($bed_repo, $reservation_repo, $bed_place_repo, $res_place_repo);
+    $availability_service = new AvailabilityService($bed_repo, $reservation_repo, $bed_place_repo, $res_place_repo, $room_repo);
     
     // Pricing Service needs PricingRepo, BedRepo & RoomRepo
     $pricing_service = new PricingService($pricing_repo, $bed_repo, $room_repo);
