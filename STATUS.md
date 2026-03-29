@@ -1,6 +1,6 @@
 # Status Projektu
 
-Ostatnia aktualizacja: 2026-03-27
+Ostatnia aktualizacja: 2026-03-29
 
 Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 
@@ -27,9 +27,12 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 | Kalendarz dostępności (publiczny shortcode) | Zaimplementowane, do potwierdzenia | średni | regresja frontu: siatka miesięczna + CTA Rezerwuj + responsywność |
 | Ustawienia admina (czytelność + kopiowanie) | Zaimplementowane, do potwierdzenia | średni | potwierdzić komunikaty i działanie wszystkich przycisków Kopiuj na różnych przeglądarkach |
 | Alokacja miejsc w łóżkach piętrowych | Zaimplementowane, do potwierdzenia | średni | uruchomić migrację `reservation_places` i zrobić regresję create/edit/check-in/widget dla częściowo zajętych łóżek |
-| Płatności online | Planowane | wysoki | rozpocząć MVP od jednego providera |
+| Płatności online — Moduł (architektura) | W trakcie — plan gotowy | wysoki | Implementacja Sesja 1: migracje 026+027, model, repository (szczegóły w `NEXT_SESSION.md`) |
 | iCal import / OTA | Planowane | wysoki | po testach zewnętrznych |
 | AI FAQ | Planowane | wysoki | dopiero po płatnościach i integracjach |
+| Analityka — Faza 1 (wykresy, CSV, PDF) | Planowane | średni | Q3 2026; wymaga danych produkcyjnych z pierwszych instalacji |
+| Analityka — Faza 2 (predykcja trendów) | Planowane | niski | po Fazie 1 i zebraniu min. 3 mies. danych; decyzja produktowa: wyróżnik rynkowy |
+| Smart Tips dla recepcji | Planowane | niski | po ukończeniu predykcji trendów (5.4 → 5.5) |
 
 ## Zweryfikowane ostatnio
 
@@ -43,6 +46,8 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - uaktualniono `ARCHITECTURE.md` i `QA_CHECKLIST.md` o model `reservation_places` oraz scenariusze regresji częściowo zajętych łóżek piętrowych.
 - przeszły testy integracyjne najbliższe pracy recepcji: update rezerwacji, check-in z korektami, endpoint update, public reservations, trigger cron i reschedule cron.
 - build admina oraz `php -l` dla zmienionych plików przeszły po dopięciu obsługi `place_ids` w kalendarzu i backendzie rezerwacji.
+- **2026-03-29:** podjęto decyzję produktową o module Analityki w dwóch fazach (szczegóły w `ROADMAP.md` Priorytet 5). Faza 1 — czyste statystyki i wykresy (Q3 2026). Faza 2 — predykcja trendów obłożenia i Smart Tips dla recepcji (po zebraniu min. 3 mies. danych). Zidentyfikowane jako wyróżnik względem Amelii / MotoPress / Booking Calendar.
+- **2026-03-29:** zaprojektowano kompletny moduł płatności (plan w `NEXT_SESSION.md` + konwersacja 5860694c). Decyzje: wielowalutowość od razu (`currency VARCHAR(3)`), Przelewy24 bundled w core, Stripe jako osobna wtyczka add-on (filter `mikroplaneta_payment_gateways` — model WooCommerce). Dwa tory: online (auto-confirm przez webhook HMAC) i przelew ręczny (recepcja potwierdza jednym klikiem). Dashboard: badge statusu płatności 🟢/🟡/⚪ + sekcja „Do sprawdzenia". Implementacja 6 sesji, ~13h łącznie. Sandbox: Przelewy24 + ngrok do testów lokalnych.
 
 ## Zaimplementowane, ale wymagają potwierdzenia
 

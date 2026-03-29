@@ -75,7 +75,19 @@
 - [ ] Licznik nowych rezerwacji (badge na ikonie)
 - [ ] Dźwięk powiadomienia (opcjonalny)
 - [ ] Lista ostatnich rezerwacji na dashboardzie
-- [ ] Filtr: "Oczekujące na potwierdzenie"
+- [ ] Filtr: „Oczekujące na potwierdzenie"
+
+**Wymagania UX — Status płatności zaliczki (decyzja 2026-03-29):**
+
+Recepcjonista musi na pierwszy rzut oka widzieć, które rezerwacje wymagają jego uwagi w kwestii płatności. Każda rezerwacja na dashboardzie i liście rezerwacji pokazuje badge:
+
+- [ ] 🟢 `Zapłacono online` — zaliczka potwierdzona automatycznie przez webhook bramki płatności
+- [ ] 🟡 `Czeka na przelew` — klient wybrał przelew ręczny, wymaga weryfikacji na koncie bankowym
+- [ ] ⚪ `Bez zaliczki` — właściciel obiektu nie wymaga zaliczki
+
+- [ ] Sekcja „Do sprawdzenia" na dashboardzie: lista rezerwacji ze statusem `pending` i metodą `bank_transfer`, posortowana wg terminu wygaśnięcia
+- [ ] Przycisk „Potwierdź przelew" przy każdej takiej rezerwacji — jednym kliknięciem zmienia status na `confirmed` bez wchodzenia w szczegóły
+- [ ] Tooltip/szczegóły: metoda płatności, kwota zaliczki, termin płatności, ile czasu zostało
 
 **Tech Stack:**
 - WordPress REST API + polling (prostsze)
@@ -83,9 +95,10 @@
 
 **Pliki do zmiany:**
 - `admin/src/components/DashboardContent.tsx`
+- `admin/src/components/PaymentStatusBadge.tsx` (nowy)
 - `rest-api/controllers/class-dashboard-controller.php`
 
-**Estimacja:** 4-6 godzin
+**Estimacja:** 6-8 godzin (rozszerzone o UX płatności)
 
 ---
 
@@ -230,20 +243,44 @@ Dostęp do pełnego API Booking.com zależy od warunków partnerstwa i środowis
 ### **Priorytet 3: Płatności Online (Q2 2026)**
 
 #### 3.1 Przelewy24 / BLIK 🔴 NOWE
-**Opis:** Klient płaci zaliczkę online od razu.
+**Opis:** Klient płaci zaliczkę online bezpośrednio po złożeniu rezerwacji. System automatycznie wykrywa płatność przez webhook i zmienia status rezerwacji — bez udziału recepcji.
+
+**Dwa tryby płatności zaliczki (równolegle):**
+
+- **Online** → klient wybiera „Zapłać kartą/BLIKIEM" → system auto-potwierdza po webhookу → dashboard: 🟢 `Zapłacono online`
+- **Przelew ręczny** → klient wybiera „Przelew tradycyjny" → dostaje dane konta → recepcja sprawdza ręcznie → dashboard: 🟡 `Czeka na przelew`
 
 **Wymagania:**
-- [ ] Integracja z Przelewy24 API
-- [ ] Płatność przy rezerwacji (widget)
-- [ ] Status: "paid" po pozytywnej płatności
-- [ ] Powiadomienie email z potwierdzeniem
-- [ ] Zwrot płatności przy anulowaniu
+- [ ] Integracja z Przelewy24 REST API v3 (sandbox + produkcja)
+- [ ] BLIK jako metoda płatności w Przelewy24
+- [ ] Publiczny endpoint webhook: `POST /wp-json/mikroplaneta/v1/payments/webhook`
+- [ ] Weryfikacja podpisu webhooka (HMAC — ochrona przed fałszywymi wywołaniami)
+- [ ] Nowe pole w rezerwacji: `payment_method` (`online` | `bank_transfer` | `none`)
+- [ ] Nowe statusy rezerwacji: `pending_payment` → `confirmed` (auto, po webhookу) lub `failed` / `refunded`
+- [ ] Nowa tabela `payment_transactions` — audit trail każdej transakcji (kwota, status, timestamp, odpowiedź bramki)
+- [ ] Email do klienta: „Płatność przyjęta — rezerwacja potwierdzona" (automatyczny po webhookу)
+- [ ] Email do recepcji: „Nowa opłacona rezerwacja #ID"
+- [ ] Zwrot zaliczki przy anulowaniu (refund przez API bramki)
+
+**Dashboard recepcji (powiązane z sekcją 1.1):**
+- [ ] Badge statusu płatności przy każdej rezerwacji: 🟢 / 🟡 / ⚪
+- [ ] Sekcja „Do sprawdzenia" — rezerwacje czekające na przelew ręczny, posortowane wg terminu wygaśnięcia
+- [ ] Przycisk „Potwierdź przelew" — jednym kliknięciem, bez wchodzenia w szczegóły rezerwacji
 
 **Tech Stack:**
-- Przelewy24 REST API
-- Webhook do obsługi statusów
+- Przelewy24 REST API v3
+- Webhook endpoint zabezpieczony podpisem HMAC
+- Nowa migracja `026-create-payment-transactions.php`
 
-**Estimacja:** 10-15 godzin
+**Główne pliki (nowe):**
+- `core/payments/interface-payment-gateway.php` — abstrakcyjny kontrakt bramki
+- `core/payments/class-payment-manager.php` — rejestr aktywnych bramek
+- `core/payments/class-payment-transaction.php` — value object transakcji
+- `integrations/payments/class-gateway-przelewy24.php` — implementacja
+- `rest-api/controllers/class-payments-controller.php` — webhook + inicjacja płatności
+- `admin/src/components/PaymentStatusBadge.tsx` — komponent UI badge'a
+
+**Estimacja:** 14-18 godzin
 
 ---
 
@@ -305,45 +342,110 @@ Dostęp do pełnego API Booking.com zależy od warunków partnerstwa i środowis
 
 ### **Priorytet 5: Analityka i Raporty (Q3 2026)**
 
-#### 5.1 Dashboard - Statystyki 🔴 NOWE
-**Opis:** Rozbudowany dashboard z wykresami.
-
-**Wymagania:**
-- [ ] Wykres obłożenia (miesiąc/rok)
-- [ ] Przychód (miesiąc/rok)
-- [ ] Średnia cena za noc
-- [ ] Top 10 gości
-- [ ] Źródła rezerwacji (widget, Booking.com, itp.)
-
-**Tech Stack:**
-- Chart.js lub Recharts
-
-**Estimacja:** 8-12 godzin
+> **Decyzja produktowa (2026-03-29):** Moduł analityki budujemy dwufazowo.
+> - **Faza 1** — czyste statystyki historyczne (wykresy, eksporty, raporty PDF).
+> - **Faza 2** — predykcja trendów obłożenia i podpowiedzi dla recepcji (Smart Tips), aktywowana po zebraniu min. 3 miesięcy danych produkcyjnych.
+>
+> To **wyróżnik na rynku** — żadna wiodąca wtyczka booking (Amelia, MotoPress, Booking Calendar) nie oferuje predykcji trendów. Naturalnie współgra z Priorytetem 7 (AI/Chatbot).
 
 ---
 
-#### 5.2 Export CSV / Excel 🔴 NOWE
+#### 5.1 Dashboard - Statystyki 🔴 FAZA 1
+**Opis:** Rozbudowany dashboard z wykresami historycznego obłożenia i przychodów.
+
+**Wymagania:**
+- [ ] Wykres obłożenia (miesiąc/rok) — per pokój i łącznie
+- [ ] Wykres przychodów (miesiąc/rok)
+- [ ] Średnia cena za noc
+- [ ] Top 10 gości (wg liczby noclegów i przychodu)
+- [ ] Źródła rezerwacji (`direct`, `booking`, `airbnb`, itp.)
+- [ ] Widok porównawczy: ten miesiąc vs poprzedni
+- [ ] Obsługa stanu „za mało danych" — informacja UX dla nowych instalacji
+
+**Tech Stack:**
+- Recharts (już w zależnościach React/Vite projektu)
+- PHP: agregacje na tabelach `reservations`, `reservation_beds`, `reservation_places`
+
+**Główne pliki:**
+- `admin/src/components/DashboardContent.tsx`
+- `rest-api/controllers/class-dashboard-controller.php`
+
+**Estimacja:** 10-14 godzin
+
+---
+
+#### 5.2 Export CSV / Excel 🔴 FAZA 1
 **Opis:** Eksport rezerwacji do arkusza kalkulacyjnego.
 
 **Wymagania:**
-- [ ] Export wszystkich rezerwacji
-- [ ] Filtry: data, status, pokój
-- [ ] Kolumny: gość, data, łóżka, cena, status
+- [ ] Eksport wszystkich rezerwacji z filtrami: data, status, pokój
+- [ ] Kolumny: gość, daty, łóżka, cena, status, źródło
+- [ ] Eksport danych gości (RODO: tylko za zgodą)
 
 **Estimacja:** 4-6 godzin
 
 ---
 
-#### 5.3 Raport miesięczny PDF 🔴 NOWE
-**Opis:** Automatyczny raport na email właściciela.
+#### 5.3 Raport miesięczny PDF 🔴 FAZA 1
+**Opis:** Automatyczny raport na email właściciela, generowany pierwszego dnia każdego miesiąca.
 
 **Wymagania:**
-- [ ] Generowanie 1-go dnia miesiąca
-- [ ] Podsumowanie: przychód, obłożenie, liczba gości
-- [ ] Porównanie z poprzednim miesiącem
-- [ ] PDF załącznik
+- [ ] Generowanie przez WP-Cron 1-go dnia miesiąca
+- [ ] Podsumowanie: przychód, obłożenie %, liczba gości
+- [ ] Porównanie z poprzednim miesiącem i analogicznym miesiącem rok wcześniej
+- [ ] PDF jako załącznik (biblioteka: Dompdf)
 
 **Estimacja:** 6-8 godzin
+
+---
+
+#### 5.4 Predykcja Trendów Obłożenia 🔴 FAZA 2 (NOWE)
+**Opis:** System przewiduje przyszłe obłożenie na podstawie historii rezerwacji z poprzednich lat i miesięcy. Właściciel widzi prognozę na kolejne 4–8 tygodni.
+
+**Wymagania:**
+- [ ] Algorytm sezonowości: porównanie tego samego okresu rok temu (rok-do-roku)
+- [ ] Prognoza obłożenia % na kolejne 4 tygodnie — per pokój i łącznie
+- [ ] Wykres: dane historyczne + linia predykcji (wyróżniona wizualnie)
+- [ ] Próg aktywacji: min. 3 miesiące danych historycznych — poniżej progu: informacja UX zamiast pustego wykresu
+- [ ] (Faza 2b) Opcjonalna integracja z OpenAI API dla zaawansowanych wzorców sezonowych — powiązana z Priorytetem 7
+
+**Tech Stack:**
+- **Faza 2a (PHP):** prosta agregacja SQL (mean, trend liniowy, sezonowość tygodniowa / miesięczna)
+- **Faza 2b (AI):** OpenAI API lub lokalny model — po weryfikacji Priorytetu 7
+- **Frontend:** Recharts — linia predykcji jako `<ReferenceLine>` z `strokeDasharray`
+
+**Główne pliki (nowe):**
+- `core/services/class-analytics-service.php`
+- `rest-api/controllers/class-analytics-controller.php`
+- `admin/src/components/AnalyticsView.tsx`
+
+**Estimacja:**
+- Faza 2a (algorytm PHP): 12-18 godzin
+- Faza 2b (AI): 8-12 godzin — po wdrożeniu Priorytetu 7
+
+**Warunek startu fazy 2:** zebrane min. 3 miesiące danych od pierwszych klientów produkcyjnych.
+
+---
+
+#### 5.5 Podpowiedzi dla Recepcji (Smart Tips) 🔴 FAZA 2 (NOWE)
+**Opis:** Na podstawie trendów i historii system generuje krótkie, kontekstowe podpowiedzi widoczne w panelu admina na dashboardzie.
+
+**Przykłady podpowiedzi:**
+- *„Ten weekend historycznie bywa zapełniony w 90% — rozważ podwyżkę ceny."*
+- *„Mało rezerwacji na przyszły wtorek — aktywuj promocję."*
+- *„Gość Jan Kowalski odwiedzał obiekt co roku w tym terminie — nie ma jeszcze rezerwacji."*
+
+**Wymagania:**
+- [ ] Min. 3 podpowiedzi kontekstowe na dashboardzie (rotujące)
+- [ ] Typy: wysokie obłożenie prognozowane, niskie obłożenie, powtarzający się gość, brak rezerwacji w historycznie dobrym terminie
+- [ ] Linki akcji z poziomu podpowiedzi (np. „Zmień cenę" → PricingView)
+- [ ] Możliwość odrzucenia / ukrycia konkretnej podpowiedzi
+
+**Główne pliki:**
+- `core/services/class-analytics-service.php` (rozszerzenie)
+- `admin/src/components/DashboardContent.tsx` (sekcja Smart Tips)
+
+**Estimacja:** 6-10 godzin (po ukończeniu 5.4)
 
 ---
 
@@ -457,10 +559,12 @@ Dostęp do pełnego API Booking.com zależy od warunków partnerstwa i środowis
 - [ ] Powiadomienia SMS
 
 ### **Q3 2026 (Lip-Wrz)**
-- [ ] Dashboard - statystyki i wykresy
-- [ ] Export CSV / Excel
-- [ ] Raporty miesięczne PDF
-- [ ] WhatsApp Business API
+- [ ] Dashboard - statystyki i wykresy (5.1) — Faza 1
+- [ ] Export CSV / Excel (5.2) — Faza 1
+- [ ] Raporty miesięczne PDF (5.3) — Faza 1
+- [ ] WhatsApp Business API (4.2)
+- [ ] Predykcja trendów obłożenia (5.4) — Faza 2a, po zebraniu min. 3 mies. danych
+- [ ] Smart Tips dla recepcji (5.5) — po ukończeniu 5.4
 
 ### **Q4 2026 (Paź-Gru)**
 - [ ] Channel Manager (Booking.com, Airbnb)
@@ -531,7 +635,7 @@ Dostęp do pełnego API Booking.com zależy od warunków partnerstwa i środowis
 
 ---
 
-**Ostatnia aktualizacja:** 2026-03-02  
-**Wersja roadmap:** 1.0
+**Ostatnia aktualizacja:** 2026-03-29  
+**Wersja roadmap:** 1.1
 
 **Zatwierdzone przez:** MikroPlaneta Team
