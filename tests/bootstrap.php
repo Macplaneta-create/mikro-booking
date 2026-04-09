@@ -423,6 +423,24 @@ if (!isset($GLOBALS['wpdb'])) {
     };
 }
 
+if (!function_exists('wp_json_encode')) {
+    function wp_json_encode($data, int $options = 0): string {
+        return json_encode($data, $options) ?: '';
+    }
+}
+
+if (!function_exists('get_current_user_id')) {
+    function get_current_user_id(): int {
+        return $GLOBALS['__mb_current_user_id'] ?? 0;
+    }
+}
+
+if (!function_exists('nl2br')) {
+    function nl2br(string $text): string {
+        return str_replace("\n", "<br />\n", $text);
+    }
+}
+
 require_once __DIR__ . '/../core/database/class-schema.php';
 
 require_once __DIR__ . '/../core/repositories/interface-repository.php';
