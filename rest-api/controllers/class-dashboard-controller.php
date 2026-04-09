@@ -85,8 +85,8 @@ class DashboardController extends RestController {
         $reservation_beds_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('reservation_beds');
         $guests_table = \MikroPlaneta\Booking\Core\Database\Schema::get_table_name('guests');
 
-        $stats['total_rooms'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$rooms_table}");
-        $stats['total_beds'] = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$beds_table} WHERE is_active = 1");
+        $stats['total_rooms'] = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$rooms_table} WHERE 1=%d", 1));
+        $stats['total_beds'] = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$beds_table} WHERE is_active = %d", 1));
 
         // 2. Today's date
         $today = current_time('Y-m-d');
