@@ -36,7 +36,12 @@ Inspect code only as needed to confirm whether a feature is planned, implemented
 
 ## Update procedure
 
-1. Read `STATUS.md`, `NEXT_SESSION.md`, and `ROADMAP.md`.
+1. **Jeśli sesja zawierała zmiany PHP — uruchom testy przed dokumentowaniem:**
+   - `php vendor/bin/phpunit` — wszystkie testy muszą przejść (zielone)
+   - `php -l {zmienione_pliki.php}` — brak błędów składni
+   - Jeśli testy nie przechodzą — napraw najpierw, dokumentuj po naprawie.
+   - Jeśli sesja dotyczyła tylko CSS/TSX/dokumentacji — pomiń ten krok.
+2. Read `STATUS.md`, `NEXT_SESSION.md`, and `ROADMAP.md`.
 2. Check recent code or changed files if the current state is unclear.
 3. Update `STATUS.md` first.
 4. Update `NEXT_SESSION.md` to reflect only the next 1-3 priorities.
