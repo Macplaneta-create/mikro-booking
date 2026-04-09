@@ -52,6 +52,7 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - **2026-04-09:** Sesja 1+2 modułu płatności: migracje 026+027, `PaymentTransaction` model + repository, `Reservation` rozszerzona o `payment_method`; auto-ustawianie `payment_method = 'bank_transfer'` przy tworzeniu rezerwacji gdy depozyt włączony + konto skonfigurowane; badge 🟡 Przelew bankowy w `ReservationDetailsModal`. Wszystkie `php -l` i build ✅.
 - **2026-04-09:** Naprawiono błąd `failed to create reservation` — nowe migracje (026+027) nie uruchamiały się na aktywnej wtyczce; dodano `maybe_run_pending_migrations()` na `plugins_loaded` prio 5 w `class-plugin.php`. Zweryfikowane na żywej instalacji.
 - **2026-04-09:** Wiadomość do gościa z recepcji: `NotificationService::sendCustomMessage()`, endpoint `POST /guests/{id}/message`, logi w `changes_log`. Przycisk ✉️ w `GuestsView` + modal z dropdownem rezerwacji gościa. `php -l` ✅, build ✅.
+- **2026-04-09:** Suite testów integracyjnych 43/43 zielone. Naprawiono pre-existing failures: ścieżki do `tools/` w AdminToolsSecurityGuardsTest, brakujące `require_once IcalService` + stuby `wp_salt`/`add_query_arg`/`admin_url`/`wp_nonce_url`/`wp_die` w bootstrap, izolacja `$GLOBALS['wpdb']` w PaymentTransactionRepositoryTest (setUp/tearDown), brakujące 2 argumenty konstruktora w ReservationConfirmNotificationTest.
 
 ## Zaimplementowane, ale wymagają potwierdzenia
 
