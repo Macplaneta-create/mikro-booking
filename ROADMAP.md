@@ -30,6 +30,7 @@
 | **Admin** | Kalendarz rezerwacji | ✅ |
 | **Admin** | Dashboard ze statystykami | ✅ |
 | **Admin** | Zarządzanie gośćmi | ✅ |
+| **Admin** | Wiadomość do gościa z recepcji (✉️ + modal + log) | ✅ |
 | **Admin** | Ustawienia systemu | ✅ |
 | **Integracje** | Google Calendar - Eksport (BYOK) | ✅ |
 

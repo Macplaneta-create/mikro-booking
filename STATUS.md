@@ -28,6 +28,7 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 | Ustawienia admina (czytelność + kopiowanie) | Zaimplementowane, do potwierdzenia | średni | potwierdzić komunikaty i działanie wszystkich przycisków Kopiuj na różnych przeglądarkach |
 | Alokacja miejsc w łóżkach piętrowych | Zaimplementowane, do potwierdzenia | średni | uruchomić migrację `reservation_places` i zrobić regresję create/edit/check-in/widget dla częściowo zajętych łóżek |
 | Płatności online — Moduł (architektura) | Zaimplementowane, do potwierdzenia | wysoki | Sesja 1+2 gotowe: migracje, model, repository, auto payment_method, badge. Następny krok: PaymentManager + gateway interface (Sesja 3) |
+| Wiadomość do gościa z recepcji | Zaimplementowane, do potwierdzenia | średni | test wysyłki w środowisku zewnętrznym, potwierdzenie zapisu w changes_log |
 | iCal import / OTA | Planowane | wysoki | po testach zewnętrznych |
 | AI FAQ | Planowane | wysoki | dopiero po płatnościach i integracjach |
 | Analityka — Faza 1 (wykresy, CSV, PDF) | Planowane | średni | Q3 2026; wymaga danych produkcyjnych z pierwszych instalacji |
@@ -49,6 +50,8 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - **2026-03-29:** podjęto decyzję produktową o module Analityki w dwóch fazach (szczegóły w `ROADMAP.md` Priorytet 5). Faza 1 — czyste statystyki i wykresy (Q3 2026). Faza 2 — predykcja trendów obłożenia i Smart Tips dla recepcji (po zebraniu min. 3 mies. danych). Zidentyfikowane jako wyróżnik względem Amelii / MotoPress / Booking Calendar.
 - **2026-03-29:** zaprojektowano kompletny moduł płatności. Decyzja: przelew ręczny w core, bramki online jako osobna wtyczka `mikro-booking-payments` przez filter `mikroplaneta_payment_gateways`.
 - **2026-04-09:** Sesja 1+2 modułu płatności: migracje 026+027, `PaymentTransaction` model + repository, `Reservation` rozszerzona o `payment_method`; auto-ustawianie `payment_method = 'bank_transfer'` przy tworzeniu rezerwacji gdy depozyt włączony + konto skonfigurowane; badge 🟡 Przelew bankowy w `ReservationDetailsModal`. Wszystkie `php -l` i build ✅.
+- **2026-04-09:** Naprawiono błąd `failed to create reservation` — nowe migracje (026+027) nie uruchamiały się na aktywnej wtyczce; dodano `maybe_run_pending_migrations()` na `plugins_loaded` prio 5 w `class-plugin.php`. Zweryfikowane na żywej instalacji.
+- **2026-04-09:** Wiadomość do gościa z recepcji: `NotificationService::sendCustomMessage()`, endpoint `POST /guests/{id}/message`, logi w `changes_log`. Przycisk ✉️ w `GuestsView` + modal z dropdownem rezerwacji gościa. `php -l` ✅, build ✅.
 
 ## Zaimplementowane, ale wymagają potwierdzenia
 

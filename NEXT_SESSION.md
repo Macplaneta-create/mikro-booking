@@ -1,7 +1,7 @@
 # Następna Sesja - MikroPlaneta Booking
 
 Data aktualizacji: 2026-04-09
-Status: Sesja 1+2 modułu płatności zakończona. Następna sesja = Sesja 3 (PaymentManager + gateway interface).
+Status: Sesja 1+2 płatności zakończona + auto-migracje naprawione + wiadomość do gościa z recepcji. Następna sesja = Sesja 3 (PaymentManager + gateway interface).
 
 ---
 
