@@ -6,9 +6,11 @@ namespace Tests\Integration;
 
 use MikroPlaneta\Booking\Core\Models\Guest;
 use MikroPlaneta\Booking\Core\Models\Reservation;
+use MikroPlaneta\Booking\Core\Repositories\BedPlaceRepository;
 use MikroPlaneta\Booking\Core\Repositories\BedRepository;
 use MikroPlaneta\Booking\Core\Repositories\GuestRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationBedRepository;
+use MikroPlaneta\Booking\Core\Repositories\ReservationPlaceRepository;
 use MikroPlaneta\Booking\Core\Repositories\ReservationRepository;
 use MikroPlaneta\Booking\Core\Repositories\RoomRepository;
 use MikroPlaneta\Booking\Core\Services\AvailabilityService;
@@ -29,6 +31,8 @@ class ReservationConfirmNotificationTest extends TestCase {
         $availabilityService = $this->createMock(AvailabilityService::class);
         $pricingService = $this->createMock(PricingService::class);
         $reservationBedRepository = $this->createMock(ReservationBedRepository::class);
+        $reservationPlaceRepository = $this->createMock(ReservationPlaceRepository::class);
+        $bedPlaceRepository = $this->createMock(BedPlaceRepository::class);
         $notificationService = $this->createMock(NotificationService::class);
         $roomRepository = $this->createMock(RoomRepository::class);
 
@@ -39,6 +43,8 @@ class ReservationConfirmNotificationTest extends TestCase {
             $availabilityService,
             $pricingService,
             $reservationBedRepository,
+            $reservationPlaceRepository,
+            $bedPlaceRepository,
             $notificationService,
             $roomRepository
         );

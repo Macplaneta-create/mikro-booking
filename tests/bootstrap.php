@@ -423,6 +423,40 @@ if (!isset($GLOBALS['wpdb'])) {
     };
 }
 
+if (!function_exists('wp_salt')) {
+    function wp_salt($scheme = 'auth'): string {
+        return 'test-salt-' . $scheme;
+    }
+}
+
+if (!function_exists('add_query_arg')) {
+    function add_query_arg($args, string $url = ''): string {
+        if (is_array($args)) {
+            $query = http_build_query($args);
+            return rtrim($url, '?&') . (strpos($url, '?') !== false ? '&' : '?') . $query;
+        }
+        return $url;
+    }
+}
+
+if (!function_exists('admin_url')) {
+    function admin_url(string $path = ''): string {
+        return 'https://example.test/wp-admin/' . ltrim($path, '/');
+    }
+}
+
+if (!function_exists('wp_nonce_url')) {
+    function wp_nonce_url(string $actionurl, $action = -1, string $name = '_wpnonce'): string {
+        return add_query_arg([$name => 'test-nonce'], $actionurl);
+    }
+}
+
+if (!function_exists('wp_die')) {
+    function wp_die($message = '', $title = '', $args = []): void {
+        throw new \RuntimeException((string) $message);
+    }
+}
+
 if (!function_exists('wp_json_encode')) {
     function wp_json_encode($data, int $options = 0): string {
         return json_encode($data, $options) ?: '';
@@ -460,6 +494,7 @@ require_once __DIR__ . '/../core/repositories/class-reservation-bed-repository.p
 require_once __DIR__ . '/../core/repositories/class-reservation-place-repository.php';
 require_once __DIR__ . '/../core/services/class-availability-service.php';
 require_once __DIR__ . '/../core/services/class-pricing-service.php';
+require_once __DIR__ . '/../core/services/class-ical-service.php';
 require_once __DIR__ . '/../core/services/class-notification-service.php';
 require_once __DIR__ . '/../core/services/class-reservation-service.php';
 require_once __DIR__ . '/../core/services/class-guest-service.php';

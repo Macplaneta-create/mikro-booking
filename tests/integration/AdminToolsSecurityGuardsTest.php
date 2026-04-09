@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 
 class AdminToolsSecurityGuardsTest extends TestCase {
     public function testForceRepairDbHasSecurityGuards(): void {
-        $content = (string) file_get_contents(__DIR__ . '/../../force-repair-db.php');
+        $content = (string) file_get_contents(__DIR__ . '/../../tools/force-repair-db.php');
 
         $this->assertStringContainsString("PHP_SAPI !== 'cli'", $content);
         $this->assertStringContainsString('current_user_can', $content);
@@ -17,7 +17,7 @@ class AdminToolsSecurityGuardsTest extends TestCase {
     }
 
     public function testForceUpdateHasCapabilityNonceAndDebugGuards(): void {
-        $content = (string) file_get_contents(__DIR__ . '/../../force-update.php');
+        $content = (string) file_get_contents(__DIR__ . '/../../tools/force-update.php');
 
         $this->assertStringContainsString("defined('WP_DEBUG')", $content);
         $this->assertStringContainsString('current_user_can', $content);

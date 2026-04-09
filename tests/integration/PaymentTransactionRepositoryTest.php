@@ -13,6 +13,18 @@ require_once __DIR__ . '/../../core/repositories/class-payment-transaction-repos
 
 class PaymentTransactionRepositoryTest extends TestCase {
 
+    /** @var object */
+    private $originalWpdb;
+
+    protected function setUp(): void {
+        $GLOBALS['__mb_options'] = [];
+        $this->originalWpdb = $GLOBALS['wpdb'];
+    }
+
+    protected function tearDown(): void {
+        $GLOBALS['wpdb'] = $this->originalWpdb;
+    }
+
     private function makeFakeWpdb(array $config = []): object {
         return new class($config) {
             public string $prefix = 'wp_';
@@ -54,10 +66,6 @@ class PaymentTransactionRepositoryTest extends TestCase {
                 return $this->config['update_result'] ?? 1;
             }
         };
-    }
-
-    protected function setUp(): void {
-        $GLOBALS['__mb_options'] = [];
     }
 
     public function testCreateReturnsTransactionWithCorrectData(): void {
