@@ -1,6 +1,6 @@
 # Status Projektu
 
-Ostatnia aktualizacja: 2026-03-29
+Ostatnia aktualizacja: 2026-04-09
 
 Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 
@@ -27,7 +27,7 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 | Kalendarz dostępności (publiczny shortcode) | Zaimplementowane, do potwierdzenia | średni | regresja frontu: siatka miesięczna + CTA Rezerwuj + responsywność |
 | Ustawienia admina (czytelność + kopiowanie) | Zaimplementowane, do potwierdzenia | średni | potwierdzić komunikaty i działanie wszystkich przycisków Kopiuj na różnych przeglądarkach |
 | Alokacja miejsc w łóżkach piętrowych | Zaimplementowane, do potwierdzenia | średni | uruchomić migrację `reservation_places` i zrobić regresję create/edit/check-in/widget dla częściowo zajętych łóżek |
-| Płatności online — Moduł (architektura) | W trakcie — plan gotowy | wysoki | Implementacja Sesja 1: migracje 026+027, model, repository (szczegóły w `NEXT_SESSION.md`) |
+| Płatności online — Moduł (architektura) | Zaimplementowane, do potwierdzenia | wysoki | Sesja 1+2 gotowe: migracje, model, repository, auto payment_method, badge. Następny krok: PaymentManager + gateway interface (Sesja 3) |
 | iCal import / OTA | Planowane | wysoki | po testach zewnętrznych |
 | AI FAQ | Planowane | wysoki | dopiero po płatnościach i integracjach |
 | Analityka — Faza 1 (wykresy, CSV, PDF) | Planowane | średni | Q3 2026; wymaga danych produkcyjnych z pierwszych instalacji |
@@ -47,7 +47,8 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - przeszły testy integracyjne najbliższe pracy recepcji: update rezerwacji, check-in z korektami, endpoint update, public reservations, trigger cron i reschedule cron.
 - build admina oraz `php -l` dla zmienionych plików przeszły po dopięciu obsługi `place_ids` w kalendarzu i backendzie rezerwacji.
 - **2026-03-29:** podjęto decyzję produktową o module Analityki w dwóch fazach (szczegóły w `ROADMAP.md` Priorytet 5). Faza 1 — czyste statystyki i wykresy (Q3 2026). Faza 2 — predykcja trendów obłożenia i Smart Tips dla recepcji (po zebraniu min. 3 mies. danych). Zidentyfikowane jako wyróżnik względem Amelii / MotoPress / Booking Calendar.
-- **2026-03-29:** zaprojektowano kompletny moduł płatności (plan w `NEXT_SESSION.md` + konwersacja 5860694c). Decyzje: wielowalutowość od razu (`currency VARCHAR(3)`), Przelewy24 bundled w core, Stripe jako osobna wtyczka add-on (filter `mikroplaneta_payment_gateways` — model WooCommerce). Dwa tory: online (auto-confirm przez webhook HMAC) i przelew ręczny (recepcja potwierdza jednym klikiem). Dashboard: badge statusu płatności 🟢/🟡/⚪ + sekcja „Do sprawdzenia". Implementacja 6 sesji, ~13h łącznie. Sandbox: Przelewy24 + ngrok do testów lokalnych.
+- **2026-03-29:** zaprojektowano kompletny moduł płatności. Decyzja: przelew ręczny w core, bramki online jako osobna wtyczka `mikro-booking-payments` przez filter `mikroplaneta_payment_gateways`.
+- **2026-04-09:** Sesja 1+2 modułu płatności: migracje 026+027, `PaymentTransaction` model + repository, `Reservation` rozszerzona o `payment_method`; auto-ustawianie `payment_method = 'bank_transfer'` przy tworzeniu rezerwacji gdy depozyt włączony + konto skonfigurowane; badge 🟡 Przelew bankowy w `ReservationDetailsModal`. Wszystkie `php -l` i build ✅.
 
 ## Zaimplementowane, ale wymagają potwierdzenia
 
@@ -99,9 +100,9 @@ Ten dokument jest głównym źródłem prawdy o stanie projektu między sesjami.
 - potwierdzić ręcznie w realnym UI, że kalendarz zachowuje wybrane `place_ids` przy tworzeniu rezerwacji i nie wpada ponownie w automatyczną alokację dla ręcznie wskazanego miejsca.
 ## Plan najbliższy
 
-1. Potwierdzić ręcznie na stagingu / w realnym UI WordPressa, że wybór konkretnego miejsca w kalendarzu zapisuje te same `place_ids` i działa dla częściowo zajętego łóżka piętrowego.
-2. Potwierdzić ręcznie działanie CTA „Rezerwacje" w widoku kalendarza (siatka + toolbar) oraz poprawną cenę w modalu tworzenia rezerwacji.
-3. Potwierdzić ręcznie alokację grup po zmianie rankingu `groupSearch` (preferencja `single_room`) i sprawdzić wynikową cenę.
+1. Zaimplementować `PaymentManager` + `GatewayInterface` (Sesja 3 modułu płatności).
+2. Dodać sekcję „Do sprawdzenia" na dashboardzie dla rezerwacji `payment_method = bank_transfer` + przycisk „Potwierdź przelew".
+3. Potwierdzić ręcznie na stagingu: CTA kalendarza, alokację grupy, cenę w modalu, wybór miejsca w łóżku piętrowym.
 
 ## Zasada aktualizacji po każdej sesji
 

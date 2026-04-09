@@ -1,6 +1,6 @@
 # 🗺️ MikroPlaneta Booking - Roadmap 2026
 
-**Stan dokumentu:** marzec 2026  
+**Stan dokumentu:** kwiecień 2026  
 **Status produktu:** aktywnie rozwijany, gotowy do testów zewnętrznych  
 **Cel dokumentu:** plan średnioterminowy, bez duplikowania checklist release i notatek sesyjnych
 
@@ -49,13 +49,17 @@
 
 **Cel:** Domknięty fundament pod dalszy rozwój biznesowy.
 
-#### Etap B (1-2 tygodnie): Płatności MVP
-- [ ] Jedna bramka na start (Przelewy24) + webhook statusów
-- [ ] Statusy płatności w rezerwacji: `pending_payment`, `paid`, `failed`, `refunded`
-- [ ] Rejestr zdarzeń płatności (audit trail)
-- [ ] Minimalny panel administracyjny do weryfikacji i ręcznego odświeżenia statusu
+#### Etap B (w toku): Płatności MVP
+- [x] Infrastruktura płatności: migracje 026+027, `PaymentTransaction` model, `PaymentTransactionRepository`
+- [x] `payment_method` auto-ustawiany przy tworzeniu rezerwacji (bank_transfer gdy depozyt włączony)
+- [x] Badge 🟡 Przelew bankowy w `ReservationDetailsModal`
+- [ ] `PaymentManager` + `GatewayInterface` + filter `mikroplaneta_payment_gateways` (Sesja 3)
+- [ ] Dashboard: sekcja „Do sprawdzenia" + przycisk „Potwierdź przelew"
+- [ ] Bramki online (Przelewy24, Stripe) → osobna wtyczka `mikro-booking-payments`
 
-**Cel:** Domknąć realny proces pobrania zaliczki online.
+**Architektura:** przelew ręczny w core `mikro-booking`; bramki online w osobnej wtyczce add-on.
+
+**Cel:** Domknąć realny proces pobrania zaliczki — ręczny przelew najpierw, online przez add-on.
 
 #### Etap C (1 tydzień): AI MVP (bez ryzyka dla danych)
 - [ ] Asystent FAQ dla recepcji i gościa (RAG na treści lokalnej)
@@ -77,13 +81,13 @@
 - [ ] Lista ostatnich rezerwacji na dashboardzie
 - [ ] Filtr: „Oczekujące na potwierdzenie"
 
-**Wymagania UX — Status płatności zaliczki (decyzja 2026-03-29):**
+**Wymagania UX — Status płatności zaliczki (decyzja 2026-03-29, częściowo zaimplementowane):**
 
 Recepcjonista musi na pierwszy rzut oka widzieć, które rezerwacje wymagają jego uwagi w kwestii płatności. Każda rezerwacja na dashboardzie i liście rezerwacji pokazuje badge:
 
-- [ ] 🟢 `Zapłacono online` — zaliczka potwierdzona automatycznie przez webhook bramki płatności
-- [ ] 🟡 `Czeka na przelew` — klient wybrał przelew ręczny, wymaga weryfikacji na koncie bankowym
-- [ ] ⚪ `Bez zaliczki` — właściciel obiektu nie wymaga zaliczki
+- [x] 🟡 `Przelew bankowy` — badge w `ReservationDetailsModal` ✅ (2026-04-09)
+- [ ] 🟢 `Zapłacono online` — po wdrożeniu bramki online w `mikro-booking-payments`
+- [ ] ⚪ `Bez zaliczki` — gdy depozyt nie jest wymagany
 
 - [ ] Sekcja „Do sprawdzenia" na dashboardzie: lista rezerwacji ze statusem `pending` i metodą `bank_transfer`, posortowana wg terminu wygaśnięcia
 - [ ] Przycisk „Potwierdź przelew" przy każdej takiej rezerwacji — jednym kliknięciem zmienia status na `confirmed` bez wchodzenia w szczegóły
