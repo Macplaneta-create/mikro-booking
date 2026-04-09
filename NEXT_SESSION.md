@@ -1,7 +1,7 @@
 # Następna Sesja - MikroPlaneta Booking
 
 Data aktualizacji: 2026-04-09
-Status: Testy (43/43 zielone). Następna sesja = Sesja 3 (PaymentManager + gateway interface).
+Status: Testy 43/43 zielone, przegląd bezpieczeństwa zakończony. Następna sesja = Sesja 3 (PaymentManager + gateway interface).
 
 ---
 
