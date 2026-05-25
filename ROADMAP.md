@@ -54,7 +54,7 @@
 - [x] Infrastruktura płatności: migracje 026+027, `PaymentTransaction` model, `PaymentTransactionRepository`
 - [x] `payment_method` auto-ustawiany przy tworzeniu rezerwacji (bank_transfer gdy depozyt włączony)
 - [x] Badge 🟡 Przelew bankowy w `ReservationDetailsModal`
-- [ ] `PaymentManager` + `GatewayInterface` + filter `mikroplaneta_payment_gateways` (Sesja 3)
+- [x] `PaymentManager` + `GatewayInterface` + filter `mikroplaneta_payment_gateways`
 - [ ] Dashboard: sekcja „Do sprawdzenia" + przycisk „Potwierdź przelew"
 - [ ] Bramki online (Przelewy24, Stripe) → osobna wtyczka `mikro-booking-payments`
 

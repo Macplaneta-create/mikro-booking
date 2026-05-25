@@ -1,43 +1,27 @@
 # Następna Sesja - MikroPlaneta Booking
 
-Data aktualizacji: 2026-04-09
-Status: Testy 43/43 zielone, przegląd bezpieczeństwa zakończony. Następna sesja = Sesja 3 (PaymentManager + gateway interface).
+Data aktualizacji: 2026-05-25
+Status: Testy 47/47 zielone, API płatności zweryfikowane testami PHPUnit, przed końcem sesji zostaje manualne potwierdzenie w realnym WordPressie.
 
 ---
 
 ## 🎯 Top 3 priorytety następnej sesji
 
-### 1. PaymentManager + gateway interface (Sesja 3, ~2h)
+### 1. Potwierdzenie manualne endpointu `/payments/gateways`
 
-Stworzyć `core/payments/interface-gateway.php`:
-```php
-interface GatewayInterface {
-    public function getName(): string;
-    public function initiate(Reservation $reservation, array $options): array;
-    public function handleWebhook(array $payload, string $signature): bool;
-    public function refund(int $transaction_id, float $amount): bool;
-}
-```
+- sprawdzić odpowiedź w działającej instalacji WordPress
+- potwierdzić brak błędów w realnym środowisku i zgodność kontraktu `gateways` / `total`
 
-Stworzyć `core/payments/class-payment-manager.php`:
-- `registerGateway(GatewayInterface $gateway): void`
-- `getGateway(string $name): ?GatewayInterface`
-- `getAvailableGateways(): array`
-- Aplikuje filter `mikroplaneta_payment_gateways` w konstruktorze
+### 2. Dokończenie flow dashboardu „Do sprawdzenia"
 
-Zarejestrować oba pliki w `class-plugin.php`.
-
-### 2. Dashboard — sekcja „Do sprawdzenia" (powiązane z Sesją 3)
-
-W `DashboardContent.tsx` dodać sekcję z rezerwacjami gdzie `payment_method = 'bank_transfer'` i status `pending`:
-- Lista posortowana wg terminu wygaśnięcia
-- Przycisk „Potwierdź przelew" → zmienia status na `confirmed`
+- dodać sekcję dla rezerwacji `payment_method = bank_transfer`
+- podpiąć akcję „Potwierdź przelew" i zweryfikować działania w UI
 
 ### 3. Regresja manualna UI
 
-- Ręczny test przycisku „Rezerwuj zaznaczone" / „ZAREZERWUJ" w kalendarzu
-- Ręczny test wyboru miejsca w łóżku piętrowym i zapis `place_ids`
-- Ręczny test ceny w modalu tworzenia rezerwacji przy automatycznym doborze łóżek
+- ręczny test przycisku „Rezerwuj zaznaczone" / „ZAREZERWUJ" w kalendarzu
+- ręczny test wyboru miejsca w łóżku piętrowym i zapis `place_ids`
+- ręczny test ceny w modalu tworzenia rezerwacji przy automatycznym doborze łóżek
 
 ---
 
